@@ -16,6 +16,10 @@ export async function POST(req: Request) {
         { status: 409 },
       );
     }
-    return NextResponse.json({ error: "Invalid input" }, { status: 400 });
+    console.error("register failed", e);
+    return NextResponse.json(
+      { error: "Не удалось создать аккаунт. Проверьте данные и подключение к БД." },
+      { status: 400 },
+    );
   }
 }

@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { signOut } from "next-auth/react";
 import { Disclaimer } from "@/components/Disclaimer";
 import { NetWorthChart } from "@/components/charts/NetWorthChart";
@@ -29,6 +30,7 @@ interface Projection {
 }
 
 export default function DashboardPage() {
+  const router = useRouter();
   const [tab, setTab] = useState<Tab>("plan");
   const [projection, setProjection] = useState<Projection | null>(null);
   const [scenarios, setScenarios] = useState<
@@ -51,18 +53,31 @@ export default function DashboardPage() {
   } | null>(null);
   const [loading, setLoading] = useState(true);
 
+  const handleUnauthorized = useCallback(
+    (res: Response) => {
+      if (res.status === 401) {
+        router.push("/login?session=expired");
+        return true;
+      }
+      return false;
+    },
+    [router],
+  );
+
   const loadProjection = useCallback(async () => {
     const res = await fetch("/api/plan/projection");
+    if (handleUnauthorized(res)) return;
     if (res.ok) setProjection(await res.json());
-  }, []);
+  }, [handleUnauthorized]);
 
   const loadScenarios = useCallback(async () => {
     const res = await fetch("/api/scenarios");
+    if (handleUnauthorized(res)) return;
     if (res.ok) {
       const data = await res.json();
       setScenarios(data.scenarios);
     }
-  }, []);
+  }, [handleUnauthorized]);
 
   useEffect(() => {
     Promise.all([loadProjection(), loadScenarios()]).finally(() =>
