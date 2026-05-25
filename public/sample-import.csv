@@ -1,0 +1,4 @@
+type,name,amount,category
+asset,Портфель,3000000,
+income,Зарплата,50000,
+expense,Жизнь,40000,living
