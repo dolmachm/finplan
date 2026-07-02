@@ -32,8 +32,8 @@ export function RuleBranchEditor({
 
   if (isNested) {
     return (
-      <div className="ml-4 border-l-2 border-emerald-200 pl-4 space-y-3">
-        <p className="text-xs font-medium text-emerald-800">
+      <div className="ml-4 border-l-2 border-brand-muted pl-4 space-y-3">
+        <p className="text-xs font-medium text-brand">
           {sideLabel} → вложенные правила
         </p>
         {branch.rules.map((nested, idx) => (
@@ -57,7 +57,7 @@ export function RuleBranchEditor({
         ))}
         <button
           type="button"
-          className="text-xs text-emerald-700 underline"
+          className="text-xs text-brand underline"
           onClick={() =>
             onChange({
               type: "nested",
@@ -84,7 +84,7 @@ export function RuleBranchEditor({
   return (
     <div className="space-y-2">
       <div className="flex flex-wrap items-center gap-2">
-        <span className="rounded bg-emerald-100 px-2 py-0.5 text-xs font-semibold text-emerald-900">
+        <span className="rounded bg-brand-muted px-2 py-0.5 text-xs font-semibold text-sidebar">
           {sideLabel}
         </span>
         <select

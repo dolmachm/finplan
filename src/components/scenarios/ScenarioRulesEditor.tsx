@@ -135,13 +135,13 @@ export function ScenarioRulesEditor({
             onClick={() => setSelectedId(s.id)}
             className={`w-full rounded-lg border px-3 py-2 text-left text-sm transition ${
               selectedId === s.id
-                ? "border-emerald-600 bg-emerald-50"
+                ? "border-brand bg-brand-light"
                 : "border-zinc-200 hover:bg-zinc-50"
             }`}
           >
             {s.name}
             {s.isActive && (
-              <span className="block text-xs text-emerald-600">активный</span>
+              <span className="block text-xs text-brand">активный</span>
             )}
           </button>
         ))}
@@ -161,7 +161,7 @@ export function ScenarioRulesEditor({
                 <button
                   type="button"
                   onClick={() => onActivate(selected.id)}
-                  className="rounded-lg border border-emerald-600 px-3 py-1.5 text-sm text-emerald-800 hover:bg-emerald-50"
+                  className="rounded-lg border border-brand px-3 py-1.5 text-sm text-brand hover:bg-brand-light"
                 >
                   Применить сценарий
                 </button>
@@ -176,7 +176,7 @@ export function ScenarioRulesEditor({
                   type="button"
                   disabled={!dirty || saving}
                   onClick={() => save()}
-                  className="rounded-lg bg-emerald-700 px-3 py-1.5 text-sm text-white disabled:opacity-50"
+                  className="rounded-lg bg-brand px-3 py-1.5 text-sm text-white disabled:opacity-50"
                 >
                   {saving ? "Сохранение…" : "Сохранить правила"}
                 </button>
@@ -255,12 +255,12 @@ function FlowPreview({ rules }: { rules: ScenarioRule[] }) {
       <div className="flex flex-col gap-2 font-mono text-xs">
         {rules.map((r) => (
           <div key={r.id} className="flex flex-wrap items-center gap-1">
-            <span className={r.enabled ? "text-emerald-700" : "text-zinc-400"}>
+            <span className={r.enabled ? "text-brand" : "text-zinc-400"}>
               {r.enabled ? "●" : "○"}
             </span>
             <span className="text-amber-700">IF</span>
             <span className="text-zinc-800">{r.condition.type}</span>
-            <span className="text-emerald-700">→ THEN</span>
+            <span className="text-brand">→ THEN</span>
             <BranchLabel branch={r.then} />
             {r.else && (
               <>

@@ -16,13 +16,13 @@ interface Props {
 export function RuleCard({ rule, assets, depth, onChange, onRemove }: Props) {
   return (
     <div
-      className={`rounded-xl border bg-zinc-50/80 p-4 ${depth > 0 ? "border-emerald-200" : "border-zinc-200"}`}
+      className={`rounded-xl border bg-zinc-50/80 p-4 ${depth > 0 ? "border-brand-muted" : "border-zinc-200"}`}
     >
       <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
         <input
           value={rule.name}
           onChange={(e) => onChange({ ...rule, name: e.target.value })}
-          className="font-medium text-sm bg-transparent border-b border-transparent hover:border-zinc-300 focus:border-emerald-500 outline-none"
+          className="font-medium text-sm bg-transparent border-b border-transparent hover:border-zinc-300 focus:border-brand outline-none"
         />
         <div className="flex items-center gap-3">
           <label className="flex items-center gap-1.5 text-xs text-zinc-600">

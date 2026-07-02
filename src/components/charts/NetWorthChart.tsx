@@ -23,8 +23,8 @@ export function NetWorthChart({
         <AreaChart data={sampled}>
           <defs>
             <linearGradient id="nw" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="5%" stopColor="#059669" stopOpacity={0.35} />
-              <stop offset="95%" stopColor="#059669" stopOpacity={0} />
+              <stop offset="5%" stopColor="#2563eb" stopOpacity={0.35} />
+              <stop offset="95%" stopColor="#2563eb" stopOpacity={0} />
             </linearGradient>
           </defs>
           <CartesianGrid strokeDasharray="3 3" stroke="#e4e4e7" />
@@ -50,7 +50,7 @@ export function NetWorthChart({
           <Area
             type="monotone"
             dataKey="netWorth"
-            stroke="#059669"
+            stroke="#2563eb"
             fill="url(#nw)"
             name="Чистые активы"
           />

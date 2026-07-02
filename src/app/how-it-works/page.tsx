@@ -3,7 +3,7 @@ import Link from "next/link";
 export default function HowItWorksPage() {
   return (
     <main className="mx-auto max-w-3xl px-6 py-16 prose prose-zinc">
-      <Link href="/" className="text-sm text-emerald-700">
+      <Link href="/" className="text-sm font-medium text-brand hover:underline">
         ← На главную
       </Link>
       <h1 className="mt-6 text-3xl font-semibold">Как это считается</h1>

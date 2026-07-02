@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
+import { parseJsonBody } from "@/shared/api-validation";
 import { prisma } from "@/shared/db";
 import { requireUserId, isErrorResponse } from "@/shared/session";
 
@@ -24,7 +25,9 @@ export async function GET() {
 export async function POST(req: Request) {
   const userId = await requireUserId();
   if (isErrorResponse(userId)) return userId;
-  const data = schema.parse(await req.json());
+  const parsed = parseJsonBody(schema, await req.json());
+  if (!parsed.ok) return parsed.response;
+  const data = parsed.data;
   const row = await prisma.expense.create({ data: { ...data, userId } });
   return NextResponse.json(row, { status: 201 });
 }

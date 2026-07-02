@@ -41,7 +41,7 @@ export function MonteCarloBandChart({
           <Area
             dataKey="p95"
             stroke="none"
-            fill="#a7f3d0"
+            fill="#dbeafe"
             fillOpacity={0.5}
             name="Верхняя граница"
           />
@@ -54,14 +54,14 @@ export function MonteCarloBandChart({
           />
           <Line
             dataKey="median"
-            stroke="#047857"
+            stroke="#2563eb"
             dot={false}
             name="Медиана"
           />
         </ComposedChart>
       </ResponsiveContainer>
-      <p className="mt-2 text-xs text-zinc-500">
-        Зелёная область: диапазон худший / лучший путь (иллюстрация MVP)
+      <p className="mt-2 text-xs text-muted">
+        Синяя область: диапазон худший / лучший путь (иллюстрация MVP)
       </p>
     </div>
   );

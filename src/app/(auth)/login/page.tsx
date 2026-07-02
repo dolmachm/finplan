@@ -5,6 +5,9 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Suspense, useState } from "react";
 import { useRouter } from "next/navigation";
+import { AuthShell } from "@/components/layout/AuthShell";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 
 function LoginForm() {
   const router = useRouter();
@@ -39,13 +42,12 @@ function LoginForm() {
   }
 
   return (
-    <main className="mx-auto flex min-h-full max-w-md flex-col justify-center px-6 py-16">
-      <h1 className="text-2xl font-semibold text-zinc-900">Вход в FinPlan</h1>
-      <p className="mt-2 text-sm text-zinc-600">
-        Персональное финансовое планирование с Monte Carlo
-      </p>
+    <AuthShell
+      title="Вход"
+      subtitle="Персональное финансовое планирование с Monte Carlo"
+    >
       {registered && (
-        <p className="mt-4 rounded-lg bg-emerald-50 px-4 py-2 text-sm text-emerald-800">
+        <p className="mt-4 rounded-lg bg-brand-light px-4 py-2 text-sm text-brand">
           Аккаунт создан. Войдите с вашим email и паролем.
         </p>
       )}
@@ -55,46 +57,40 @@ function LoginForm() {
         </p>
       )}
       <form onSubmit={onSubmit} className="mt-8 space-y-4">
-        <input
+        <Input
           type="email"
           placeholder="Email"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
-          className="w-full rounded-lg border border-zinc-300 px-4 py-2"
           required
           autoComplete="email"
         />
-        <input
+        <Input
           type="password"
           placeholder="Пароль"
           value={password}
           onChange={(e) => setPassword(e.target.value)}
-          className="w-full rounded-lg border border-zinc-300 px-4 py-2"
           required
           autoComplete="current-password"
         />
-        {error && <p className="text-sm text-red-600">{error}</p>}
-        <button
-          type="submit"
-          disabled={loading}
-          className="w-full rounded-lg bg-emerald-700 py-2.5 text-white hover:bg-emerald-800 disabled:opacity-60"
-        >
+        {error && <p className="text-sm text-danger">{error}</p>}
+        <Button type="submit" disabled={loading} className="w-full">
           {loading ? "Вход…" : "Войти"}
-        </button>
+        </Button>
       </form>
-      <p className="mt-6 text-center text-sm text-zinc-600">
+      <p className="mt-6 text-center text-sm text-muted">
         Нет аккаунта?{" "}
-        <Link href="/register" className="text-emerald-700 underline">
+        <Link href="/register" className="font-medium text-brand hover:underline">
           Регистрация
         </Link>
       </p>
-    </main>
+    </AuthShell>
   );
 }
 
 export default function LoginPage() {
   return (
-    <Suspense fallback={<main className="px-6 py-16 text-zinc-500">Загрузка…</main>}>
+    <Suspense fallback={<main className="px-6 py-16 text-muted">Загрузка…</main>}>
       <LoginForm />
     </Suspense>
   );

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import Papa from "papaparse";
 import { z } from "zod";
+import { formatZodIssues } from "@/shared/api-validation";
 import { prisma } from "@/shared/db";
 import { requireUserId, isErrorResponse } from "@/shared/session";
 
@@ -19,7 +20,13 @@ export async function POST(req: Request) {
   const form = await req.formData();
   const file = form.get("file");
   if (!(file instanceof Blob)) {
-    return NextResponse.json({ error: "No file" }, { status: 400 });
+    return NextResponse.json(
+      {
+        error: "Файл не выбран",
+        fix: "Выберите CSV-файл с колонками type, name, amount",
+      },
+      { status: 400 },
+    );
   }
 
   const text = await file.text();
@@ -29,7 +36,11 @@ export async function POST(req: Request) {
   });
 
   let created = 0;
-  for (const raw of parsed.data) {
+  const errors: Array<{ row: number; message: string; fix: string }> = [];
+
+  for (let i = 0; i < parsed.data.length; i++) {
+    const raw = parsed.data[i];
+    const rowNum = i + 2;
     const row = rowSchema.safeParse({
       type: raw.type?.toLowerCase(),
       name: raw.name,
@@ -37,7 +48,26 @@ export async function POST(req: Request) {
       category: raw.category,
       assetType: raw.asset_type ?? raw.assetType,
     });
-    if (!row.success) continue;
+    if (!row.success) {
+      const issue = formatZodIssues(row.error.issues)[0];
+      errors.push({
+        row: rowNum,
+        message: issue?.message ?? "Некорректная строка",
+        fix:
+          issue?.fix ??
+          "Проверьте type (asset|income|expense), name и amount",
+      });
+      continue;
+    }
+
+    if (!row.data.name.trim()) {
+      errors.push({
+        row: rowNum,
+        message: "Пустое название",
+        fix: "Заполните колонку name",
+      });
+      continue;
+    }
 
     if (row.data.type === "asset") {
       await prisma.asset.create({
@@ -72,5 +102,10 @@ export async function POST(req: Request) {
     }
   }
 
-  return NextResponse.json({ created, total: parsed.data.length });
+  return NextResponse.json({
+    created,
+    skipped: errors.length,
+    total: parsed.data.length,
+    errors,
+  });
 }
