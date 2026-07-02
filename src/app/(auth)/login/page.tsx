@@ -9,6 +9,19 @@ import { AuthShell } from "@/components/layout/AuthShell";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
+function signInErrorMessage(code: string | null | undefined): string {
+  switch (code) {
+    case "CredentialsSignin":
+      return "Неверный email или пароль";
+    case "MissingCSRF":
+      return "Ошибка безопасности. Обновите страницу и попробуйте снова.";
+    default:
+      return code
+        ? "Не удалось войти. Попробуйте ещё раз."
+        : "Неверный email или пароль";
+  }
+}
+
 function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -19,6 +32,7 @@ function LoginForm() {
 
   const registered = searchParams.get("registered") === "1";
   const sessionExpired = searchParams.get("session") === "expired";
+  const urlError = searchParams.get("error");
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -31,11 +45,13 @@ function LoginForm() {
         redirect: false,
       });
       if (!res?.ok) {
-        setError("Неверный email или пароль");
+        setError(signInErrorMessage(res?.error));
         return;
       }
       router.push("/dashboard");
       router.refresh();
+    } catch {
+      setError("Не удалось связаться с сервером. Проверьте подключение и попробуйте снова.");
     } finally {
       setLoading(false);
     }
@@ -54,6 +70,11 @@ function LoginForm() {
       {sessionExpired && (
         <p className="mt-4 rounded-lg bg-amber-50 px-4 py-2 text-sm text-amber-800">
           Сессия истекла. Войдите снова.
+        </p>
+      )}
+      {urlError && !error && (
+        <p className="mt-4 rounded-lg bg-red-50 px-4 py-2 text-sm text-danger">
+          {signInErrorMessage(urlError)}
         </p>
       )}
       <form onSubmit={onSubmit} className="mt-8 space-y-4">

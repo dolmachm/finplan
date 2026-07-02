@@ -28,7 +28,11 @@ export default function RegisterPage() {
       const res = await fetch("/api/auth/register", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, email, password }),
+        body: JSON.stringify({
+          name: name.trim() || undefined,
+          email,
+          password,
+        }),
       });
       if (!res.ok) {
         const data = await res.json();
@@ -43,11 +47,15 @@ export default function RegisterPage() {
         redirect: false,
       });
       if (!signInRes?.ok) {
-        router.push("/login?registered=1");
+        setError(
+          "Аккаунт создан, но автоматический вход не удался. Перейдите на страницу входа и войдите вручную.",
+        );
         return;
       }
       router.push("/dashboard");
       router.refresh();
+    } catch {
+      setError("Не удалось связаться с сервером. Проверьте подключение и попробуйте снова.");
     } finally {
       setLoading(false);
     }
