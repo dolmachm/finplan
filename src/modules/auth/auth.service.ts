@@ -3,9 +3,14 @@ import { prisma } from "@/shared/db";
 import { z } from "zod";
 
 export const registerSchema = z.object({
-  email: z.string().email(),
+  email: z.string().trim().email(),
   password: z.string().min(8),
-  name: z.string().min(1).optional(),
+  name: z
+    .string()
+    .trim()
+    .optional()
+    .transform((v) => (v ? v : undefined))
+    .pipe(z.string().min(1).optional()),
 });
 
 export async function registerUser(input: z.infer<typeof registerSchema>) {

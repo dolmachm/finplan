@@ -34,9 +34,10 @@ export default function RegisterPage() {
           password,
         }),
       });
+      const data = await res.json().catch(() => ({}));
       if (!res.ok) {
-        const data = await res.json();
-        setError(data.error ?? "Ошибка регистрации");
+        const msg = data.error ?? "Ошибка регистрации";
+        setError(data.fix ? `${msg}. ${data.fix}` : msg);
         if (data.issues) setFieldErrors(issuesByField(data.issues));
         return;
       }
@@ -47,9 +48,7 @@ export default function RegisterPage() {
         redirect: false,
       });
       if (!signInRes?.ok) {
-        setError(
-          "Аккаунт создан, но автоматический вход не удался. Перейдите на страницу входа и войдите вручную.",
-        );
+        router.push("/login?registered=1");
         return;
       }
       router.push("/dashboard");

@@ -1,13 +1,10 @@
 import { NextResponse } from "next/server";
-import { auth } from "@/shared/auth";
 import { prisma } from "@/shared/db";
+import { requireAdmin } from "@/shared/admin-auth";
 
 export async function GET() {
-  const session = await auth();
-  const role = (session?.user as { role?: string })?.role;
-  if (role !== "ADMIN") {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  }
+  const auth = await requireAdmin();
+  if (auth !== true) return auth;
 
   const [pending, running, failed, completedToday] = await Promise.all([
     prisma.simulationJob.count({ where: { status: "PENDING" } }),
