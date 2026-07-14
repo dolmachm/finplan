@@ -16,6 +16,7 @@ import {
   FinanceDataPanel,
   type FinanceDataStatus,
 } from "@/components/finance/FinanceDataPanel";
+import { HomeDashboard } from "@/components/finance/HomeDashboard";
 import { InvestmentPlanPanel } from "@/components/finance/InvestmentPlanPanel";
 import { MacroSettingsCard } from "@/components/finance/MacroSettingsCard";
 import { ChangeHistoryPanel } from "@/components/finance/ChangeHistoryPanel";
@@ -25,6 +26,14 @@ import { HelpHint } from "@/components/ui/FormField";
 import { toast } from "@/components/ui/ToastProvider";
 import { FEATURE_HINTS } from "@/content/help";
 import { readApiError } from "@/shared/api-client";
+import type {
+  Asset,
+  Expense,
+  Goal,
+  Income,
+  Liability,
+} from "@/shared/types";
+import type { HomeDashboardInput } from "@/modules/dashboard/insights";
 
 interface Projection {
   result: {
@@ -51,6 +60,8 @@ export default function DashboardPage() {
   const [tab, setTab] = useState<DashboardTab>("home");
   const [dataStatus, setDataStatus] = useState<FinanceDataStatus | null>(null);
   const [goalCount, setGoalCount] = useState(0);
+  const [homeInput, setHomeInput] = useState<HomeDashboardInput | null>(null);
+  const [homeLoading, setHomeLoading] = useState(true);
   const [projection, setProjection] = useState<Projection | null>(null);
   const [scenarios, setScenarios] = useState<
     Array<{ id: string; name: string; isActive: boolean; rules: unknown }>
@@ -93,6 +104,49 @@ export default function DashboardPage() {
     [router],
   );
 
+  const loadHomeSnapshot = useCallback(async () => {
+    setHomeLoading(true);
+    try {
+      const [aRes, lRes, iRes, eRes, gRes, sRes] = await Promise.all([
+        fetch("/api/assets", { cache: "no-store" }),
+        fetch("/api/liabilities", { cache: "no-store" }),
+        fetch("/api/incomes", { cache: "no-store" }),
+        fetch("/api/expenses", { cache: "no-store" }),
+        fetch("/api/goals", { cache: "no-store" }),
+        fetch("/api/scenarios", { cache: "no-store" }),
+      ]);
+      if (
+        handleUnauthorized(aRes) ||
+        handleUnauthorized(lRes) ||
+        handleUnauthorized(iRes) ||
+        handleUnauthorized(eRes) ||
+        handleUnauthorized(gRes) ||
+        handleUnauthorized(sRes)
+      )
+        return;
+      const assets: Asset[] = aRes.ok ? await aRes.json() : [];
+      const liabilities: Liability[] = lRes.ok ? await lRes.json() : [];
+      const incomes: Income[] = iRes.ok ? await iRes.json() : [];
+      const expenses: Expense[] = eRes.ok ? await eRes.json() : [];
+      const goals: Goal[] = gRes.ok ? await gRes.json() : [];
+      const scenariosPayload = sRes.ok ? await sRes.json() : { scenarios: [] };
+      const scenarioList = (scenariosPayload.scenarios ?? []) as Array<{
+        id: string;
+      }>;
+      setGoalCount(goals.length);
+      setHomeInput({
+        assets,
+        liabilities,
+        incomes,
+        expenses,
+        goals,
+        scenarioCount: scenarioList.length,
+      });
+    } finally {
+      setHomeLoading(false);
+    }
+  }, [handleUnauthorized]);
+
   const loadProjection = useCallback(
     async (scenarioId?: string) => {
       const id = scenarioId ?? viewScenarioId;
@@ -126,9 +180,24 @@ export default function DashboardPage() {
     return [];
   }, [handleUnauthorized]);
 
+  const refreshAfterData = useCallback(async () => {
+    await loadProjection();
+    await loadHomeSnapshot();
+  }, [loadProjection, loadHomeSnapshot]);
+
+  const enrichedHome: HomeDashboardInput | null = homeInput
+    ? {
+        ...homeInput,
+        recommendedMonthlySaving:
+          projection?.result.summary.recommendedMonthlySaving,
+        goalProbabilities: simJob?.result?.goalProbabilities,
+      }
+    : null;
+
   useEffect(() => {
     loadScenarios().finally(() => setLoading(false));
-  }, [loadScenarios]);
+    loadHomeSnapshot();
+  }, [loadScenarios, loadHomeSnapshot]);
 
   useEffect(() => {
     if (viewScenarioId !== null) return;
@@ -203,7 +272,7 @@ export default function DashboardPage() {
       toast.error(message);
       return;
     }
-    await Promise.all([loadScenarios(), loadProjection(id)]);
+    await Promise.all([loadScenarios(), loadProjection(id), loadHomeSnapshot()]);
     setViewScenarioId(id);
     toast.success("Сценарий применён");
   }
@@ -229,7 +298,7 @@ export default function DashboardPage() {
         toast.error(message);
         return;
       }
-      await loadProjection();
+      await refreshAfterData();
       toast.success("Демо-портфель добавлен");
     } catch {
       toast.error("Не удалось добавить портфель. Проверьте подключение и попробуйте снова.");
@@ -245,21 +314,11 @@ export default function DashboardPage() {
       {loading && tab !== "home" && <p className="text-muted">Загрузка…</p>}
 
         {tab === "home" && (
-          <div className="rounded-lg border border-dashed border-border px-6 py-16 text-center">
-            <p className="text-sm text-muted">
-              Главная пока пустая — сюда позже вынесем сводные дашборды и рекомендации.
-            </p>
-            <p className="mt-2 text-sm text-muted">
-              Заполнение плана начните на вкладке «Данные».
-            </p>
-            <Button
-              type="button"
-              className="mt-6"
-              onClick={() => setTab("assets")}
-            >
-              Перейти к данным
-            </Button>
-          </div>
+          <HomeDashboard
+            input={enrichedHome}
+            loading={homeLoading}
+            onNavigate={setTab}
+          />
         )}
 
         {tab === "plan" && projection && viewScenarioId && (
@@ -354,7 +413,7 @@ export default function DashboardPage() {
         {tab === "iplan" && (
           <InvestmentPlanPanel
             onUnauthorized={handleUnauthorized}
-            onAssetsChanged={loadProjection}
+            onAssetsChanged={refreshAfterData}
           />
         )}
 
@@ -368,7 +427,7 @@ export default function DashboardPage() {
             />
             <FinanceDataPanel
               onQuickAdd={quickAddAsset}
-              onRefresh={loadProjection}
+              onRefresh={refreshAfterData}
               onUnauthorized={handleUnauthorized}
               addingAsset={addingAsset}
               onStatusChange={setDataStatus}
@@ -382,10 +441,10 @@ export default function DashboardPage() {
             </div>
             <MacroSettingsCard
               onUnauthorized={handleUnauthorized}
-              onSaved={loadProjection}
+              onSaved={refreshAfterData}
             />
             <GoalsPanel
-              onSaved={loadProjection}
+              onSaved={refreshAfterData}
               onUnauthorized={handleUnauthorized}
               onCountChange={setGoalCount}
             />
