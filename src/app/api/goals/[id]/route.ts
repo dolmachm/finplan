@@ -6,6 +6,7 @@ import { prisma } from "@/shared/db";
 import { requireUserId, isErrorResponse } from "@/shared/session";
 import { assertOwned } from "@/shared/crud";
 import { duplicateEntityResponse, isDuplicateGoal } from "@/shared/duplicate-check";
+import { recordRevision } from "@/shared/revision";
 
 const patchSchema = goalSchema
   .extend({ targetDate: z.string().datetime().optional() })
@@ -51,6 +52,15 @@ export async function PATCH(
       ...(targetDate ? { targetDate: mergedDate } : {}),
     },
   });
+  await recordRevision({
+    userId,
+    entityType: "goal",
+    entityId: row.id,
+    action: "UPDATE",
+    label: `Цель изменена: ${row.name}`,
+    before: current,
+    after: row,
+  });
   return NextResponse.json(row);
 }
 
@@ -64,6 +74,18 @@ export async function DELETE(
   if (!(await assertOwned("goal", id, userId))) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
+  const current = await prisma.goal.findFirst({ where: { id, userId } });
   await prisma.goal.delete({ where: { id } });
+  if (current) {
+    await recordRevision({
+      userId,
+      entityType: "goal",
+      entityId: id,
+      action: "DELETE",
+      label: `Цель удалена: ${current.name}`,
+      before: current,
+      after: null,
+    });
+  }
   return NextResponse.json({ ok: true });
 }

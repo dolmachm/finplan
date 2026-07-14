@@ -179,4 +179,17 @@ export type SimulationResult = {
   createdAt: Date;
 };
 
+/** Audit trail for CFP-style change history */
+export type EntityRevision = {
+  id: string;
+  userId: string;
+  entityType: "asset" | "income" | "expense" | "goal" | "liability" | "iplan" | "macro";
+  entityId: string;
+  action: "CREATE" | "UPDATE" | "DELETE";
+  label: string;
+  before: unknown | null;
+  after: unknown | null;
+  createdAt: Date;
+};
+
 export type JsonValue = string | number | boolean | null | JsonValue[] | { [key: string]: JsonValue };

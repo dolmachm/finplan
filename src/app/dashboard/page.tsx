@@ -11,6 +11,8 @@ import { MonteCarloBandChart } from "@/components/charts/MonteCarloBandChart";
 import { GoalsPanel } from "@/components/finance/GoalsPanel";
 import { FinanceDataPanel } from "@/components/finance/FinanceDataPanel";
 import { InvestmentPlanPanel } from "@/components/finance/InvestmentPlanPanel";
+import { MacroSettingsCard } from "@/components/finance/MacroSettingsCard";
+import { ChangeHistoryPanel } from "@/components/finance/ChangeHistoryPanel";
 import { ScenariosPanel } from "@/components/scenarios/ScenariosPanel";
 import { FormError } from "@/components/ui/FormError";
 import { HelpHint } from "@/components/ui/FormField";
@@ -334,6 +336,10 @@ export default function DashboardPage() {
 
         {tab === "assets" && (
           <div className="space-y-6">
+            <MacroSettingsCard
+              onUnauthorized={handleUnauthorized}
+              onSaved={loadProjection}
+            />
             <FinanceDataPanel
               onQuickAdd={quickAddAsset}
               onRefresh={loadProjection}
@@ -341,6 +347,7 @@ export default function DashboardPage() {
               addingAsset={addingAsset}
             />
             <GoalsPanel onSaved={loadProjection} onUnauthorized={handleUnauthorized} />
+            <ChangeHistoryPanel onUnauthorized={handleUnauthorized} />
           </div>
         )}
 

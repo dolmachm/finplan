@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/shared/db";
 import { requireUserId, isErrorResponse } from "@/shared/session";
+import { recordRevision } from "@/shared/revision";
 
 const schema = z.object({
   baseCurrency: z.string().optional(),
@@ -21,11 +22,21 @@ export async function GET() {
 export async function PATCH(req: Request) {
   const userId = await requireUserId();
   if (isErrorResponse(userId)) return userId;
+  const before = await prisma.macroSettings.findUnique({ where: { userId } });
   const data = schema.parse(await req.json());
   const macro = await prisma.macroSettings.upsert({
     where: { userId },
     create: { userId, ...data },
     update: data,
+  });
+  await recordRevision({
+    userId,
+    entityType: "macro",
+    entityId: macro.id,
+    action: before ? "UPDATE" : "CREATE",
+    label: "Макропараметры плана обновлены",
+    before,
+    after: macro,
   });
   return NextResponse.json(macro);
 }

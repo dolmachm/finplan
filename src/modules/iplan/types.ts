@@ -1,4 +1,6 @@
 export type IPlanStreamFrequency = "MONTHLY" | "QUARTERLY" | "YEARLY" | "PERIOD";
+export type IPlanDistribution = "RISK_FREE" | "NORMAL" | "LOGNORMAL";
+export type IPlanAxisMode = "INDEX" | "YEAR" | "AGE";
 
 export type IPlanStream = {
   id: string;
@@ -8,13 +10,14 @@ export type IPlanStream = {
   startYear: number;
   endYear: number;
   enabled: boolean;
-  /** Optional link to Income (contributions) or Goal (withdrawals) */
   linkedEntityId: string | null;
 };
 
 export type IPlanReturnStep = {
   fromYear: number | null;
   ratePct: number;
+  /** Annual St.D. % — as in Spirin MC iPlan */
+  volatilityPct: number;
 };
 
 export type IPlanVariant = {
@@ -22,7 +25,14 @@ export type IPlanVariant = {
   name: string;
   startYear: number;
   horizonYears: number;
+  /** Investor age at startYear */
+  age: number;
   includeInitialCapital: boolean;
+  distribution: IPlanDistribution;
+  axisMode: IPlanAxisMode;
+  percentileLow: number;
+  percentileHigh: number;
+  mcRuns: number;
   returnSchedule: IPlanReturnStep[];
   contributions: IPlanStream[];
   goals: IPlanStream[];
@@ -40,10 +50,15 @@ export type InvestmentPlan = {
 export type IPlanYearRow = {
   index: number;
   year: number;
+  age: number;
   yearsElapsed: number;
   ratePct: number;
+  volatilityPct: number;
   startCapital: number;
   growth: number;
+  incomeAnnual: number;
+  expenseAnnual: number;
+  surplusAnnual: number;
   contributionsTotal: number;
   goalsTotal: number;
   endCapital: number;
@@ -58,4 +73,22 @@ export type IPlanProjection = {
   weightedReturnPct: number;
   rows: IPlanYearRow[];
   finalCapital: number;
+};
+
+export type IPlanMcYear = {
+  year: number;
+  age: number;
+  median: number;
+  pLow: number;
+  pHigh: number;
+  successCount: number;
+  failCount: number;
+};
+
+export type IPlanMcResult = {
+  years: IPlanMcYear[];
+  finalSuccessRate: number;
+  finalMedian: number;
+  finalPLow: number;
+  finalPHigh: number;
 };

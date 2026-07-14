@@ -23,8 +23,14 @@ export function defaultVariant(name = "Вариант 1"): IPlanVariant {
     name,
     startYear: y,
     horizonYears: 30,
+    age: 40,
     includeInitialCapital: true,
-    returnSchedule: [{ fromYear: null, ratePct: 6 }],
+    distribution: "LOGNORMAL",
+    axisMode: "YEAR",
+    percentileLow: 10,
+    percentileHigh: 90,
+    mcRuns: 500,
+    returnSchedule: [{ fromYear: null, ratePct: 6, volatilityPct: 15 }],
     contributions: [
       emptyStream({
         name: "Отчисления от зарплаты",
@@ -56,6 +62,8 @@ export function seedFromFinanceData(params: {
   userId: string;
   investmentAssetsTotal: number;
   weightedReturnPct: number;
+  weightedVolatilityPct?: number;
+  surplusMonthly?: number;
   incomes: Array<{
     id: string;
     name: string;
@@ -78,43 +86,29 @@ export function seedFromFinanceData(params: {
   v.horizonYears = params.horizonYears;
   v.startYear = y;
   v.returnSchedule = [
-    { fromYear: null, ratePct: Math.round(params.weightedReturnPct * 10) / 10 || 6 },
+    {
+      fromYear: null,
+      ratePct: Math.round(params.weightedReturnPct * 10) / 10 || 6,
+      volatilityPct:
+        Math.round((params.weightedVolatilityPct ?? 15) * 10) / 10 || 15,
+    },
   ];
 
-  const salaryLike = params.incomes.filter((i) =>
-    ["MONTHLY", "QUARTERLY", "YEARLY"].includes(i.frequency),
-  );
-  v.contributions = salaryLike.slice(0, 6).map((inc) => {
-    const start = inc.startDate ? inc.startDate.getFullYear() : y;
-    const end = inc.endDate ? inc.endDate.getFullYear() : y + Math.min(20, params.horizonYears);
-    return {
+  const surplus = Math.max(0, Math.round(params.surplusMonthly ?? 0));
+  v.contributions = [
+    {
       id: newId(),
-      name: inc.name,
-      amount: inc.amount,
-      frequency:
-        inc.frequency === "QUARTERLY"
-          ? ("QUARTERLY" as const)
-          : inc.frequency === "YEARLY"
-            ? ("YEARLY" as const)
-            : ("MONTHLY" as const),
-      startYear: start,
-      endYear: end,
-      enabled: true,
-      linkedEntityId: inc.id,
-    };
-  });
-  if (v.contributions.length === 0) {
-    v.contributions = [
-      emptyStream({
-        name: "Отчисления",
-        enabled: false,
-        startYear: y,
-        endYear: y + 15,
-      }),
-    ];
-  }
+      name: "Взнос = доходы − расходы",
+      amount: surplus,
+      frequency: "MONTHLY",
+      startYear: y,
+      endYear: y + Math.min(20, params.horizonYears) - 1,
+      enabled: surplus > 0,
+      linkedEntityId: "__surplus__",
+    },
+  ];
 
-  v.goals = params.goals.slice(0, 6).map((g) => {
+  v.goals = params.goals.slice(0, 9).map((g) => {
     const targetYear = g.targetDate.getFullYear();
     return {
       id: newId(),
@@ -129,5 +123,6 @@ export function seedFromFinanceData(params: {
   });
 
   void params.investmentAssetsTotal;
+  void params.incomes;
   return plan;
 }

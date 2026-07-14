@@ -7,6 +7,7 @@ import { prisma } from "@/shared/db";
 import { requireUserId, isErrorResponse } from "@/shared/session";
 import { assertOwned } from "@/shared/crud";
 import { duplicateEntityResponse, isDuplicateAsset } from "@/shared/duplicate-check";
+import { recordRevision } from "@/shared/revision";
 
 const patchSchema = assetSchema.partial();
 
@@ -49,6 +50,15 @@ export async function PATCH(
     where: { id },
     data: { ...data, ...(resolvedClass ? { assetClass: resolvedClass } : {}) },
   });
+  await recordRevision({
+    userId,
+    entityType: "asset",
+    entityId: asset.id,
+    action: "UPDATE",
+    label: `Актив изменён: ${asset.name}`,
+    before: current,
+    after: asset,
+  });
   return NextResponse.json(asset);
 }
 
@@ -62,6 +72,18 @@ export async function DELETE(
   if (!(await assertOwned("asset", id, userId))) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
+  const current = await prisma.asset.findFirst({ where: { id, userId } });
   await prisma.asset.delete({ where: { id } });
+  if (current) {
+    await recordRevision({
+      userId,
+      entityType: "asset",
+      entityId: id,
+      action: "DELETE",
+      label: `Актив удалён: ${current.name}`,
+      before: current,
+      after: null,
+    });
+  }
   return NextResponse.json({ ok: true });
 }

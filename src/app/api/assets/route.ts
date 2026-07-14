@@ -6,6 +6,7 @@ import { assetSchema } from "@/shared/finance-schemas";
 import { prisma } from "@/shared/db";
 import { requireUserId, isErrorResponse } from "@/shared/session";
 import { duplicateEntityResponse, isDuplicateAsset } from "@/shared/duplicate-check";
+import { recordRevision } from "@/shared/revision";
 
 function resolveAssetClass(
   type: z.infer<typeof assetSchema>["type"],
@@ -41,6 +42,15 @@ export async function POST(req: Request) {
       assetClass: resolveAssetClass(data.type, assetClass),
       userId,
     },
+  });
+  await recordRevision({
+    userId,
+    entityType: "asset",
+    entityId: asset.id,
+    action: "CREATE",
+    label: `Актив создан: ${asset.name}`,
+    before: null,
+    after: asset,
   });
   return NextResponse.json(asset, { status: 201 });
 }

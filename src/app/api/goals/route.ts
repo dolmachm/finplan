@@ -4,6 +4,7 @@ import { goalSchema } from "@/shared/finance-schemas";
 import { prisma } from "@/shared/db";
 import { requireUserId, isErrorResponse } from "@/shared/session";
 import { duplicateEntityResponse, isDuplicateGoal } from "@/shared/duplicate-check";
+import { recordRevision } from "@/shared/revision";
 
 export async function GET() {
   const userId = await requireUserId();
@@ -41,6 +42,15 @@ export async function POST(req: Request) {
       targetDate,
       linkedAssetId: data.linkedAssetId ?? null,
     },
+  });
+  await recordRevision({
+    userId,
+    entityType: "goal",
+    entityId: row.id,
+    action: "CREATE",
+    label: `Цель создана: ${row.name}`,
+    before: null,
+    after: row,
   });
   return NextResponse.json(row, { status: 201 });
 }
