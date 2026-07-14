@@ -4,6 +4,7 @@ import { incomeSchema } from "@/shared/finance-schemas";
 import { prisma } from "@/shared/db";
 import { requireUserId, isErrorResponse } from "@/shared/session";
 import { assertOwned } from "@/shared/crud";
+import { duplicateEntityResponse, isDuplicateIncome } from "@/shared/duplicate-check";
 
 const patchSchema = incomeSchema.partial();
 
@@ -17,8 +18,22 @@ export async function PATCH(
   if (!(await assertOwned("income", id, userId))) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
+  const current = await prisma.income.findFirst({ where: { id, userId } });
+  if (!current) {
+    return NextResponse.json({ error: "Not found" }, { status: 404 });
+  }
   const parsed = parseJsonBody(patchSchema, await req.json());
   if (!parsed.ok) return parsed.response;
+  const merged = {
+    name: parsed.data.name ?? current.name,
+    source: parsed.data.source ?? current.source,
+    amount: parsed.data.amount ?? current.amount,
+    frequency: parsed.data.frequency ?? current.frequency,
+  };
+  const existing = await prisma.income.findMany({ where: { userId } });
+  if (isDuplicateIncome(existing, merged, id)) {
+    return duplicateEntityResponse("Доход");
+  }
   const row = await prisma.income.update({
     where: { id },
     data: parsed.data,

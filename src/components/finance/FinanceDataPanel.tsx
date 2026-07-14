@@ -41,7 +41,7 @@ export function FinanceDataPanel({
 }: {
   onRefresh: () => void;
   onUnauthorized: (res: Response) => boolean;
-  onQuickAdd: () => void;
+  onQuickAdd: () => void | Promise<void>;
   addingAsset: boolean;
 }) {
   const [assets, setAssets] = useState<Asset[]>([]);
@@ -54,9 +54,9 @@ export function FinanceDataPanel({
     setLoading(true);
     try {
       const [aRes, iRes, eRes] = await Promise.all([
-        fetch("/api/assets"),
-        fetch("/api/incomes"),
-        fetch("/api/expenses"),
+        fetch("/api/assets", { cache: "no-store" }),
+        fetch("/api/incomes", { cache: "no-store" }),
+        fetch("/api/expenses", { cache: "no-store" }),
       ]);
       if (onUnauthorized(aRes) || onUnauthorized(iRes) || onUnauthorized(eRes)) return;
       if (aRes.ok) setAssets(await aRes.json());
@@ -71,16 +71,31 @@ export function FinanceDataPanel({
     load();
   }, [load]);
 
-  async function remove(kind: "asset" | "income" | "expense", id: string) {
-    const res = await fetch(`/api/${kind}s/${id}`, { method: "DELETE" });
-    if (onUnauthorized(res)) return;
-    if (!res.ok) {
-      toast.error("Не удалось удалить");
-      return;
-    }
-    toast.success("Удалено");
+  async function handleQuickAdd() {
+    await onQuickAdd();
     await load();
-    await onRefresh();
+  }
+
+  async function remove(kind: "asset" | "income" | "expense", id: string) {
+    try {
+      const res = await fetch(`/api/${kind}s/${id}`, {
+        method: "DELETE",
+        cache: "no-store",
+      });
+      if (onUnauthorized(res)) return;
+      if (!res.ok) {
+        toast.error("Не удалось удалить");
+        return;
+      }
+      if (kind === "asset") setAssets((prev) => prev.filter((a) => a.id !== id));
+      else if (kind === "income") setIncomes((prev) => prev.filter((i) => i.id !== id));
+      else setExpenses((prev) => prev.filter((e) => e.id !== id));
+      toast.success("Удалено");
+      await load();
+      await onRefresh();
+    } catch {
+      toast.error("Не удалось удалить");
+    }
   }
 
   if (editView) {
@@ -127,7 +142,7 @@ export function FinanceDataPanel({
           <HelpHint>{FEATURE_HINTS.demoPortfolio}</HelpHint>
           <button
             type="button"
-            onClick={onQuickAdd}
+            onClick={handleQuickAdd}
             disabled={addingAsset}
             className="mt-2 text-sm font-medium text-brand hover:underline disabled:opacity-50"
           >
@@ -143,45 +158,51 @@ export function FinanceDataPanel({
           <DataTable
             title="Активы"
             empty="Нет активов — добавьте брокерский счёт, недвижимость или другое"
-            columns={["Название", "Тип", "Класс", "Стоимость", "Доход/мес", ""]}
-            rows={assets.map((a) => [
-              a.name,
-              assetTypeLabel(a.type),
-              ASSET_CLASS_LABELS[(a.assetClass as AssetClass) ?? "PERSONAL"],
-              fmtRub(a.currentValue),
-              a.dividendIncomeMonthly ? fmtRub(a.dividendIncomeMonthly) : "—",
-            ])}
-            ids={assets.map((a) => a.id)}
+            columns={["Название", "Тип", "Класс", "Стоимость", "Доход/мес"]}
+            items={assets.map((a) => ({
+              id: a.id,
+              cells: [
+                a.name,
+                assetTypeLabel(a.type),
+                ASSET_CLASS_LABELS[(a.assetClass as AssetClass) ?? "PERSONAL"],
+                fmtRub(a.currentValue),
+                a.dividendIncomeMonthly ? fmtRub(a.dividendIncomeMonthly) : "—",
+              ],
+            }))}
             onEdit={(id) => setEditView({ kind: "asset", id })}
             onDelete={(id) => remove("asset", id)}
           />
           <DataTable
             title="Доходы"
             empty="Нет доходов"
-            columns={["Название", "Источник", "Сумма", "Период", "Тип", ""]}
-            rows={incomes.map((i) => [
-              i.name,
-              INCOME_SOURCE_LABELS[i.source] ?? i.source,
-              fmtRub(i.amount),
-              frequencyLabel(i.frequency),
-              essentialLabel(i.isEssential ?? true),
-            ])}
-            ids={incomes.map((i) => i.id)}
+            columns={["Название", "Источник", "Сумма", "Период", "Тип"]}
+            items={incomes.map((i) => ({
+              id: i.id,
+              cells: [
+                i.name,
+                INCOME_SOURCE_LABELS[i.source] ?? i.source,
+                fmtRub(i.amount),
+                frequencyLabel(i.frequency),
+                essentialLabel(i.isEssential ?? true),
+              ],
+            }))}
             onEdit={(id) => setEditView({ kind: "income", id })}
             onDelete={(id) => remove("income", id)}
           />
           <DataTable
             title="Расходы"
             empty="Нет расходов"
-            columns={["Название", "Категория", "Сумма", "Период", "Тип", ""]}
-            rows={expenses.map((e) => [
-              e.name,
-              e.category,
-              fmtRub(e.amount),
-              frequencyLabel(e.frequency),
-              essentialLabel(e.isEssential),
-            ])}
-            ids={expenses.map((e) => e.id)}
+            columns={["Название", "Категория", "Сумма", "Период", "Тип"]}
+            items={expenses.map((e) => ({
+              id: e.id,
+              cells: [
+                e.name,
+                e.category,
+                fmtRub(e.amount),
+                frequencyLabel(e.frequency),
+                essentialLabel(e.isEssential),
+              ],
+            }))}
             onEdit={(id) => setEditView({ kind: "expense", id })}
             onDelete={(id) => remove("expense", id)}
           />
@@ -195,23 +216,21 @@ function DataTable({
   title,
   empty,
   columns,
-  rows,
-  ids,
+  items,
   onEdit,
   onDelete,
 }: {
   title: string;
   empty: string;
   columns: string[];
-  rows: string[][];
-  ids: string[];
+  items: Array<{ id: string; cells: string[] }>;
   onEdit: (id: string) => void;
   onDelete: (id: string) => void;
 }) {
   return (
     <Card className="overflow-x-auto">
       <h3 className="font-medium">{title}</h3>
-      {rows.length === 0 ? (
+      {items.length === 0 ? (
         <p className="mt-3 text-sm text-muted">{empty}</p>
       ) : (
         <table className="mt-4 w-full text-sm">
@@ -222,21 +241,22 @@ function DataTable({
                   {c}
                 </th>
               ))}
+              <th className="px-3 py-2 font-medium" />
             </tr>
           </thead>
           <tbody>
-            {rows.map((row, idx) => (
-              <tr key={ids[idx]} className="border-b border-border last:border-0">
-                {row.map((cell, ci) => (
+            {items.map((item) => (
+              <tr key={item.id} className="border-b border-border last:border-0">
+                {item.cells.map((cell, ci) => (
                   <td key={ci} className="px-3 py-2">
                     {cell}
                   </td>
                 ))}
                 <td className="px-3 py-2 text-right whitespace-nowrap">
-                  <Button type="button" variant="ghost" onClick={() => onEdit(ids[idx])}>
+                  <Button type="button" variant="ghost" onClick={() => onEdit(item.id)}>
                     Изменить
                   </Button>
-                  <Button type="button" variant="ghost" onClick={() => onDelete(ids[idx])}>
+                  <Button type="button" variant="ghost" onClick={() => onDelete(item.id)}>
                     Удалить
                   </Button>
                 </td>

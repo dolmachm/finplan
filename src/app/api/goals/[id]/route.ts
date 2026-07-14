@@ -5,6 +5,7 @@ import { goalSchema } from "@/shared/finance-schemas";
 import { prisma } from "@/shared/db";
 import { requireUserId, isErrorResponse } from "@/shared/session";
 import { assertOwned } from "@/shared/crud";
+import { duplicateEntityResponse, isDuplicateGoal } from "@/shared/duplicate-check";
 
 const patchSchema = goalSchema
   .extend({ targetDate: z.string().datetime().optional() })
@@ -20,14 +21,34 @@ export async function PATCH(
   if (!(await assertOwned("goal", id, userId))) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
+  const current = await prisma.goal.findFirst({ where: { id, userId } });
+  if (!current) {
+    return NextResponse.json({ error: "Not found" }, { status: 404 });
+  }
   const parsed = parseJsonBody(patchSchema, await req.json());
   if (!parsed.ok) return parsed.response;
   const { targetDate, ...rest } = parsed.data;
+  const mergedDate = targetDate ? new Date(targetDate) : current.targetDate;
+  const existing = await prisma.goal.findMany({ where: { userId } });
+  if (
+    isDuplicateGoal(
+      existing,
+      {
+        name: rest.name ?? current.name,
+        goalType: rest.goalType ?? current.goalType ?? "OTHER",
+        targetAmountNominal: rest.targetAmountNominal ?? current.targetAmountNominal,
+        targetDate: mergedDate,
+      },
+      id,
+    )
+  ) {
+    return duplicateEntityResponse("Цель");
+  }
   const row = await prisma.goal.update({
     where: { id },
     data: {
       ...rest,
-      ...(targetDate ? { targetDate: new Date(targetDate) } : {}),
+      ...(targetDate ? { targetDate: mergedDate } : {}),
     },
   });
   return NextResponse.json(row);

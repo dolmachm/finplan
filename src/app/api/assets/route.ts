@@ -5,6 +5,7 @@ import { ASSET_TYPE_OPTIONS } from "@/shared/finance-catalog";
 import { assetSchema } from "@/shared/finance-schemas";
 import { prisma } from "@/shared/db";
 import { requireUserId, isErrorResponse } from "@/shared/session";
+import { duplicateEntityResponse, isDuplicateAsset } from "@/shared/duplicate-check";
 
 function resolveAssetClass(
   type: z.infer<typeof assetSchema>["type"],
@@ -30,6 +31,10 @@ export async function POST(req: Request) {
   const parsed = parseJsonBody(assetSchema, await req.json());
   if (!parsed.ok) return parsed.response;
   const { assetClass, ...data } = parsed.data;
+  const existing = await prisma.asset.findMany({ where: { userId } });
+  if (isDuplicateAsset(existing, data)) {
+    return duplicateEntityResponse("Актив");
+  }
   const asset = await prisma.asset.create({
     data: {
       ...data,

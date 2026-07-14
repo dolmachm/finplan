@@ -4,6 +4,12 @@ import { z } from "zod";
 import { formatZodIssues } from "@/shared/api-validation";
 import { prisma } from "@/shared/db";
 import { requireUserId, isErrorResponse } from "@/shared/session";
+import {
+  isDuplicateAsset,
+  isDuplicateExpense,
+  isDuplicateIncome,
+} from "@/shared/duplicate-check";
+import type { Asset, Expense, Income } from "@/shared/types";
 
 const rowSchema = z.object({
   type: z.enum(["asset", "income", "expense"]),
@@ -38,6 +44,12 @@ export async function POST(req: Request) {
   let created = 0;
   const errors: Array<{ row: number; message: string; fix: string }> = [];
 
+  const [assets, incomes, expenses] = await Promise.all([
+    prisma.asset.findMany({ where: { userId } }),
+    prisma.income.findMany({ where: { userId } }),
+    prisma.expense.findMany({ where: { userId } }),
+  ]) as [Asset[], Income[], Expense[]];
+
   for (let i = 0; i < parsed.data.length; i++) {
     const raw = parsed.data[i];
     const rowNum = i + 2;
@@ -70,7 +82,16 @@ export async function POST(req: Request) {
     }
 
     if (row.data.type === "asset") {
-      await prisma.asset.create({
+      const candidate = { name: row.data.name, type: "OTHER" as const };
+      if (isDuplicateAsset(assets, candidate)) {
+        errors.push({
+          row: rowNum,
+          message: "Дубликат актива",
+          fix: "Запись с таким названием и типом уже есть",
+        });
+        continue;
+      }
+      const createdRow = await prisma.asset.create({
         data: {
           userId,
           name: row.data.name,
@@ -78,9 +99,24 @@ export async function POST(req: Request) {
           currentValue: row.data.amount,
         },
       });
+      assets.push(createdRow);
       created++;
     } else if (row.data.type === "income") {
-      await prisma.income.create({
+      const candidate = {
+        name: row.data.name,
+        source: "OTHER" as const,
+        amount: row.data.amount,
+        frequency: "MONTHLY" as const,
+      };
+      if (isDuplicateIncome(incomes, candidate)) {
+        errors.push({
+          row: rowNum,
+          message: "Дубликат дохода",
+          fix: "Запись с такими полями уже есть",
+        });
+        continue;
+      }
+      const createdRow = await prisma.income.create({
         data: {
           userId,
           name: row.data.name,
@@ -88,16 +124,33 @@ export async function POST(req: Request) {
           amount: row.data.amount,
         },
       });
+      incomes.push(createdRow);
       created++;
     } else if (row.data.type === "expense") {
-      await prisma.expense.create({
+      const category = row.data.category ?? "general";
+      const candidate = {
+        name: row.data.name,
+        category,
+        amount: row.data.amount,
+        frequency: "MONTHLY" as const,
+      };
+      if (isDuplicateExpense(expenses, candidate)) {
+        errors.push({
+          row: rowNum,
+          message: "Дубликат расхода",
+          fix: "Запись с такими полями уже есть",
+        });
+        continue;
+      }
+      const createdRow = await prisma.expense.create({
         data: {
           userId,
           name: row.data.name,
-          category: row.data.category ?? "general",
+          category,
           amount: row.data.amount,
         },
       });
+      expenses.push(createdRow);
       created++;
     }
   }
