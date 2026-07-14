@@ -1,10 +1,11 @@
 import NextAuth from "next-auth";
 import Credentials from "next-auth/providers/credentials";
 import type { User } from "@/shared/types";
-import { authConfig } from "@/shared/auth.config";
+import { authConfig, getAuthSecret } from "@/shared/auth.config";
 
-export const { handlers, signIn, signOut, auth } = NextAuth({
+export const { handlers, signIn, signOut, auth } = NextAuth(() => ({
   ...authConfig,
+  secret: getAuthSecret(),
   providers: [
     Credentials({
       name: "credentials",
@@ -21,7 +22,9 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
           import("@/shared/db"),
           import("bcryptjs"),
         ]);
-        const user = (await prisma.user.findUnique({ where: { email } })) as User | null;
+        const user = (await prisma.user.findUnique({
+          where: { email },
+        })) as User | null;
         if (!user?.passwordHash) return null;
 
         const valid = await bcrypt.default.compare(password, user.passwordHash);
@@ -36,4 +39,4 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       },
     }),
   ],
-});
+}));
