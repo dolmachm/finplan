@@ -30,7 +30,7 @@ export function ScenarioRulesEditor({
 }: {
   scenarios: ScenarioRow[];
   onSaved: () => void;
-  onActivate: (id: string) => void;
+  onActivate: (id: string) => void | Promise<void>;
 }) {
   const [selectedId, setSelectedId] = useState<string | null>(
     scenarios[0]?.id ?? null,
@@ -39,6 +39,8 @@ export function ScenarioRulesEditor({
   const [assets, setAssets] = useState<AssetOption[]>([]);
   const [issues, setIssues] = useState<ValidationIssue[]>([]);
   const [saving, setSaving] = useState(false);
+  const [validating, setValidating] = useState(false);
+  const [activating, setActivating] = useState(false);
   const [dirty, setDirty] = useState(false);
 
   const selected = scenarios.find((s) => s.id === selectedId);
@@ -69,55 +71,66 @@ export function ScenarioRulesEditor({
   }, [selectedId, selected?.rules, selected]);
 
   async function validate() {
-    if (!selectedId) return;
-    const res = await fetch(`/api/scenarios/${selectedId}/validate-rules`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ rules }),
-    });
-    if (res.ok) {
-      const data = await res.json();
-      setIssues(data.issues ?? []);
-      if (data.valid) {
-        toast.success("Правила корректны");
-      } else {
-        const errors = (data.issues ?? []).filter(
-          (i: ValidationIssue) => i.level === "error",
-        ).length;
-        toast.error(
-          errors > 0
-            ? `Найдено ошибок: ${errors}`
-            : "Есть предупреждения в правилах",
-        );
+    if (!selectedId) return false;
+    setValidating(true);
+    try {
+      const res = await fetch(`/api/scenarios/${selectedId}/validate-rules`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ rules }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setIssues(data.issues ?? []);
+        if (data.valid) {
+          toast.success("Правила корректны");
+        } else {
+          const errors = (data.issues ?? []).filter(
+            (i: ValidationIssue) => i.level === "error",
+          ).length;
+          toast.error(
+            errors > 0
+              ? `Найдено ошибок: ${errors}`
+              : "Есть предупреждения в правилах",
+          );
+        }
+        return data.valid as boolean;
       }
-      return data.valid as boolean;
+      toast.error("Не удалось проверить правила");
+      return false;
+    } catch {
+      toast.error("Не удалось проверить правила");
+      return false;
+    } finally {
+      setValidating(false);
     }
-    toast.error("Не удалось проверить правила");
-    return false;
   }
 
   async function save() {
     if (!selectedId) return;
     setSaving(true);
-    const valid = await validate();
-    if (!valid) {
+    try {
+      const valid = await validate();
+      if (!valid) return;
+
+      const res = await fetch(`/api/scenarios/${selectedId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ rules }),
+      });
+      if (res.ok) {
+        setDirty(false);
+        onSaved();
+        toast.success("Правила сохранены");
+      } else {
+        const data = await res.json();
+        setIssues(data.issues ?? [{ ruleId: "", level: "error", message: data.error }]);
+        toast.error(data.error ?? "Не удалось сохранить правила");
+      }
+    } catch {
+      toast.error("Не удалось сохранить правила");
+    } finally {
       setSaving(false);
-      return;
-    }
-    const res = await fetch(`/api/scenarios/${selectedId}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ rules }),
-    });
-    setSaving(false);
-    if (res.ok) {
-      setDirty(false);
-      onSaved();
-      toast.success("Правила сохранены");
-    } else {
-      const data = await res.json();
-      setIssues(data.issues ?? [{ ruleId: "", level: "error", message: data.error }]);
-      toast.error(data.error ?? "Не удалось сохранить правила");
     }
   }
 
@@ -176,23 +189,33 @@ export function ScenarioRulesEditor({
               <div className="flex flex-wrap gap-2">
                 <button
                   type="button"
-                  onClick={() => onActivate(selected.id)}
-                  className="rounded-lg border border-brand px-3 py-1.5 text-sm text-brand hover:bg-brand-light"
+                  disabled={activating || saving || validating}
+                  onClick={async () => {
+                    if (!selected) return;
+                    setActivating(true);
+                    try {
+                      await onActivate(selected.id);
+                    } finally {
+                      setActivating(false);
+                    }
+                  }}
+                  className="rounded-lg border border-brand px-3 py-1.5 text-sm text-brand hover:bg-brand-light disabled:cursor-not-allowed disabled:opacity-50"
                 >
-                  Применить сценарий
+                  {activating ? "Применение…" : "Применить сценарий"}
                 </button>
                 <button
                   type="button"
+                  disabled={validating || saving || activating}
                   onClick={() => validate()}
-                  className="rounded-lg border px-3 py-1.5 text-sm"
+                  className="rounded-lg border px-3 py-1.5 text-sm disabled:cursor-not-allowed disabled:opacity-50"
                 >
-                  Проверить
+                  {validating ? "Проверка…" : "Проверить"}
                 </button>
                 <button
                   type="button"
-                  disabled={!dirty || saving}
+                  disabled={!dirty || saving || validating || activating}
                   onClick={() => save()}
-                  className="rounded-lg bg-brand px-3 py-1.5 text-sm text-white disabled:opacity-50"
+                  className="rounded-lg bg-brand px-3 py-1.5 text-sm text-white disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   {saving ? "Сохранение…" : "Сохранить правила"}
                 </button>

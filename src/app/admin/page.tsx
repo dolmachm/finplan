@@ -111,6 +111,7 @@ function UserEditor({
     baseCurrency: "RUB",
   });
   const [balanceAmount, setBalanceAmount] = useState("");
+  const balanceValid = Number(balanceAmount) > 0;
   const [msg, setMsg] = useState("");
   const [loading, setLoading] = useState(false);
 
@@ -285,10 +286,10 @@ function UserEditor({
             onChange={(e) => setBalanceAmount(e.target.value)}
           />
         </label>
-        <Button disabled={loading} onClick={() => adjustBalance("add")}>
+        <Button disabled={loading || !balanceValid} onClick={() => adjustBalance("add")}>
           + Начислить
         </Button>
-        <Button variant="danger" disabled={loading} onClick={() => adjustBalance("subtract")}>
+        <Button variant="danger" disabled={loading || !balanceValid} onClick={() => adjustBalance("subtract")}>
           − Списать
         </Button>
       </div>

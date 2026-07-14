@@ -29,6 +29,9 @@ export async function POST(req: Request) {
       ...data,
       userId,
       targetDate: new Date(data.targetDate),
+      allowPartialFunding: true,
+      strategy: "balanced",
+      linkedAssetId: null,
     },
   });
   return NextResponse.json(row, { status: 201 });

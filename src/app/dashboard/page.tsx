@@ -62,6 +62,13 @@ export default function DashboardPage() {
   } | null>(null);
   const [loading, setLoading] = useState(true);
   const [simError, setSimError] = useState("");
+  const [simStarting, setSimStarting] = useState(false);
+  const [addingAsset, setAddingAsset] = useState(false);
+
+  const simBusy =
+    simStarting ||
+    simJob?.status === "PENDING" ||
+    simJob?.status === "RUNNING";
 
   const handleUnauthorized = useCallback(
     (res: Response) => {
@@ -97,22 +104,31 @@ export default function DashboardPage() {
 
   async function runSimulation() {
     setSimError("");
-    const res = await fetch("/api/simulations", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ numRuns: 5000 }),
-    });
-    if (handleUnauthorized(res)) return;
-    if (!res.ok) {
-      const { message } = await readApiError(res);
+    setSimStarting(true);
+    try {
+      const res = await fetch("/api/simulations", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ numRuns: 5000 }),
+      });
+      if (handleUnauthorized(res)) return;
+      if (!res.ok) {
+        const { message } = await readApiError(res);
+        setSimError(message);
+        toast.error(message);
+        return;
+      }
+      const job = await res.json();
+      setSimJob(job);
+      toast.success("Расчёт Monte Carlo запущен");
+      pollJob(job.id);
+    } catch {
+      const message = "Не удалось запустить расчёт. Проверьте подключение и попробуйте снова.";
       setSimError(message);
       toast.error(message);
-      return;
+    } finally {
+      setSimStarting(false);
     }
-    const job = await res.json();
-    setSimJob(job);
-    toast.success("Расчёт Monte Carlo запущен");
-    pollJob(job.id);
   }
 
   function pollJob(id: string) {
@@ -151,25 +167,32 @@ export default function DashboardPage() {
   }
 
   async function quickAddAsset() {
-    const res = await fetch("/api/assets", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        name: "Портфель",
-        type: "BROKERAGE",
-        currentValue: 3_000_000,
-        expectedReturnPct: 7,
-        volatilityPct: 12,
-      }),
-    });
-    if (handleUnauthorized(res)) return;
-    if (!res.ok) {
-      const { message } = await readApiError(res);
-      toast.error(message);
-      return;
+    setAddingAsset(true);
+    try {
+      const res = await fetch("/api/assets", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: "Портфель",
+          type: "BROKERAGE",
+          currentValue: 3_000_000,
+          expectedReturnPct: 7,
+          volatilityPct: 12,
+        }),
+      });
+      if (handleUnauthorized(res)) return;
+      if (!res.ok) {
+        const { message } = await readApiError(res);
+        toast.error(message);
+        return;
+      }
+      await loadProjection();
+      toast.success("Демо-портфель добавлен");
+    } catch {
+      toast.error("Не удалось добавить портфель. Проверьте подключение и попробуйте снова.");
+    } finally {
+      setAddingAsset(false);
     }
-    await loadProjection();
-    toast.success("Демо-портфель добавлен");
   }
 
   return (
@@ -219,8 +242,8 @@ export default function DashboardPage() {
             )}
 
             <div className="flex flex-wrap gap-3">
-              <Button type="button" onClick={runSimulation}>
-                Запустить Monte Carlo (5k)
+              <Button type="button" onClick={runSimulation} disabled={simBusy}>
+                {simBusy ? "Расчёт…" : "Запустить Monte Carlo (5k)"}
               </Button>
               {simJob && (
                 <span className="text-sm text-muted">
@@ -237,6 +260,7 @@ export default function DashboardPage() {
             onQuickAdd={quickAddAsset}
             onRefresh={loadProjection}
             onUnauthorized={handleUnauthorized}
+            addingAsset={addingAsset}
           />
         )}
 
@@ -285,15 +309,22 @@ function OnboardingPanel({
   onQuickAdd,
   onRefresh,
   onUnauthorized,
+  addingAsset,
 }: {
   onQuickAdd: () => void;
   onRefresh: () => void;
   onUnauthorized: (res: Response) => boolean;
+  addingAsset: boolean;
 }) {
   const [income, setIncome] = useState("50000");
   const [expense, setExpense] = useState("40000");
   const [error, setError] = useState("");
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  const [saving, setSaving] = useState(false);
+
+  const incomeValid = parsePositiveNumber(income, "Доход").ok;
+  const expenseValid = parsePositiveNumber(expense, "Расход").ok;
+  const canSave = incomeValid && expenseValid && !saving;
 
   async function saveBasics() {
     setError("");
@@ -302,52 +333,63 @@ function OnboardingPanel({
     const incomeNum = parsePositiveNumber(income, "Доход");
     if (!incomeNum.ok) {
       setFieldErrors({ amount: incomeNum.message });
+      toast.error(incomeNum.message);
       return;
     }
     const expenseNum = parsePositiveNumber(expense, "Расход");
     if (!expenseNum.ok) {
       setFieldErrors({ category: expenseNum.message });
+      toast.error(expenseNum.message);
       return;
     }
 
-    const incomeRes = await fetch("/api/incomes", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        name: "Зарплата",
-        source: "SALARY",
-        amount: incomeNum.value,
-      }),
-    });
-    if (onUnauthorized(incomeRes)) return;
-    if (!incomeRes.ok) {
-      const { message, issues } = await readApiError(incomeRes);
+    setSaving(true);
+    try {
+      const incomeRes = await fetch("/api/incomes", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: "Зарплата",
+          source: "SALARY",
+          amount: incomeNum.value,
+        }),
+      });
+      if (onUnauthorized(incomeRes)) return;
+      if (!incomeRes.ok) {
+        const { message, issues } = await readApiError(incomeRes);
+        setError(message);
+        setFieldErrors(issuesByField(issues));
+        toast.error(message);
+        return;
+      }
+
+      const expenseRes = await fetch("/api/expenses", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: "Расходы",
+          category: "living",
+          amount: expenseNum.value,
+        }),
+      });
+      if (onUnauthorized(expenseRes)) return;
+      if (!expenseRes.ok) {
+        const { message, issues } = await readApiError(expenseRes);
+        setError(message);
+        setFieldErrors(issuesByField(issues));
+        toast.error(message);
+        return;
+      }
+
+      await onRefresh();
+      toast.success("Доход и расход сохранены");
+    } catch {
+      const message = "Не удалось сохранить данные. Проверьте подключение и попробуйте снова.";
       setError(message);
-      setFieldErrors(issuesByField(issues));
       toast.error(message);
-      return;
+    } finally {
+      setSaving(false);
     }
-
-    const expenseRes = await fetch("/api/expenses", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        name: "Расходы",
-        category: "living",
-        amount: expenseNum.value,
-      }),
-    });
-    if (onUnauthorized(expenseRes)) return;
-    if (!expenseRes.ok) {
-      const { message, issues } = await readApiError(expenseRes);
-      setError(message);
-      setFieldErrors(issuesByField(issues));
-      toast.error(message);
-      return;
-    }
-
-    await onRefresh();
-    toast.success("Доход и расход сохранены");
   }
 
   return (
@@ -376,17 +418,18 @@ function OnboardingPanel({
             />
             <FieldError message={fieldErrors.category} />
           </div>
-          <Button type="button" onClick={saveBasics}>
-            Сохранить
+          <Button type="button" onClick={saveBasics} disabled={!canSave}>
+            {saving ? "Сохранение…" : "Сохранить"}
           </Button>
         </div>
         <FormError message={error} />
         <button
           type="button"
           onClick={onQuickAdd}
-          className="mt-4 text-sm font-medium text-brand hover:underline"
+          disabled={addingAsset}
+          className="mt-4 text-sm font-medium text-brand hover:underline disabled:cursor-not-allowed disabled:opacity-50"
         >
-          Добавить демо-портфель 3 млн ₽
+          {addingAsset ? "Добавление…" : "Добавить демо-портфель 3 млн ₽"}
         </button>
       </Card>
       <GoalForm onSaved={onRefresh} onUnauthorized={onUnauthorized} />
@@ -406,59 +449,80 @@ function GoalForm({
   const [years, setYears] = useState("7");
   const [error, setError] = useState("");
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  const [saving, setSaving] = useState(false);
+
+  const amountNum = parsePositiveNumber(amount, "Целевая сумма");
+  const yearsNum = parsePositiveNumber(years, "Срок");
+  const canSubmit =
+    name.trim().length > 0 &&
+    amountNum.ok &&
+    amountNum.value > 0 &&
+    yearsNum.ok &&
+    yearsNum.value > 0 &&
+    !saving;
 
   async function submit() {
     setError("");
     setFieldErrors({});
 
     if (!name.trim()) {
-      setFieldErrors({ name: "Название: укажите цель. Например, «Квартира»" });
+      const message = "Название: укажите цель. Например, «Квартира»";
+      setFieldErrors({ name: message });
+      toast.error(message);
       return;
     }
 
-    const amountNum = parsePositiveNumber(amount, "Целевая сумма");
     if (!amountNum.ok) {
       setFieldErrors({ targetAmountNominal: amountNum.message });
+      toast.error(amountNum.message);
       return;
     }
     if (amountNum.value === 0) {
-      setFieldErrors({
-        targetAmountNominal: "Целевая сумма должна быть больше нуля",
-      });
+      const message = "Целевая сумма должна быть больше нуля";
+      setFieldErrors({ targetAmountNominal: message });
+      toast.error(message);
       return;
     }
 
-    const yearsNum = parsePositiveNumber(years, "Срок");
     if (!yearsNum.ok || yearsNum.value === 0) {
-      setFieldErrors({
-        targetDate: "Срок: укажите число лет, например 7",
-      });
+      const message = "Срок: укажите число лет, например 7";
+      setFieldErrors({ targetDate: message });
+      toast.error(message);
       return;
     }
 
     const targetDate = new Date();
     targetDate.setFullYear(targetDate.getFullYear() + yearsNum.value);
 
-    const res = await fetch("/api/goals", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        name: name.trim(),
-        targetAmountNominal: amountNum.value,
-        targetDate: targetDate.toISOString(),
-      }),
-    });
-    if (onUnauthorized(res)) return;
-    if (!res.ok) {
-      const { message, issues } = await readApiError(res);
-      setError(message);
-      setFieldErrors(issuesByField(issues));
-      toast.error(message);
-      return;
-    }
+    setSaving(true);
+    try {
+      const res = await fetch("/api/goals", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: name.trim(),
+          targetAmountNominal: amountNum.value,
+          targetDate: targetDate.toISOString(),
+        }),
+      });
+      if (onUnauthorized(res)) return;
+      if (!res.ok) {
+        const { message, issues } = await readApiError(res);
+        setError(message);
+        setFieldErrors(issuesByField(issues));
+        toast.error(message);
+        return;
+      }
 
-    await onSaved();
-    toast.success("Цель добавлена");
+      await onSaved();
+      toast.success("Цель добавлена");
+    } catch {
+      const message = "Не удалось добавить цель. Проверьте подключение и попробуйте снова.";
+      setError(message);
+      toast.error(message);
+    } finally {
+      setSaving(false);
+    }
   }
 
   return (
@@ -490,8 +554,8 @@ function GoalForm({
           />
           <FieldError message={fieldErrors.targetDate} />
         </div>
-        <Button type="button" onClick={submit}>
-          Добавить цель
+        <Button type="button" onClick={submit} disabled={!canSubmit}>
+          {saving ? "Добавление…" : "Добавить цель"}
         </Button>
       </div>
       <FormError message={error} />
