@@ -878,6 +878,7 @@ export function InvestmentPlanPanel({
                 fontSize={11}
               />
               <Tooltip formatter={(value) => fmtRub(Number(value ?? 0))} />
+              <Legend />
               <Area
                 type="monotone"
                 dataKey="endCapital"
@@ -922,6 +923,7 @@ export function InvestmentPlanPanel({
                   fontSize={11}
                 />
                 <Tooltip formatter={(value) => fmtRub(Number(value ?? 0))} />
+                <Legend />
                 <Area
                   type="monotone"
                   dataKey="pHigh"

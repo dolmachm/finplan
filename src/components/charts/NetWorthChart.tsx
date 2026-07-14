@@ -4,6 +4,7 @@ import {
   Area,
   AreaChart,
   CartesianGrid,
+  Legend,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -47,6 +48,7 @@ export function NetWorthChart({
             }
             labelFormatter={(m) => `Месяц ${m}`}
           />
+          <Legend />
           <Area
             type="monotone"
             dataKey="netWorth"

@@ -3,6 +3,7 @@
 import {
   Area,
   ComposedChart,
+  Legend,
   Line,
   ResponsiveContainer,
   Tooltip,
@@ -38,6 +39,7 @@ export function MonteCarloBandChart({
           <XAxis dataKey="month" fontSize={11} />
           <YAxis fontSize={11} />
           <Tooltip />
+          <Legend />
           <Area
             dataKey="p95"
             stroke="none"
