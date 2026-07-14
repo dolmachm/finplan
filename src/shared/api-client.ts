@@ -41,7 +41,7 @@ export function parsePositiveNumber(
   value: string,
   label: string,
 ): { ok: true; value: number } | { ok: false; message: string } {
-  const trimmed = value.trim();
+  const trimmed = value.trim().replace(/\s/g, "");
   if (!trimmed) {
     return { ok: false, message: `${label}: укажите значение` };
   }

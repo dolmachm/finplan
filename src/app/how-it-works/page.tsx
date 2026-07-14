@@ -28,7 +28,11 @@ export default function HowItWorksPage() {
       </p>
 
       <p className="mt-8 text-sm text-zinc-500 border-t pt-6">
-        Результаты носят информационный характер и не являются индивидуальной
+        Есть вопросы по использованию? См.{" "}
+        <Link href="/faq" className="font-medium text-brand hover:underline">
+          FAQ
+        </Link>
+        . Результаты носят информационный характер и не являются индивидуальной
         инвестиционной рекомендацией.
       </p>
     </main>

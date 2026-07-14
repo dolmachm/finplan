@@ -53,6 +53,12 @@ export default function HomePage() {
                 Начать бесплатно
               </Link>
               <Link
+                href="/faq"
+                className="rounded-lg border border-border bg-card px-6 py-3 text-sm font-medium hover:bg-brand-light"
+              >
+                FAQ
+              </Link>
+              <Link
                 href="/how-it-works"
                 className="rounded-lg border border-border bg-card px-6 py-3 text-sm font-medium hover:bg-brand-light"
               >

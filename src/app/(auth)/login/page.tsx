@@ -7,6 +7,7 @@ import { Suspense, useState } from "react";
 import { useRouter } from "next/navigation";
 import { AuthShell } from "@/components/layout/AuthShell";
 import { Button } from "@/components/ui/button";
+import { FormField } from "@/components/ui/FormField";
 import { Input } from "@/components/ui/input";
 import { toast } from "@/components/ui/ToastProvider";
 
@@ -84,22 +85,28 @@ function LoginForm() {
         </p>
       )}
       <form onSubmit={onSubmit} className="mt-8 space-y-4">
-        <Input
-          type="email"
-          placeholder="Email"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          required
-          autoComplete="email"
-        />
-        <Input
-          type="password"
-          placeholder="Пароль"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          required
-          autoComplete="current-password"
-        />
+        <FormField label="Email" hint="Адрес, указанный при регистрации" htmlFor="login-email">
+          <Input
+            id="login-email"
+            type="email"
+            placeholder="name@example.com"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            required
+            autoComplete="email"
+          />
+        </FormField>
+        <FormField label="Пароль" htmlFor="login-password">
+          <Input
+            id="login-password"
+            type="password"
+            placeholder="Введите пароль"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            required
+            autoComplete="current-password"
+          />
+        </FormField>
         {error && <p className="text-sm text-danger">{error}</p>}
         <Button type="submit" disabled={loading} className="w-full">
           {loading ? "Вход…" : "Войти"}

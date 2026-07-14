@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { AuthShell } from "@/components/layout/AuthShell";
 import { Button } from "@/components/ui/button";
-import { FieldError } from "@/components/ui/FormError";
+import { FormField } from "@/components/ui/FormField";
 import { Input } from "@/components/ui/input";
 import { toast } from "@/components/ui/ToastProvider";
 import { issuesByField } from "@/shared/api-client";
@@ -70,37 +70,47 @@ export default function RegisterPage() {
   return (
     <AuthShell title="Регистрация" subtitle="Создайте личный кабинет ФИНКОН">
       <form onSubmit={onSubmit} className="mt-8 space-y-4">
-        <div>
+        <FormField
+          label="Имя"
+          hint="Необязательно — отображается в кабинете"
+          htmlFor="register-name"
+          error={fieldErrors.name}
+        >
           <Input
-            placeholder="Имя"
+            id="register-name"
+            placeholder="Иван"
             value={name}
             onChange={(e) => setName(e.target.value)}
           />
-          <FieldError message={fieldErrors.name} />
-        </div>
-        <div>
+        </FormField>
+        <FormField label="Email" htmlFor="register-email" error={fieldErrors.email}>
           <Input
+            id="register-email"
             type="email"
-            placeholder="Email"
+            placeholder="name@example.com"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             required
             autoComplete="email"
           />
-          <FieldError message={fieldErrors.email} />
-        </div>
-        <div>
+        </FormField>
+        <FormField
+          label="Пароль"
+          hint="Минимум 8 символов"
+          htmlFor="register-password"
+          error={fieldErrors.password}
+        >
           <Input
+            id="register-password"
             type="password"
-            placeholder="Пароль (мин. 8 символов)"
+            placeholder="Минимум 8 символов"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             minLength={8}
             required
             autoComplete="new-password"
           />
-          <FieldError message={fieldErrors.password} />
-        </div>
+        </FormField>
         {error && <p className="text-sm text-danger">{error}</p>}
         <Button type="submit" disabled={loading} className="w-full">
           {loading ? "Создание…" : "Создать аккаунт"}

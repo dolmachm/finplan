@@ -6,6 +6,8 @@ import { createEmptyRule, newRuleId } from "@/modules/scenarios/rule.types";
 import { parseRulesFromJson } from "@/modules/scenarios/rule-engine";
 import { RULE_TEMPLATES } from "@/modules/scenarios/rule-catalog";
 import { toast } from "@/components/ui/ToastProvider";
+import { HelpHint } from "@/components/ui/FormField";
+import { FEATURE_HINTS } from "@/content/help";
 import { RuleCard } from "./RuleCard";
 
 interface ValidationIssue {
@@ -185,6 +187,7 @@ export function ScenarioRulesEditor({
                 <p className="text-sm text-zinc-500">
                   Конструктор IF → THEN → ELSE (вложенные ветки поддерживаются)
                 </p>
+                <HelpHint>{FEATURE_HINTS.scenarios}</HelpHint>
               </div>
               <div className="flex flex-wrap gap-2">
                 <button

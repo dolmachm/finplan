@@ -10,13 +10,16 @@ import { Input } from "@/components/ui/input";
 import { NetWorthChart } from "@/components/charts/NetWorthChart";
 import { MonteCarloBandChart } from "@/components/charts/MonteCarloBandChart";
 import { ScenariosPanel } from "@/components/scenarios/ScenariosPanel";
-import { FieldError, FormError } from "@/components/ui/FormError";
+import { FormError } from "@/components/ui/FormError";
+import { FormField, HelpHint } from "@/components/ui/FormField";
 import { toast } from "@/components/ui/ToastProvider";
+import { FEATURE_HINTS } from "@/content/help";
 import {
   issuesByField,
   parsePositiveNumber,
   readApiError,
 } from "@/shared/api-client";
+import { digitsOnly, formatMoneyInput } from "@/shared/format-input";
 
 type Tab = "plan" | "assets" | "scenarios" | "export";
 
@@ -206,14 +209,17 @@ export default function DashboardPage() {
             <section className="grid gap-4 sm:grid-cols-3">
               <SummaryCard
                 title="Рекомендуемый взнос / мес"
+                hint="Сколько откладывать ежемесячно, чтобы успеть к целям"
                 value={projection.result.summary.recommendedMonthlySaving}
               />
               <SummaryCard
                 title="Средний профицит / мес"
+                hint="Доходы минус расходы и долги в среднем за горизонт"
                 value={projection.result.summary.avgMonthlySurplus}
               />
               <SummaryCard
                 title="Чистые активы (конец горизонта)"
+                hint="Прогноз накоплений к концу выбранного периода"
                 value={projection.result.summary.finalNetWorth}
               />
             </section>
@@ -241,7 +247,10 @@ export default function DashboardPage() {
               </Card>
             )}
 
-            <div className="flex flex-wrap gap-3">
+            <div className="flex flex-wrap items-end gap-3">
+              <div className="flex-1 min-w-[200px]">
+                <HelpHint>{FEATURE_HINTS.monteCarlo}</HelpHint>
+              </div>
               <Button type="button" onClick={runSimulation} disabled={simBusy}>
                 {simBusy ? "Расчёт…" : "Запустить Monte Carlo (5k)"}
               </Button>
@@ -273,14 +282,17 @@ export default function DashboardPage() {
         )}
 
         {tab === "export" && (
-          <Card className="space-y-4">
-            <h2 className="font-medium">Экспорт</h2>
-            <a
-              href="/api/export/pdf"
-              className="inline-block rounded-lg bg-sidebar px-4 py-2 text-sm text-white hover:opacity-90"
-            >
-              Скачать PDF
-            </a>
+          <Card className="space-y-6">
+            <div>
+              <h2 className="font-medium">PDF-отчёт</h2>
+              <HelpHint className="mt-1">{FEATURE_HINTS.pdfExport}</HelpHint>
+              <a
+                href="/api/export/pdf"
+                className="mt-3 inline-block rounded-lg bg-sidebar px-4 py-2 text-sm text-white hover:opacity-90"
+              >
+                Скачать PDF
+              </a>
+            </div>
             <CsvImport />
           </Card>
         )}
@@ -288,10 +300,19 @@ export default function DashboardPage() {
   );
 }
 
-function SummaryCard({ title, value }: { title: string; value: number }) {
+function SummaryCard({
+  title,
+  hint,
+  value,
+}: {
+  title: string;
+  hint?: string;
+  value: number;
+}) {
   return (
     <Card className="p-4">
       <p className="text-xs text-muted">{title}</p>
+      {hint && <p className="mt-0.5 text-[11px] text-muted/80">{hint}</p>}
       <p className="mt-1 text-lg font-semibold">{formatRub(value)}</p>
     </Card>
   );
@@ -316,8 +337,8 @@ function OnboardingPanel({
   onUnauthorized: (res: Response) => boolean;
   addingAsset: boolean;
 }) {
-  const [income, setIncome] = useState("50000");
-  const [expense, setExpense] = useState("40000");
+  const [income, setIncome] = useState("50 000");
+  const [expense, setExpense] = useState("40 000");
   const [error, setError] = useState("");
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
@@ -399,31 +420,45 @@ function OnboardingPanel({
         <p className="mt-1 text-sm text-muted">
           Шаг 1: доход и расход. Шаг 2: активы. Шаг 3: цель и Monte Carlo.
         </p>
-        <div className="mt-4 flex flex-wrap gap-4">
-          <div>
+        <div className="mt-4 flex flex-wrap items-end gap-4">
+          <FormField
+            label="Доход в месяц"
+            hint="Зарплата и другие поступления после налогов"
+            htmlFor="income"
+            error={fieldErrors.amount}
+            className="max-w-[180px]"
+          >
             <Input
+              id="income"
+              inputMode="numeric"
               value={income}
-              onChange={(e) => setIncome(e.target.value)}
-              placeholder="Доход / мес"
-              className="max-w-[160px]"
+              onChange={(e) => setIncome(formatMoneyInput(e.target.value))}
+              placeholder="50 000"
             />
-            <FieldError message={fieldErrors.amount} />
-          </div>
-          <div>
+          </FormField>
+          <FormField
+            label="Расход в месяц"
+            hint="Обязательные и регулярные траты"
+            htmlFor="expense"
+            error={fieldErrors.category}
+            className="max-w-[180px]"
+          >
             <Input
+              id="expense"
+              inputMode="numeric"
               value={expense}
-              onChange={(e) => setExpense(e.target.value)}
-              placeholder="Расход / мес"
-              className="max-w-[160px]"
+              onChange={(e) => setExpense(formatMoneyInput(e.target.value))}
+              placeholder="40 000"
             />
-            <FieldError message={fieldErrors.category} />
-          </div>
+          </FormField>
           <Button type="button" onClick={saveBasics} disabled={!canSave}>
             {saving ? "Сохранение…" : "Сохранить"}
           </Button>
         </div>
         <FormError message={error} />
-        <button
+        <div className="mt-4">
+          <HelpHint>{FEATURE_HINTS.demoPortfolio}</HelpHint>
+          <button
           type="button"
           onClick={onQuickAdd}
           disabled={addingAsset}
@@ -431,6 +466,7 @@ function OnboardingPanel({
         >
           {addingAsset ? "Добавление…" : "Добавить демо-портфель 3 млн ₽"}
         </button>
+        </div>
       </Card>
       <GoalForm onSaved={onRefresh} onUnauthorized={onUnauthorized} />
     </section>
@@ -445,7 +481,7 @@ function GoalForm({
   onUnauthorized: (res: Response) => boolean;
 }) {
   const [name, setName] = useState("Квартира");
-  const [amount, setAmount] = useState("6000000");
+  const [amount, setAmount] = useState("6 000 000");
   const [years, setYears] = useState("7");
   const [error, setError] = useState("");
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
@@ -528,32 +564,52 @@ function GoalForm({
   return (
     <Card>
       <h3 className="font-medium">Цель</h3>
-      <div className="mt-4 flex flex-wrap gap-3">
-        <div>
+      <HelpHint className="mt-1">
+        Укажите название, сумму в рублях и срок в годах — дата цели рассчитается автоматически.
+      </HelpHint>
+      <div className="mt-4 flex flex-wrap items-end gap-3">
+        <FormField
+          label="Название"
+          htmlFor="goal-name"
+          error={fieldErrors.name}
+          className="max-w-[160px]"
+        >
           <Input
+            id="goal-name"
             value={name}
             onChange={(e) => setName(e.target.value)}
-            className="max-w-[140px]"
+            placeholder="Квартира"
           />
-          <FieldError message={fieldErrors.name} />
-        </div>
-        <div>
+        </FormField>
+        <FormField
+          label="Сумма, ₽"
+          hint="Номинальная сумма без инфляции"
+          htmlFor="goal-amount"
+          error={fieldErrors.targetAmountNominal}
+          className="max-w-[160px]"
+        >
           <Input
+            id="goal-amount"
+            inputMode="numeric"
             value={amount}
-            onChange={(e) => setAmount(e.target.value)}
-            className="max-w-[140px]"
+            onChange={(e) => setAmount(formatMoneyInput(e.target.value))}
+            placeholder="6 000 000"
           />
-          <FieldError message={fieldErrors.targetAmountNominal} />
-        </div>
-        <div>
+        </FormField>
+        <FormField
+          label="Срок, лет"
+          htmlFor="goal-years"
+          error={fieldErrors.targetDate}
+          className="w-28"
+        >
           <Input
+            id="goal-years"
+            inputMode="numeric"
             value={years}
-            onChange={(e) => setYears(e.target.value)}
-            title="лет"
-            className="w-20"
+            onChange={(e) => setYears(digitsOnly(e.target.value, 2))}
+            placeholder="7"
           />
-          <FieldError message={fieldErrors.targetDate} />
-        </div>
+        </FormField>
         <Button type="button" onClick={submit} disabled={!canSubmit}>
           {saving ? "Добавление…" : "Добавить цель"}
         </Button>
@@ -613,10 +669,12 @@ function CsvImport() {
 
   return (
     <div>
-      <p className="mb-2 text-sm text-muted">
-        CSV: колонки type (asset|income|expense), name, amount, category
+      <h3 className="font-medium">Импорт CSV</h3>
+      <HelpHint className="mt-1">{FEATURE_HINTS.csvImport}</HelpHint>
+      <p className="mt-2 text-xs text-muted">
+        Колонки: type (asset|income|expense), name, amount, category
       </p>
-      <input type="file" accept=".csv" onChange={onFile} className="text-sm" />
+      <input type="file" accept=".csv" onChange={onFile} className="mt-3 text-sm" />
       {result && <p className="mt-2 text-sm text-success">{result}</p>}
       <FormError message={error} />
     </div>

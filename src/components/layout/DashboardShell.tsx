@@ -1,7 +1,10 @@
 "use client";
 
+import Link from "next/link";
 import { BrandLogo } from "@/components/brand/BrandLogo";
+import { HelpHint } from "@/components/ui/FormField";
 import { toast } from "@/components/ui/ToastProvider";
+import { TAB_HINTS } from "@/content/help";
 import { signOut } from "next-auth/react";
 
 const navItems = [
@@ -44,7 +47,13 @@ export function DashboardShell({
             </button>
           ))}
         </nav>
-        <div className="border-t border-white/10 p-3">
+        <div className="border-t border-white/10 p-3 space-y-1">
+          <Link
+            href="/faq"
+            className="block w-full rounded-lg px-3 py-2.5 text-left text-sm text-white/60 hover:bg-white/10 hover:text-white"
+          >
+            FAQ
+          </Link>
           <button
             type="button"
             onClick={() => {
@@ -62,6 +71,7 @@ export function DashboardShell({
           <h1 className="text-xl font-semibold text-foreground">
             {navItems.find((n) => n.id === tab)?.label}
           </h1>
+          <HelpHint>{TAB_HINTS[tab]}</HelpHint>
         </header>
         <main className="flex-1 px-8 py-8">{children}</main>
       </div>
