@@ -1,3 +1,4 @@
+import { notFoundResponse } from "@/shared/api-validation";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { getUser, updateUser, adjustBalance, setAccountStatus } from "@/modules/admin/admin.service";
@@ -30,7 +31,7 @@ export async function GET(_req: Request, { params }: Params) {
   const { id } = await params;
   const user = await getUser(id);
   if (!user) {
-    return NextResponse.json({ error: "Not found" }, { status: 404 });
+    return notFoundResponse();
   }
   return NextResponse.json({ user });
 }

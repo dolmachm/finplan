@@ -7,6 +7,7 @@ import { FormField, HelpHint } from "@/components/ui/FormField";
 import { Input } from "@/components/ui/input";
 import { toast } from "@/components/ui/ToastProvider";
 import { readApiError } from "@/shared/api-client";
+import { FIELD_HINTS } from "@/content/help";
 import type { MacroSettings } from "@/shared/types";
 
 export function MacroSettingsCard({
@@ -67,19 +68,19 @@ export function MacroSettingsCard({
   return (
     <Card className="space-y-4">
       <div>
-        <h2 className="font-medium">Макропараметры плана</h2>
+        <h2 className="font-medium">Общие настройки прогноза</h2>
         <HelpHint>
-          Инфляция, налог и горизонт — общие допущения CFP для прогноза и симуляций.
+          Общие допущения для всего плана: рост цен, налог и на сколько лет смотреть вперёд.
         </HelpHint>
       </div>
       <div className="grid gap-3 sm:grid-cols-3">
-        <FormField label="Инфляция, % год.">
+        <FormField label="Инфляция, % год." hint={FIELD_HINTS.inflation}>
           <Input value={inflation} onChange={(e) => setInflation(e.target.value)} />
         </FormField>
-        <FormField label="НДФЛ, %">
+        <FormField label="НДФЛ, %" hint={FIELD_HINTS.incomeTax}>
           <Input value={tax} onChange={(e) => setTax(e.target.value)} />
         </FormField>
-        <FormField label="Горизонт, лет">
+        <FormField label="Горизонт, лет" hint={FIELD_HINTS.planHorizon}>
           <Input value={horizon} onChange={(e) => setHorizon(e.target.value)} />
         </FormField>
       </div>

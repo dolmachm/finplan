@@ -1,4 +1,5 @@
 import { jsPDF } from "jspdf";
+import { formatRub } from "@/shared/format";
 
 export interface PdfReportData {
   userName: string;
@@ -53,13 +54,13 @@ export function generatePlanPdf(data: PdfReportData): Uint8Array {
   y += 8;
   doc.setFontSize(10);
   doc.text(
-    `Прогноз чистых активов (конец): ${formatMoney(data.summary.finalNetWorth)}`,
+    `Прогноз чистых активов (конец): ${formatRub(data.summary.finalNetWorth)}`,
     14,
     y,
   );
   y += 6;
   doc.text(
-    `Рекомендуемый ежемесячный взнос: ${formatMoney(data.summary.recommendedSaving)}`,
+    `Рекомендуемый ежемесячный взнос: ${formatRub(data.summary.recommendedSaving)}`,
     14,
     y,
   );
@@ -74,7 +75,7 @@ export function generatePlanPdf(data: PdfReportData): Uint8Array {
       g.probability !== undefined
         ? ` — вероятность ${(g.probability * 100).toFixed(1)}%`
         : "";
-    doc.text(`${g.name}: ${formatMoney(g.target)}${prob}`, 14, y);
+    doc.text(`${g.name}: ${formatRub(g.target)}${prob}`, 14, y);
     y += 6;
     if (y > 270) {
       doc.addPage();
@@ -83,14 +84,6 @@ export function generatePlanPdf(data: PdfReportData): Uint8Array {
   }
 
   return new Uint8Array(doc.output("arraybuffer"));
-}
-
-function formatMoney(n: number): string {
-  return new Intl.NumberFormat("ru-RU", {
-    style: "currency",
-    currency: "RUB",
-    maximumFractionDigits: 0,
-  }).format(n);
 }
 
 export const REGULATORY_DISCLAIMER =

@@ -75,3 +75,34 @@ export const goalSchema = z.object({
   strategy: z.enum(["SYSTEMATIC", "LUMP_SUM", "BALANCED"]).default("SYSTEMATIC"),
   linkedAssetId: z.string().nullable().optional(),
 });
+
+export const liabilityTypeEnum = z.enum([
+  "MORTGAGE",
+  "CONSUMER_LOAN",
+  "CREDIT_CARD",
+  "AUTO_LOAN",
+  "STUDENT_LOAN",
+  "OTHER",
+]);
+
+export const liabilitySchema = z.object({
+  name: z.string().min(1),
+  type: liabilityTypeEnum,
+  remainingBalance: z.number().nonnegative(),
+  interestRatePct: z.number(),
+  monthlyPayment: z.number().nonnegative(),
+  endDate: z.string().datetime().optional(),
+  currency: z.string().default("RUB"),
+});
+
+export const liabilityPatchSchema = z
+  .object({
+    name: z.string().min(1),
+    type: liabilityTypeEnum,
+    remainingBalance: z.number().nonnegative(),
+    interestRatePct: z.number(),
+    monthlyPayment: z.number().nonnegative(),
+    endDate: z.string().datetime().nullable().optional(),
+    currency: z.string(),
+  })
+  .partial();

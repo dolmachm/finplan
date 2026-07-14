@@ -2,8 +2,11 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import type { InputJsonValue } from "@/shared/db";
 import { prisma } from "@/shared/db";
+import {
+  notFoundResponse,
+  parseJsonBody,
+} from "@/shared/api-validation";
 import { requireUserId, isErrorResponse } from "@/shared/session";
-import { parseRulesFromJson } from "@/modules/scenarios/rule-engine";
 import { validateRules } from "@/modules/scenarios/rule-validation";
 import { loadPlanInputForUser } from "@/modules/plan/plan-data.service";
 import type { ScenarioRule } from "@/modules/scenarios/rule.types";
@@ -26,7 +29,7 @@ export async function GET(
     where: { id, userId },
   });
   if (!scenario) {
-    return NextResponse.json({ error: "Not found" }, { status: 404 });
+    return notFoundResponse();
   }
   return NextResponse.json(scenario);
 }
@@ -38,13 +41,15 @@ export async function PATCH(
   const userId = await requireUserId();
   if (isErrorResponse(userId)) return userId;
   const { id } = await params;
-  const body = patchSchema.parse(await req.json());
+  const parsed = parseJsonBody(patchSchema, await req.json());
+  if (!parsed.ok) return parsed.response;
+  const body = parsed.data;
 
   const existing = await prisma.scenario.findFirst({
     where: { id, userId },
   });
   if (!existing) {
-    return NextResponse.json({ error: "Not found" }, { status: 404 });
+    return notFoundResponse();
   }
 
   let validation: ReturnType<typeof validateRules> = [];
@@ -54,7 +59,11 @@ export async function PATCH(
     const errors = validation.filter((v) => v.level === "error");
     if (errors.length > 0) {
       return NextResponse.json(
-        { error: "Validation failed", issues: validation },
+        {
+          error:
+            "В правилах есть ошибки. Исправьте их и сохраните снова.",
+          issues: validation,
+        },
         { status: 400 },
       );
     }

@@ -6,15 +6,11 @@ import { createEmptyRule, newRuleId } from "@/modules/scenarios/rule.types";
 import { parseRulesFromJson } from "@/modules/scenarios/rule-engine";
 import { RULE_TEMPLATES } from "@/modules/scenarios/rule-catalog";
 import { toast } from "@/components/ui/ToastProvider";
-import { HelpHint } from "@/components/ui/FormField";
 import { FEATURE_HINTS } from "@/content/help";
+import { HelpHint } from "@/components/ui/FormField";
+import { readApiError, NETWORK_ERROR_MESSAGE } from "@/shared/api-client";
+import type { RuleValidationIssue } from "@/modules/scenarios/rule-validation";
 import { RuleCard } from "./RuleCard";
-
-interface ValidationIssue {
-  ruleId: string;
-  level: "error" | "warning";
-  message: string;
-}
 
 interface ScenarioRow {
   id: string;
@@ -39,7 +35,7 @@ export function ScenarioRulesEditor({
   );
   const [rules, setRules] = useState<ScenarioRule[]>([]);
   const [assets, setAssets] = useState<AssetOption[]>([]);
-  const [issues, setIssues] = useState<ValidationIssue[]>([]);
+  const [issues, setIssues] = useState<RuleValidationIssue[]>([]);
   const [saving, setSaving] = useState(false);
   const [validating, setValidating] = useState(false);
   const [activating, setActivating] = useState(false);
@@ -88,20 +84,22 @@ export function ScenarioRulesEditor({
           toast.success("Правила корректны");
         } else {
           const errors = (data.issues ?? []).filter(
-            (i: ValidationIssue) => i.level === "error",
+            (i: RuleValidationIssue) => i.level === "error",
           ).length;
           toast.error(
             errors > 0
-              ? `Найдено ошибок: ${errors}`
-              : "Есть предупреждения в правилах",
+              ? `Найдено ошибок: ${errors}. Исправьте их и проверьте снова.`
+              : "Есть предупреждения в правилах — можно сохранить, но лучше уточнить.",
           );
         }
         return data.valid as boolean;
       }
-      toast.error("Не удалось проверить правила");
+      const { message, issues } = await readApiError(res);
+      if (issues.length) setIssues(issues as unknown as RuleValidationIssue[]);
+      toast.error(message);
       return false;
     } catch {
-      toast.error("Не удалось проверить правила");
+      toast.error(NETWORK_ERROR_MESSAGE);
       return false;
     } finally {
       setValidating(false);
@@ -125,12 +123,16 @@ export function ScenarioRulesEditor({
         onSaved();
         toast.success("Правила сохранены");
       } else {
-        const data = await res.json();
-        setIssues(data.issues ?? [{ ruleId: "", level: "error", message: data.error }]);
-        toast.error(data.error ?? "Не удалось сохранить правила");
+        const { message, issues } = await readApiError(res);
+        if (issues.length) {
+          setIssues(issues as unknown as RuleValidationIssue[]);
+        } else {
+          setIssues([{ ruleId: "", level: "error", message }]);
+        }
+        toast.error(message);
       }
     } catch {
-      toast.error("Не удалось сохранить правила");
+      toast.error(NETWORK_ERROR_MESSAGE);
     } finally {
       setSaving(false);
     }
@@ -185,7 +187,7 @@ export function ScenarioRulesEditor({
               <div>
                 <h2 className="text-lg font-medium">{selected.name}</h2>
                 <p className="text-sm text-zinc-500">
-                  Конструктор IF → THEN → ELSE (вложенные ветки поддерживаются)
+                  Если случится условие А — сделайте действие Б (иначе — В). Можно вкладывать ветки.
                 </p>
                 <HelpHint>{FEATURE_HINTS.scenarios}</HelpHint>
               </div>

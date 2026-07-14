@@ -5,38 +5,15 @@ import type {
   IPlanProjection,
   IPlanReturnStep,
   IPlanStream,
-  IPlanStreamFrequency,
   IPlanVariant,
   IPlanYearRow,
 } from "./types";
 import { budgetForYear, type BudgetLine } from "./budget";
+import { annualAmount, periodYears } from "./stream-math";
+import { percentile, randn } from "@/shared/math";
 
 export type { BudgetLine };
-
-/** Excel CHOOSE → annual cashflow */
-export function annualAmount(
-  amount: number,
-  frequency: IPlanStreamFrequency,
-  yearsInPeriod: number,
-): number {
-  if (!amount || yearsInPeriod <= 0) return 0;
-  switch (frequency) {
-    case "MONTHLY":
-      return amount * 12;
-    case "QUARTERLY":
-      return amount * 4;
-    case "YEARLY":
-      return amount;
-    case "PERIOD":
-      return amount / yearsInPeriod;
-  }
-}
-
-export function periodYears(startYear: number, endYear: number): number {
-  if (!startYear || !endYear) return 0;
-  const n = endYear - startYear + 1;
-  return n >= 0 && n <= 199 ? n : 0;
-}
+export { annualAmount, periodYears } from "./stream-math";
 
 function pickScheduleStep(
   year: number,
@@ -146,14 +123,6 @@ export function normalizeVariant(v: IPlanVariant): IPlanVariant {
   };
 }
 
-function randn(): number {
-  let u = 0;
-  let v = 0;
-  while (u === 0) u = Math.random();
-  while (v === 0) v = Math.random();
-  return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
-}
-
 /** Excel: RISK_FREE | NORMINV | LOGNORM-style */
 export function sampleReturnPct(
   meanPct: number,
@@ -166,15 +135,6 @@ export function sampleReturnPct(
   }
   // LOGNORMAL: (EXP(NORMINV(RAND(), mean/100, vol/100)) - 1) * 100
   return (Math.exp(meanPct / 100 + randn() * (volPct / 100)) - 1) * 100;
-}
-
-function percentile(sorted: number[], p: number): number {
-  if (sorted.length === 0) return 0;
-  const idx = Math.min(
-    sorted.length - 1,
-    Math.max(0, Math.floor((sorted.length - 1) * p)),
-  );
-  return sorted[idx] ?? 0;
 }
 
 export function runIPlanProjection(

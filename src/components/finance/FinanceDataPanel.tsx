@@ -6,7 +6,7 @@ import { Card } from "@/components/ui/card";
 import { FormField, HelpHint } from "@/components/ui/FormField";
 import { Input } from "@/components/ui/input";
 import { toast } from "@/components/ui/ToastProvider";
-import { FEATURE_HINTS } from "@/content/help";
+import { FEATURE_HINTS, FIELD_HINTS } from "@/content/help";
 import {
   ASSET_CLASS_LABELS,
   ASSET_TYPE_OPTIONS,
@@ -29,6 +29,7 @@ import type {
 } from "@/shared/types";
 import { readApiError, parsePositiveNumber } from "@/shared/api-client";
 import { formatMoneyInput } from "@/shared/format-input";
+import { formatRub } from "@/shared/format";
 
 const selectClass =
   "w-full rounded-lg border border-border bg-card px-4 py-2.5 text-sm";
@@ -45,14 +46,6 @@ export type FinanceDataStatus = {
   netWorthApprox: number;
 };
 
-function fmtRub(n: number) {
-  return new Intl.NumberFormat("ru-RU", {
-    style: "currency",
-    currency: "RUB",
-    maximumFractionDigits: 0,
-  }).format(n);
-}
-
 export function FinanceDataPanel({
   onRefresh,
   onUnauthorized,
@@ -60,7 +53,7 @@ export function FinanceDataPanel({
   addingAsset,
   onStatusChange,
 }: {
-  onRefresh: () => void;
+  onRefresh?: () => void;
   onUnauthorized: (res: Response) => boolean;
   onQuickAdd: () => void | Promise<void>;
   addingAsset: boolean;
@@ -141,7 +134,7 @@ export function FinanceDataPanel({
       }
       toast.success("Удалено");
       await load();
-      await onRefresh();
+      onRefresh?.();
     } catch {
       toast.error("Не удалось удалить");
     }
@@ -157,9 +150,8 @@ export function FinanceDataPanel({
         expenses={expenses}
         onBack={() => setEditView(null)}
         onSaved={async () => {
-          setEditView(null);
           await load();
-          await onRefresh();
+          setEditView(null);
         }}
         onUnauthorized={onUnauthorized}
       />
@@ -200,13 +192,13 @@ export function FinanceDataPanel({
           </div>
           <div className="mt-4 flex flex-wrap gap-4 text-sm">
             <span>
-              Активы: <strong>{fmtRub(assetsTotal)}</strong>
+              Активы: <strong>{formatRub(assetsTotal)}</strong>
             </span>
             <span>
-              Пассивы: <strong>{fmtRub(debtTotal)}</strong>
+              Пассивы: <strong>{formatRub(debtTotal)}</strong>
             </span>
             <span>
-              Чистые активы: <strong>{fmtRub(assetsTotal - debtTotal)}</strong>
+              Чистые активы: <strong>{formatRub(assetsTotal - debtTotal)}</strong>
             </span>
           </div>
           <div className="mt-4">
@@ -236,8 +228,8 @@ export function FinanceDataPanel({
                   a.name,
                   assetTypeLabel(a.type),
                   ASSET_CLASS_LABELS[(a.assetClass as AssetClass) ?? "PERSONAL"],
-                  fmtRub(a.currentValue),
-                  a.dividendIncomeMonthly ? fmtRub(a.dividendIncomeMonthly) : "—",
+                  formatRub(a.currentValue),
+                  a.dividendIncomeMonthly ? formatRub(a.dividendIncomeMonthly) : "—",
                 ],
               }))}
               onEdit={(id) => setEditView({ kind: "asset", id })}
@@ -252,9 +244,9 @@ export function FinanceDataPanel({
                 cells: [
                   l.name,
                   liabilityTypeLabel(l.type),
-                  fmtRub(l.remainingBalance),
+                  formatRub(l.remainingBalance),
                   String(l.interestRatePct),
-                  fmtRub(l.monthlyPayment),
+                  formatRub(l.monthlyPayment),
                 ],
               }))}
               onEdit={(id) => setEditView({ kind: "liability", id })}
@@ -304,7 +296,7 @@ export function FinanceDataPanel({
                 cells: [
                   i.name,
                   INCOME_SOURCE_LABELS[i.source] ?? i.source,
-                  fmtRub(i.amount),
+                  formatRub(i.amount),
                   frequencyLabel(i.frequency),
                   essentialLabel(i.isEssential ?? true),
                 ],
@@ -321,7 +313,7 @@ export function FinanceDataPanel({
                 cells: [
                   e.name,
                   e.category,
-                  fmtRub(e.amount),
+                  formatRub(e.amount),
                   frequencyLabel(e.frequency),
                   essentialLabel(e.isEssential),
                 ],
@@ -592,16 +584,16 @@ function AssetEditor({
         <FormField label="Текущая стоимость, ₽" htmlFor="asset-value">
           <Input id="asset-value" inputMode="numeric" value={currentValue} onChange={(e) => setCurrentValue(formatMoneyInput(e.target.value))} placeholder="1 000 000" />
         </FormField>
-        <FormField label="Доходность, % годовых" htmlFor="asset-return" hint="Ожидаемый рост стоимости">
+        <FormField label="Доходность, % годовых" htmlFor="asset-return" hint={FIELD_HINTS.expectedReturn}>
           <Input id="asset-return" inputMode="decimal" value={expectedReturnPct} onChange={(e) => setExpectedReturnPct(e.target.value)} placeholder="7" />
         </FormField>
-        <FormField label="Волатильность, %" htmlFor="asset-vol">
+        <FormField label="Риск (волатильность), %" htmlFor="asset-vol" hint={FIELD_HINTS.volatility}>
           <Input id="asset-vol" inputMode="decimal" value={volatilityPct} onChange={(e) => setVolatilityPct(e.target.value)} placeholder="12" />
         </FormField>
-        <FormField label="Доход в месяц, ₽" htmlFor="asset-rent" hint="Аренда, дивиденды, купоны">
+        <FormField label="Доход в месяц, ₽" htmlFor="asset-rent" hint={FIELD_HINTS.dividendRent}>
           <Input id="asset-rent" inputMode="numeric" value={dividendIncomeMonthly} onChange={(e) => setDividendIncomeMonthly(formatMoneyInput(e.target.value))} placeholder="30 000" />
         </FormField>
-        <FormField label="Содержание в месяц, ₽" htmlFor="asset-maint" hint="Коммуналка, ТО, страховка / 12">
+        <FormField label="Содержание в месяц, ₽" htmlFor="asset-maint" hint={FIELD_HINTS.maintenance}>
           <Input id="asset-maint" inputMode="numeric" value={maintenanceCostMonthly} onChange={(e) => setMaintenanceCostMonthly(formatMoneyInput(e.target.value))} placeholder="5 000" />
         </FormField>
       </div>

@@ -1,12 +1,14 @@
+import type { Frequency } from "@/shared/types";
+
 export const FREQUENCY_VALUES = [
   "MONTHLY",
   "QUARTERLY",
   "SEMI_ANNUAL",
   "YEARLY",
   "ONE_TIME",
-] as const;
+] as const satisfies readonly Frequency[];
 
-export type PlanFrequency = (typeof FREQUENCY_VALUES)[number];
+export type PlanFrequency = Frequency;
 
 export function amountForMonth(
   amount: number,

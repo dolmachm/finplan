@@ -1,14 +1,6 @@
 import type { PlanInput } from "@/modules/plan/types";
 import { runDeterministicPlan } from "@/modules/plan/cashflow.engine";
-
-/** Box-Muller standard normal */
-function randn(): number {
-  let u = 0;
-  let v = 0;
-  while (u === 0) u = Math.random();
-  while (v === 0) v = Math.random();
-  return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
-}
+import { percentile, randn } from "@/shared/math";
 
 function cholesky2x2(corr: number): number[][] {
   const a11 = 1;
@@ -40,11 +32,6 @@ export interface MonteCarloResult {
   wealthAtHorizon: { p5: number; median: number; p95: number };
   samplePaths: Array<{ label: string; netWorth: number[] }>;
   progress: number;
-}
-
-function percentile(sorted: number[], p: number): number {
-  const idx = Math.floor((sorted.length - 1) * p);
-  return sorted[idx] ?? 0;
 }
 
 export function runMonteCarlo(

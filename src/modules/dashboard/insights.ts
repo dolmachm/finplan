@@ -7,6 +7,7 @@ import type {
   Liability,
 } from "@/shared/types";
 import type { PlanFrequency } from "@/modules/plan/frequency";
+import { formatRub } from "@/shared/format";
 
 const LIQUID_TYPES = new Set(["CASH", "BANK_ACCOUNT", "DEPOSIT"]);
 
@@ -276,7 +277,7 @@ export function buildInsights(
         kind: "insight",
         severity: "critical",
         title: "Расходы не ниже доходов",
-        body: `Месячный баланс ${fmt(m.surplusMonthly)}. Пока нет профицита, копить на цели сложно.`,
+        body: `Месячный баланс ${formatRub(m.surplusMonthly)}. Пока нет профицита, копить на цели сложно.`,
         ctaTab: "assets",
       });
       push(recs, {
@@ -302,7 +303,7 @@ export function buildInsights(
         kind: "insight",
         severity: "positive",
         title: "Сильный профицит",
-        body: `КДР ≈ ${m.kdr.toFixed(2)}, остаток ${fmt(m.surplusMonthly)}/мес — хороший запас для целей.`,
+        body: `КДР ≈ ${m.kdr.toFixed(2)}, остаток ${formatRub(m.surplusMonthly)}/мес — хороший запас для целей.`,
       });
       push(recs, {
         id: "rec-deploy-surplus",
@@ -319,7 +320,7 @@ export function buildInsights(
         kind: "recommendation",
         severity: "positive",
         title: "Хороший профицит",
-        body: `Остаток ${fmt(m.surplusMonthly)}/мес (≈ ${(m.savingsRate * 100).toFixed(0)}% дохода). Сохраняйте дисциплину.`,
+        body: `Остаток ${formatRub(m.surplusMonthly)}/мес (≈ ${(m.savingsRate * 100).toFixed(0)}% дохода). Сохраняйте дисциплину.`,
       });
     }
 
@@ -390,7 +391,7 @@ export function buildInsights(
         kind: "insight",
         severity: "warning",
         title: "Доход от инвестиций ниже платежей по кредитам",
-        body: `Дивиденды/аренда ${fmt(m.dividendMonthly)} vs платежи ${fmt(m.debtServiceMonthly)}/мес.`,
+        body: `Дивиденды/аренда ${formatRub(m.dividendMonthly)} vs платежи ${formatRub(m.debtServiceMonthly)}/мес.`,
       });
     }
   } else if (m.step1) {
@@ -576,7 +577,7 @@ export function buildInsights(
         kind: "insight",
         severity: "warning",
         title: "Цели слабо достижимы при текущем взносе",
-        body: `Нужно ≈ ${fmt(m.recommendedMonthlySaving)}/мес, профицит ${fmt(m.surplusMonthly)}. Разрыв >20%.`,
+        body: `Нужно ≈ ${formatRub(m.recommendedMonthlySaving)}/мес, профицит ${formatRub(m.surplusMonthly)}. Разрыв >20%.`,
         ctaTab: "plan",
       });
       push(recs, {
@@ -595,7 +596,7 @@ export function buildInsights(
           kind: "insight",
           severity: "info",
           title: "Если откладывать на 20% больше",
-          body: `Взнос ≈ ${fmt(m.surplusMonthly * boost)}/мес заметно сократит срок достижения целей.`,
+          body: `Взнос ≈ ${formatRub(m.surplusMonthly * boost)}/мес заметно сократит срок достижения целей.`,
           ctaTab: "iplan",
         });
       }
@@ -605,7 +606,7 @@ export function buildInsights(
         kind: "insight",
         severity: "positive",
         title: "Цели обеспечены текущим профицитом",
-        body: `Рекомендуемый взнос ${fmt(m.recommendedMonthlySaving)}/мес укладывается в баланс.`,
+        body: `Рекомендуемый взнос ${formatRub(m.recommendedMonthlySaving)}/мес укладывается в баланс.`,
       });
     }
   }
@@ -702,10 +703,3 @@ export function topActions(items: DashboardInsight[]): DashboardInsight[] {
     .slice(0, 3);
 }
 
-function fmt(n: number) {
-  return new Intl.NumberFormat("ru-RU", {
-    style: "currency",
-    currency: "RUB",
-    maximumFractionDigits: 0,
-  }).format(n);
-}

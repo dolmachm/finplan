@@ -1,3 +1,4 @@
+import { notFoundResponse } from "@/shared/api-validation";
 import { NextResponse } from "next/server";
 import { prisma } from "@/shared/db";
 import { requireUserId, isErrorResponse } from "@/shared/session";
@@ -14,7 +15,7 @@ export async function GET(
     include: { result: true },
   });
   if (!job) {
-    return NextResponse.json({ error: "Not found" }, { status: 404 });
+    return notFoundResponse();
   }
   return NextResponse.json(job);
 }

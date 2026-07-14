@@ -1,3 +1,4 @@
+import { forbiddenResponse } from "@/shared/api-validation";
 import { createHmac, timingSafeEqual } from "crypto";
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
@@ -74,5 +75,5 @@ export function clearAdminCookie(response: NextResponse) {
 
 export async function requireAdmin(): Promise<true | NextResponse> {
   if (await isAdminAuthenticated()) return true;
-  return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  return forbiddenResponse();
 }

@@ -18,9 +18,10 @@ import { Card } from "@/components/ui/card";
 import { FormField, HelpHint } from "@/components/ui/FormField";
 import { Input } from "@/components/ui/input";
 import { toast } from "@/components/ui/ToastProvider";
-import { FEATURE_HINTS } from "@/content/help";
+import { FEATURE_HINTS, FIELD_HINTS } from "@/content/help";
 import { readApiError, parsePositiveNumber } from "@/shared/api-client";
 import { formatMoneyInput } from "@/shared/format-input";
+import { formatRub } from "@/shared/format";
 import { newClientId } from "@/modules/iplan/client-id";
 import {
   normalizeVariant,
@@ -54,14 +55,6 @@ const DIST_OPTIONS: { value: IPlanDistribution; label: string }[] = [
   { value: "NORMAL", label: "Нормальное" },
   { value: "LOGNORMAL", label: "Лог. нормальное" },
 ];
-
-function fmtRub(n: number) {
-  return new Intl.NumberFormat("ru-RU", {
-    style: "currency",
-    currency: "RUB",
-    maximumFractionDigits: 0,
-  }).format(n);
-}
 
 function flagsBar(flags: boolean[]) {
   return flags.map((f) => (f ? "█" : "░")).join(" ");
@@ -428,7 +421,7 @@ export function InvestmentPlanPanel({
           <div>
             <p className="text-xs text-muted">Доходы / мес. экв.</p>
             <p className="text-lg font-semibold">
-              {fmtRub(
+              {formatRub(
                 data.incomes.reduce((s, i) => {
                   const m =
                     i.frequency === "YEARLY"
@@ -445,7 +438,7 @@ export function InvestmentPlanPanel({
             <ul className="mt-1 max-h-24 overflow-y-auto text-xs text-muted">
               {data.incomes.map((i) => (
                 <li key={i.id}>
-                  {i.name}: {fmtRub(i.amount)} ({i.frequency})
+                  {i.name}: {formatRub(i.amount)} ({i.frequency})
                 </li>
               ))}
               {data.incomes.length === 0 && <li>Нет доходов</li>}
@@ -454,7 +447,7 @@ export function InvestmentPlanPanel({
           <div>
             <p className="text-xs text-muted">Расходы / мес. экв.</p>
             <p className="text-lg font-semibold">
-              {fmtRub(
+              {formatRub(
                 data.expenses.reduce((s, e) => {
                   const m =
                     e.frequency === "YEARLY"
@@ -471,7 +464,7 @@ export function InvestmentPlanPanel({
             <ul className="mt-1 max-h-24 overflow-y-auto text-xs text-muted">
               {data.expenses.map((e) => (
                 <li key={e.id}>
-                  {e.name}: {fmtRub(e.amount)} ({e.frequency})
+                  {e.name}: {formatRub(e.amount)} ({e.frequency})
                 </li>
               ))}
               {data.expenses.length === 0 && <li>Нет расходов</li>}
@@ -480,9 +473,9 @@ export function InvestmentPlanPanel({
           <div>
             <p className="text-xs text-muted">Профицит (лимит взносов)</p>
             <p className="text-lg font-semibold text-brand">
-              {fmtRub(data.surplusMonthly)} / мес
+              {formatRub(data.surplusMonthly)} / мес
             </p>
-            <p className="text-xs text-muted">{fmtRub(data.surplusAnnual)} / год</p>
+            <p className="text-xs text-muted">{formatRub(data.surplusAnnual)} / год</p>
           </div>
         </div>
       </Card>
@@ -526,16 +519,16 @@ export function InvestmentPlanPanel({
       <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <Card>
           <p className="text-sm text-muted">Начальный капитал</p>
-          <p className="mt-1 text-2xl font-semibold">{fmtRub(data.initialCapital)}</p>
+          <p className="mt-1 text-2xl font-semibold">{formatRub(data.initialCapital)}</p>
         </Card>
         <Card>
           <p className="text-sm text-muted">Детерминированный конец</p>
-          <p className="mt-1 text-2xl font-semibold">{fmtRub(projection.finalCapital)}</p>
+          <p className="mt-1 text-2xl font-semibold">{formatRub(projection.finalCapital)}</p>
         </Card>
         <Card>
           <p className="text-sm text-muted">MC медиана (конец)</p>
           <p className="mt-1 text-2xl font-semibold">
-            {liveMc ? fmtRub(liveMc.finalMedian) : "—"}
+            {liveMc ? formatRub(liveMc.finalMedian) : "—"}
           </p>
         </Card>
         <Card>
@@ -579,7 +572,7 @@ export function InvestmentPlanPanel({
               }
             />
           </FormField>
-          <FormField label="Горизонт, лет">
+          <FormField label="Горизонт, лет" hint={FIELD_HINTS.iplanHorizon}>
             <Input
               type="number"
               value={active.horizonYears}
@@ -591,7 +584,7 @@ export function InvestmentPlanPanel({
               }
             />
           </FormField>
-          <FormField label="Распределение доходностей">
+          <FormField label="Распределение доходностей" hint={FIELD_HINTS.iplanDistribution}>
             <select
               className="w-full rounded-lg border border-border bg-card px-3 py-2.5 text-sm"
               value={active.distribution}
@@ -625,7 +618,7 @@ export function InvestmentPlanPanel({
               <option value="AGE">Возраст</option>
             </select>
           </FormField>
-          <FormField label="Нижний процентиль, %">
+          <FormField label="Нижний процентиль, %" hint="Осторожный исход: редко бывает хуже этого">
             <Input
               type="number"
               value={active.percentileLow}
@@ -637,7 +630,7 @@ export function InvestmentPlanPanel({
               }
             />
           </FormField>
-          <FormField label="Верхний процентиль, %">
+          <FormField label="Верхний процентиль, %" hint="Удачный исход: редко бывает лучше этого">
             <Input
               type="number"
               value={active.percentileHigh}
@@ -649,7 +642,7 @@ export function InvestmentPlanPanel({
               }
             />
           </FormField>
-          <FormField label="Прогоны MC">
+          <FormField label="Прогоны MC" hint={FIELD_HINTS.iplanMc}>
             <Input
               type="number"
               value={active.mcRuns}
@@ -877,7 +870,7 @@ export function InvestmentPlanPanel({
                 }
                 fontSize={11}
               />
-              <Tooltip formatter={(value) => fmtRub(Number(value ?? 0))} />
+              <Tooltip formatter={(value) => formatRub(Number(value ?? 0))} />
               <Legend />
               <Area
                 type="monotone"
@@ -922,7 +915,7 @@ export function InvestmentPlanPanel({
                   }
                   fontSize={11}
                 />
-                <Tooltip formatter={(value) => fmtRub(Number(value ?? 0))} />
+                <Tooltip formatter={(value) => formatRub(Number(value ?? 0))} />
                 <Legend />
                 <Area
                   type="monotone"
@@ -968,7 +961,7 @@ export function InvestmentPlanPanel({
                   }
                   fontSize={11}
                 />
-                <Tooltip formatter={(value) => fmtRub(Number(value ?? 0))} />
+                <Tooltip formatter={(value) => formatRub(Number(value ?? 0))} />
                 <Legend />
                 {comparisons.map((c, i) => (
                   <Line
@@ -1019,14 +1012,14 @@ export function InvestmentPlanPanel({
                 <td className="py-1.5 pr-2">{r.age}</td>
                 <td className="py-1.5 pr-2">{r.ratePct}</td>
                 <td className="py-1.5 pr-2">{r.volatilityPct}</td>
-                <td className="py-1.5 pr-2">{fmtRub(r.startCapital)}</td>
-                <td className="py-1.5 pr-2">{fmtRub(r.growth)}</td>
-                <td className="py-1.5 pr-2">{fmtRub(r.incomeAnnual)}</td>
-                <td className="py-1.5 pr-2">{fmtRub(r.expenseAnnual)}</td>
-                <td className="py-1.5 pr-2">{fmtRub(r.surplusAnnual)}</td>
-                <td className="py-1.5 pr-2">{fmtRub(r.contributionsTotal)}</td>
-                <td className="py-1.5 pr-2">{fmtRub(r.goalsTotal)}</td>
-                <td className="py-1.5 pr-2 font-medium">{fmtRub(r.endCapital)}</td>
+                <td className="py-1.5 pr-2">{formatRub(r.startCapital)}</td>
+                <td className="py-1.5 pr-2">{formatRub(r.growth)}</td>
+                <td className="py-1.5 pr-2">{formatRub(r.incomeAnnual)}</td>
+                <td className="py-1.5 pr-2">{formatRub(r.expenseAnnual)}</td>
+                <td className="py-1.5 pr-2">{formatRub(r.surplusAnnual)}</td>
+                <td className="py-1.5 pr-2">{formatRub(r.contributionsTotal)}</td>
+                <td className="py-1.5 pr-2">{formatRub(r.goalsTotal)}</td>
+                <td className="py-1.5 pr-2 font-medium">{formatRub(r.endCapital)}</td>
                 <td className="py-1.5 font-mono text-xs">
                   {flagsBar(r.contributionFlags)} / {flagsBar(r.goalFlags)}
                 </td>

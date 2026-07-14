@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import type { InputJsonValue } from "@/shared/db";
 import { prisma } from "@/shared/db";
+import { parseJsonBody } from "@/shared/api-validation";
 import { requireUserId, isErrorResponse } from "@/shared/session";
 import { PREDEFINED_SCENARIOS } from "@/modules/scenarios/scenario.templates";
 
@@ -22,7 +23,9 @@ const createSchema = z.object({
 export async function POST(req: Request) {
   const userId = await requireUserId();
   if (isErrorResponse(userId)) return userId;
-  const data = createSchema.parse(await req.json());
+  const parsed = parseJsonBody(createSchema, await req.json());
+  if (!parsed.ok) return parsed.response;
+  const data = parsed.data;
   const template = PREDEFINED_SCENARIOS.find((t) => t.key === data.templateKey);
   const row = await prisma.scenario.create({
     data: {

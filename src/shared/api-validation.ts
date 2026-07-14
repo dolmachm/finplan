@@ -20,7 +20,49 @@ const FIELD_LABELS: Record<string, string> = {
   type: "Тип",
   numRuns: "Количество прогонов",
   scenarioId: "Сценарий",
+  inflationPct: "Инфляция",
+  baseInflationPct: "Инфляция",
+  incomeTaxPct: "НДФЛ / налог на доход",
+  taxCapitalGainsPct: "Налог на доход с капитала",
+  taxDividendsPct: "Налог на дивиденды",
+  discountRatePct: "Ставка дисконтирования",
+  planningHorizonYears: "Горизонт планирования",
+  planHorizonYears: "Горизонт планирования",
+  remainingBalance: "Остаток долга",
+  interestRatePct: "Процентная ставка",
+  monthlyPayment: "Ежемесячный платёж",
+  expectedReturnPct: "Ожидаемая доходность",
+  volatilityPct: "Риск (волатильность)",
+  priority: "Приоритет",
+  goalType: "Тип цели",
+  strategy: "Стратегия",
+  frequency: "Периодичность",
+  description: "Описание",
+  params: "Параметры",
+  rules: "Правила",
+  templateKey: "Шаблон сценария",
 };
+
+export function notFoundResponse() {
+  return NextResponse.json(
+    { error: "Запись не найдена или у вас нет к ней доступа" },
+    { status: 404 },
+  );
+}
+
+export function unauthorizedResponse() {
+  return NextResponse.json(
+    { error: "Войдите в аккаунт, чтобы продолжить" },
+    { status: 401 },
+  );
+}
+
+export function forbiddenResponse() {
+  return NextResponse.json(
+    { error: "Недостаточно прав для этого действия" },
+    { status: 403 },
+  );
+}
 
 function fieldLabel(path: PropertyKey[]): string {
   const parts = path.map(String);

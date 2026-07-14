@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
+import { parseJsonBody } from "@/shared/api-validation";
 import { prisma } from "@/shared/db";
 import { requireUserId, isErrorResponse } from "@/shared/session";
 import { recordRevision } from "@/shared/revision";
@@ -23,7 +24,9 @@ export async function PATCH(req: Request) {
   const userId = await requireUserId();
   if (isErrorResponse(userId)) return userId;
   const before = await prisma.macroSettings.findUnique({ where: { userId } });
-  const data = schema.parse(await req.json());
+  const parsed = parseJsonBody(schema, await req.json());
+  if (!parsed.ok) return parsed.response;
+  const data = parsed.data;
   const macro = await prisma.macroSettings.upsert({
     where: { userId },
     create: { userId, ...data },

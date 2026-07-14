@@ -8,6 +8,8 @@ import { Input } from "@/components/ui/input";
 import { toast } from "@/components/ui/ToastProvider";
 import { readApiError, parsePositiveNumber } from "@/shared/api-client";
 import { formatMoneyInput } from "@/shared/format-input";
+import { formatRub } from "@/shared/format";
+import { FIELD_HINTS, FEATURE_HINTS } from "@/content/help";
 import {
   formatGoalDate,
   GOAL_STRATEGY_OPTIONS,
@@ -22,20 +24,12 @@ const selectClass =
 
 type EditView = { id?: string } | null;
 
-function fmtRub(n: number) {
-  return new Intl.NumberFormat("ru-RU", {
-    style: "currency",
-    currency: "RUB",
-    maximumFractionDigits: 0,
-  }).format(n);
-}
-
 export function GoalsPanel({
   onSaved,
   onUnauthorized,
   onCountChange,
 }: {
-  onSaved: () => void;
+  onSaved?: () => void;
   onUnauthorized: (res: Response) => boolean;
   onCountChange?: (count: number) => void;
 }) {
@@ -78,7 +72,7 @@ export function GoalsPanel({
     }
     toast.success("Цель удалена");
     await load();
-    await onSaved();
+    onSaved?.();
   }
 
   if (editView !== null) {
@@ -89,9 +83,8 @@ export function GoalsPanel({
         assets={assets}
         onBack={() => setEditView(null)}
         onSaved={async () => {
-          setEditView(null);
           await load();
-          await onSaved();
+          setEditView(null);
         }}
         onUnauthorized={onUnauthorized}
       />
@@ -102,9 +95,9 @@ export function GoalsPanel({
     <Card>
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h3 className="font-medium">Финансовые цели (CFP)</h3>
+          <h3 className="font-medium">Финансовые цели</h3>
           <HelpHint className="mt-1">
-            Несколько целей с приоритетом (1 — высший), сроком, стратегией финансирования и привязкой к активу.
+            {FEATURE_HINTS.goalsStep} Приоритет 1 — самая важная цель, если денег может не хватить на все сразу.
           </HelpHint>
         </div>
         <Button type="button" variant="secondary" onClick={() => setEditView({})}>
@@ -135,7 +128,7 @@ export function GoalsPanel({
                   <td className="px-3 py-2">{g.priority}</td>
                   <td className="px-3 py-2">{g.name}</td>
                   <td className="px-3 py-2">{goalTypeLabel(g.goalType ?? "OTHER")}</td>
-                  <td className="px-3 py-2">{fmtRub(g.targetAmountNominal)}</td>
+                  <td className="px-3 py-2">{formatRub(g.targetAmountNominal)}</td>
                   <td className="px-3 py-2">{formatGoalDate(g.targetDate)}</td>
                   <td className="px-3 py-2">{goalStrategyLabel(g.strategy ?? "SYSTEMATIC")}</td>
                   <td className="px-3 py-2">{g.allowPartialFunding ? "Да" : "Нет"}</td>
@@ -267,7 +260,7 @@ function GoalEditor({
             placeholder="Квартира / Пенсия"
           />
         </FormField>
-        <FormField label="Тип цели (CFP)" htmlFor="goal-type">
+        <FormField label="Тип цели" htmlFor="goal-type" hint="Для чего копите: жильё, подушка, учёба и т.д.">
           <select
             id="goal-type"
             className={selectClass}
@@ -281,7 +274,7 @@ function GoalEditor({
             ))}
           </select>
         </FormField>
-        <FormField label="Целевая сумма, ₽" htmlFor="goal-amount" hint="Номинальная сумма S₀">
+        <FormField label="Целевая сумма, ₽" htmlFor="goal-amount" hint={FIELD_HINTS.goalAmount}>
           <Input
             id="goal-amount"
             inputMode="numeric"
@@ -290,7 +283,7 @@ function GoalEditor({
             placeholder="6 000 000"
           />
         </FormField>
-        <FormField label="Срок, лет" htmlFor="goal-years" hint="Горизонт до даты цели T">
+        <FormField label="Срок, лет" htmlFor="goal-years" hint={FIELD_HINTS.goalYears}>
           <Input
             id="goal-years"
             inputMode="numeric"
@@ -299,7 +292,7 @@ function GoalEditor({
             placeholder="7"
           />
         </FormField>
-        <FormField label="Приоритет" htmlFor="goal-priority" hint="1 — высший (CFP ranking)">
+        <FormField label="Приоритет" htmlFor="goal-priority" hint={FIELD_HINTS.goalPriority}>
           <Input
             id="goal-priority"
             inputMode="numeric"
@@ -308,7 +301,7 @@ function GoalEditor({
             placeholder="1"
           />
         </FormField>
-        <FormField label="Стратегия финансирования" htmlFor="goal-strategy">
+        <FormField label="Стратегия накопления" htmlFor="goal-strategy" hint={FIELD_HINTS.goalStrategy}>
           <select
             id="goal-strategy"
             className={selectClass}
@@ -322,18 +315,18 @@ function GoalEditor({
             ))}
           </select>
         </FormField>
-        <FormField label="Частичное финансирование" htmlFor="goal-partial">
+        <FormField label="Частичное финансирование" htmlFor="goal-partial" hint="Разрешить копить не всю сумму сразу, если денег не хватает">
           <select
             id="goal-partial"
             className={selectClass}
             value={allowPartialFunding ? "1" : "0"}
             onChange={(e) => setAllowPartialFunding(e.target.value === "1")}
           >
-            <option value="1">Допускается (flexible goal)</option>
-            <option value="0">Только полная сумма</option>
+            <option value="1">Да, можно неполную сумму</option>
+            <option value="0">Нет — только полная сумма</option>
           </select>
         </FormField>
-        <FormField label="Привязанный актив" htmlFor="goal-asset" hint="Источник финансирования (optional)">
+        <FormField label="Привязанный актив" htmlFor="goal-asset" hint="С какого счёта планируете брать деньги (необязательно)">
           <select
             id="goal-asset"
             className={selectClass}

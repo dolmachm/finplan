@@ -1,12 +1,4 @@
 import { prisma } from "@/shared/db";
-import { z } from "zod";
-
-export function ownedCreate<T extends { userId: string }>(
-  userId: string,
-  data: Omit<T, "userId">,
-) {
-  return { ...data, userId } as T;
-}
 
 export async function assertOwned(
   model: "asset" | "liability" | "income" | "expense" | "goal" | "scenario",
@@ -25,8 +17,4 @@ export async function assertOwned(
     where: { id, userId },
   });
   return !!row;
-}
-
-export function parseBody<T>(schema: z.ZodType<T>, body: unknown): T {
-  return schema.parse(body);
 }

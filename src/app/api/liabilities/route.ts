@@ -1,25 +1,9 @@
 import { NextResponse } from "next/server";
-import { z } from "zod";
+import { parseJsonBody } from "@/shared/api-validation";
+import { liabilitySchema } from "@/shared/finance-schemas";
 import { prisma } from "@/shared/db";
 import { requireUserId, isErrorResponse } from "@/shared/session";
 import { recordRevision } from "@/shared/revision";
-
-const schema = z.object({
-  name: z.string().min(1),
-  type: z.enum([
-    "MORTGAGE",
-    "CONSUMER_LOAN",
-    "CREDIT_CARD",
-    "AUTO_LOAN",
-    "STUDENT_LOAN",
-    "OTHER",
-  ]),
-  remainingBalance: z.number().nonnegative(),
-  interestRatePct: z.number(),
-  monthlyPayment: z.number().nonnegative(),
-  endDate: z.string().datetime().optional(),
-  currency: z.string().default("RUB"),
-});
 
 export async function GET() {
   const userId = await requireUserId();
@@ -32,7 +16,9 @@ export async function GET() {
 export async function POST(req: Request) {
   const userId = await requireUserId();
   if (isErrorResponse(userId)) return userId;
-  const data = schema.parse(await req.json());
+  const parsed = parseJsonBody(liabilitySchema, await req.json());
+  if (!parsed.ok) return parsed.response;
+  const data = parsed.data;
   const row = await prisma.liability.create({
     data: {
       ...data,

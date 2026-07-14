@@ -9,7 +9,8 @@ export default function FaqPage() {
       </Link>
       <h1 className="mt-6 text-3xl font-semibold">FAQ — как пользоваться</h1>
       <p className="mt-3 text-muted">
-        Ответы на частые вопросы по личному кабинету ФИНКОН.
+        Простые ответы для новичков: без специальной подготовки по финансам и экономике.
+        Здесь же — что значат поля в кабинете и с чего начать.
       </p>
 
       <div className="mt-10 space-y-6">

@@ -65,15 +65,3 @@ export const PREDEFINED_SCENARIOS: ScenarioTemplate[] = [
     rules: [],
   },
 ];
-
-/** @deprecated use resolveScenarioModifiers with planInput */
-export function modifiersFromScenarioParams(
-  params: Record<string, unknown>,
-): ScenarioModifiers {
-  const key = params.templateKey as string | undefined;
-  const template = PREDEFINED_SCENARIOS.find((t) => t.key === key);
-  return {
-    ...template?.modifiers,
-    ...(params.modifiers as ScenarioModifiers | undefined),
-  };
-}

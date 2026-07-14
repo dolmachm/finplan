@@ -13,14 +13,7 @@ import {
   type HomeDashboardInput,
   type InsightSeverity,
 } from "@/modules/dashboard/insights";
-
-function fmtRub(n: number) {
-  return new Intl.NumberFormat("ru-RU", {
-    style: "currency",
-    currency: "RUB",
-    maximumFractionDigits: 0,
-  }).format(n);
-}
+import { formatRub } from "@/shared/format";
 
 const severityClass: Record<InsightSeverity, string> = {
   critical: "border-l-4 border-l-red-500",
@@ -94,16 +87,16 @@ export function HomeDashboard({
 
 function SummaryGrid({ metrics: m }: { metrics: DashboardMetrics }) {
   const cells = [
-    { label: "Активы", value: fmtRub(m.assetsTotal) },
-    { label: "Пассивы", value: fmtRub(m.liabilitiesTotal) },
-    { label: "Чистые активы", value: fmtRub(m.netWorth) },
-    { label: "Доход / мес", value: fmtRub(m.incomeMonthly) },
-    { label: "Расход / мес", value: fmtRub(m.expenseMonthly) },
+    { label: "Активы", value: formatRub(m.assetsTotal) },
+    { label: "Пассивы", value: formatRub(m.liabilitiesTotal) },
+    { label: "Чистые активы", value: formatRub(m.netWorth) },
+    { label: "Доход / мес", value: formatRub(m.incomeMonthly) },
+    { label: "Расход / мес", value: formatRub(m.expenseMonthly) },
     {
       label: "Профицит / мес",
-      value: fmtRub(m.surplusMonthly),
+      value: formatRub(m.surplusMonthly),
       hint: m.recommendedMonthlySaving
-        ? `Реком. взнос ${fmtRub(m.recommendedMonthlySaving)}`
+        ? `Реком. взнос ${formatRub(m.recommendedMonthlySaving)}`
         : undefined,
     },
   ];

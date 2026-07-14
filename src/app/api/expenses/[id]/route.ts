@@ -1,9 +1,8 @@
 import { NextResponse } from "next/server";
-import { parseJsonBody } from "@/shared/api-validation";
+import { parseJsonBody, notFoundResponse } from "@/shared/api-validation";
 import { expenseSchema } from "@/shared/finance-schemas";
 import { prisma } from "@/shared/db";
 import { requireUserId, isErrorResponse } from "@/shared/session";
-import { assertOwned } from "@/shared/crud";
 import { duplicateEntityResponse, isDuplicateExpense } from "@/shared/duplicate-check";
 
 const patchSchema = expenseSchema.partial();
@@ -15,12 +14,9 @@ export async function PATCH(
   const userId = await requireUserId();
   if (isErrorResponse(userId)) return userId;
   const { id } = await params;
-  if (!(await assertOwned("expense", id, userId))) {
-    return NextResponse.json({ error: "Not found" }, { status: 404 });
-  }
   const current = await prisma.expense.findFirst({ where: { id, userId } });
   if (!current) {
-    return NextResponse.json({ error: "Not found" }, { status: 404 });
+    return notFoundResponse();
   }
   const parsed = parseJsonBody(patchSchema, await req.json());
   if (!parsed.ok) return parsed.response;
@@ -48,8 +44,9 @@ export async function DELETE(
   const userId = await requireUserId();
   if (isErrorResponse(userId)) return userId;
   const { id } = await params;
-  if (!(await assertOwned("expense", id, userId))) {
-    return NextResponse.json({ error: "Not found" }, { status: 404 });
+  const current = await prisma.expense.findFirst({ where: { id, userId } });
+  if (!current) {
+    return notFoundResponse();
   }
   await prisma.expense.delete({ where: { id } });
   return NextResponse.json({ ok: true });

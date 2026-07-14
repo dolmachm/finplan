@@ -25,7 +25,8 @@ import { FormError } from "@/components/ui/FormError";
 import { HelpHint } from "@/components/ui/FormField";
 import { toast } from "@/components/ui/ToastProvider";
 import { FEATURE_HINTS } from "@/content/help";
-import { readApiError } from "@/shared/api-client";
+import { readApiError, NETWORK_ERROR_MESSAGE } from "@/shared/api-client";
+import { formatRub } from "@/shared/format";
 import type {
   Asset,
   Expense,
@@ -157,7 +158,17 @@ export default function DashboardPage() {
           `/api/plan/projection?scenarioId=${encodeURIComponent(id)}`,
         );
         if (handleUnauthorized(res)) return;
-        if (res.ok) setProjection(await res.json());
+        if (res.ok) {
+          setProjection(await res.json());
+        } else {
+          const { message } = await readApiError(res);
+          toast.error(
+            message ||
+              "Не удалось загрузить прогноз. Проверьте данные на вкладке «Данные».",
+          );
+        }
+      } catch {
+        toast.error(NETWORK_ERROR_MESSAGE);
       } finally {
         setProjectionLoading(false);
       }
@@ -166,24 +177,26 @@ export default function DashboardPage() {
   );
 
   const loadScenarios = useCallback(async () => {
-    const res = await fetch("/api/scenarios");
-    if (handleUnauthorized(res)) return;
-    if (res.ok) {
-      const data = await res.json();
-      setScenarios(data.scenarios);
-      return data.scenarios as Array<{
-        id: string;
-        name: string;
-        isActive: boolean;
-      }>;
+    try {
+      const res = await fetch("/api/scenarios");
+      if (handleUnauthorized(res)) return;
+      if (res.ok) {
+        const data = await res.json();
+        setScenarios(data.scenarios);
+        return data.scenarios as Array<{
+          id: string;
+          name: string;
+          isActive: boolean;
+        }>;
+      }
+      const { message } = await readApiError(res);
+      toast.error(message || "Не удалось загрузить сценарии");
+      return [];
+    } catch {
+      toast.error(NETWORK_ERROR_MESSAGE);
+      return [];
     }
-    return [];
   }, [handleUnauthorized]);
-
-  const refreshAfterData = useCallback(async () => {
-    await loadProjection();
-    await loadHomeSnapshot();
-  }, [loadProjection, loadHomeSnapshot]);
 
   const enrichedHome: HomeDashboardInput | null = homeInput
     ? {
@@ -196,8 +209,7 @@ export default function DashboardPage() {
 
   useEffect(() => {
     loadScenarios().finally(() => setLoading(false));
-    loadHomeSnapshot();
-  }, [loadScenarios, loadHomeSnapshot]);
+  }, [loadScenarios]);
 
   useEffect(() => {
     if (viewScenarioId !== null) return;
@@ -206,8 +218,12 @@ export default function DashboardPage() {
   }, [scenarios, viewScenarioId]);
 
   useEffect(() => {
-    if (viewScenarioId) loadProjection(viewScenarioId);
-  }, [viewScenarioId, loadProjection]);
+    if (tab === "home") loadHomeSnapshot();
+  }, [tab, loadHomeSnapshot]);
+
+  useEffect(() => {
+    if (tab === "plan" && viewScenarioId) loadProjection(viewScenarioId);
+  }, [tab, viewScenarioId, loadProjection]);
 
   async function runSimulation() {
     setSimError("");
@@ -233,7 +249,7 @@ export default function DashboardPage() {
       toast.success("Расчёт Monte Carlo запущен");
       pollJob(job.id);
     } catch {
-      const message = "Не удалось запустить расчёт. Проверьте подключение и попробуйте снова.";
+      const message = NETWORK_ERROR_MESSAGE;
       setSimError(message);
       toast.error(message);
     } finally {
@@ -272,7 +288,7 @@ export default function DashboardPage() {
       toast.error(message);
       return;
     }
-    await Promise.all([loadScenarios(), loadProjection(id), loadHomeSnapshot()]);
+    await loadScenarios();
     setViewScenarioId(id);
     toast.success("Сценарий применён");
   }
@@ -298,7 +314,6 @@ export default function DashboardPage() {
         toast.error(message);
         return;
       }
-      await refreshAfterData();
       toast.success("Демо-портфель добавлен");
     } catch {
       toast.error("Не удалось добавить портфель. Проверьте подключение и попробуйте снова.");
@@ -411,10 +426,7 @@ export default function DashboardPage() {
         )}
 
         {tab === "iplan" && (
-          <InvestmentPlanPanel
-            onUnauthorized={handleUnauthorized}
-            onAssetsChanged={refreshAfterData}
-          />
+          <InvestmentPlanPanel onUnauthorized={handleUnauthorized} />
         )}
 
         {tab === "assets" && (
@@ -427,7 +439,6 @@ export default function DashboardPage() {
             />
             <FinanceDataPanel
               onQuickAdd={quickAddAsset}
-              onRefresh={refreshAfterData}
               onUnauthorized={handleUnauthorized}
               addingAsset={addingAsset}
               onStatusChange={setDataStatus}
@@ -439,12 +450,8 @@ export default function DashboardPage() {
               <h2 className="mt-1 font-medium">Цели и макропараметры</h2>
               <HelpHint className="mt-1">{FEATURE_HINTS.goalsStep}</HelpHint>
             </div>
-            <MacroSettingsCard
-              onUnauthorized={handleUnauthorized}
-              onSaved={refreshAfterData}
-            />
+            <MacroSettingsCard onUnauthorized={handleUnauthorized} />
             <GoalsPanel
-              onSaved={refreshAfterData}
               onUnauthorized={handleUnauthorized}
               onCountChange={setGoalCount}
             />
@@ -495,14 +502,6 @@ function SummaryCard({
       <p className="mt-1 text-lg font-semibold">{formatRub(value)}</p>
     </Card>
   );
-}
-
-function formatRub(n: number) {
-  return new Intl.NumberFormat("ru-RU", {
-    style: "currency",
-    currency: "RUB",
-    maximumFractionDigits: 0,
-  }).format(n);
 }
 
 function CfpProgressCard({

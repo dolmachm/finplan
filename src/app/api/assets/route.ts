@@ -1,23 +1,11 @@
 import { NextResponse } from "next/server";
-import { z } from "zod";
 import { parseJsonBody } from "@/shared/api-validation";
-import { ASSET_TYPE_OPTIONS } from "@/shared/finance-catalog";
+import { resolveAssetClass } from "@/shared/finance-catalog";
 import { assetSchema } from "@/shared/finance-schemas";
 import { prisma } from "@/shared/db";
 import { requireUserId, isErrorResponse } from "@/shared/session";
 import { duplicateEntityResponse, isDuplicateAsset } from "@/shared/duplicate-check";
 import { recordRevision } from "@/shared/revision";
-
-function resolveAssetClass(
-  type: z.infer<typeof assetSchema>["type"],
-  assetClass?: "PERSONAL" | "INVESTMENT",
-) {
-  return (
-    assetClass ??
-    ASSET_TYPE_OPTIONS.find((o) => o.value === type)?.class ??
-    "PERSONAL"
-  );
-}
 
 export async function GET() {
   const userId = await requireUserId();
@@ -39,11 +27,11 @@ export async function POST(req: Request) {
   const asset = await prisma.asset.create({
     data: {
       ...data,
-      assetClass: resolveAssetClass(data.type, assetClass),
+      assetClass: resolveAssetClass(data.type, assetClass) ?? "PERSONAL",
       userId,
     },
   });
-  await recordRevision({
+  void recordRevision({
     userId,
     entityType: "asset",
     entityId: asset.id,
@@ -51,6 +39,6 @@ export async function POST(req: Request) {
     label: `Актив создан: ${asset.name}`,
     before: null,
     after: asset,
-  });
+  }).catch(() => {});
   return NextResponse.json(asset, { status: 201 });
 }

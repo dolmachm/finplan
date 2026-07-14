@@ -72,3 +72,12 @@ export function frequencyLabel(freq: string): string {
 export function essentialLabel(isEssential: boolean): string {
   return isEssential ? "Обязательный" : "Переменный";
 }
+
+export function resolveAssetClass(
+  type: AssetType | undefined,
+  assetClass?: "PERSONAL" | "INVESTMENT",
+): "PERSONAL" | "INVESTMENT" | undefined {
+  if (assetClass) return assetClass;
+  if (!type) return undefined;
+  return ASSET_TYPE_OPTIONS.find((o) => o.value === type)?.class ?? "PERSONAL";
+}

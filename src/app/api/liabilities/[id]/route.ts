@@ -1,29 +1,10 @@
 import { NextResponse } from "next/server";
-import { z } from "zod";
-import { parseJsonBody } from "@/shared/api-validation";
+import { parseJsonBody, notFoundResponse } from "@/shared/api-validation";
+import { liabilityPatchSchema } from "@/shared/finance-schemas";
 import { prisma } from "@/shared/db";
 import { requireUserId, isErrorResponse } from "@/shared/session";
 import { assertOwned } from "@/shared/crud";
 import { recordRevision } from "@/shared/revision";
-
-const patchSchema = z
-  .object({
-    name: z.string().min(1),
-    type: z.enum([
-      "MORTGAGE",
-      "CONSUMER_LOAN",
-      "CREDIT_CARD",
-      "AUTO_LOAN",
-      "STUDENT_LOAN",
-      "OTHER",
-    ]),
-    remainingBalance: z.number().nonnegative(),
-    interestRatePct: z.number(),
-    monthlyPayment: z.number().nonnegative(),
-    endDate: z.string().datetime().nullable().optional(),
-    currency: z.string(),
-  })
-  .partial();
 
 export async function PATCH(
   req: Request,
@@ -33,13 +14,13 @@ export async function PATCH(
   if (isErrorResponse(userId)) return userId;
   const { id } = await params;
   if (!(await assertOwned("liability", id, userId))) {
-    return NextResponse.json({ error: "Not found" }, { status: 404 });
+    return notFoundResponse();
   }
   const current = await prisma.liability.findFirst({ where: { id, userId } });
   if (!current) {
-    return NextResponse.json({ error: "Not found" }, { status: 404 });
+    return notFoundResponse();
   }
-  const parsed = parseJsonBody(patchSchema, await req.json());
+  const parsed = parseJsonBody(liabilityPatchSchema, await req.json());
   if (!parsed.ok) return parsed.response;
   const { endDate, ...rest } = parsed.data;
   const row = await prisma.liability.update({
@@ -71,7 +52,7 @@ export async function DELETE(
   if (isErrorResponse(userId)) return userId;
   const { id } = await params;
   if (!(await assertOwned("liability", id, userId))) {
-    return NextResponse.json({ error: "Not found" }, { status: 404 });
+    return notFoundResponse();
   }
   const current = await prisma.liability.findFirst({ where: { id, userId } });
   await prisma.liability.delete({ where: { id } });
