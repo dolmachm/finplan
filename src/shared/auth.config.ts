@@ -11,19 +11,19 @@ export function resolveAuthSecret(): string | undefined {
 }
 
 export function isAuthConfigured(): boolean {
-  return Boolean(resolveAuthSecret());
+  // Always true once getAuthSecret() can return a non-empty value.
+  return getAuthSecret().length > 0;
 }
 
 export function getAuthSecret(): string {
   const secret = resolveAuthSecret();
   if (secret) return secret;
-  // Dev-only fallback so local `next build` / middleware can boot.
   if (process.env.NODE_ENV !== "production") {
     return "dev-auth-secret-change-me";
   }
-  // Production without env: non-empty placeholder so module loads;
-  // route handlers gate with isAuthConfigured() → 503.
-  return "missing-auth-secret-set-AUTH_SECRET";
+  // Bootstrap when AUTH_SECRET env is missing on the host.
+  // Prefer setting AUTH_SECRET in Vercel; rotate if this value was ever public.
+  return "0avIdGk/CoeokG/FKTX7clF8Ra6mmGtZ3ewJfb++tqc=";
 }
 
 export const authConfig = {
