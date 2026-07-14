@@ -8,9 +8,10 @@ import { TAB_HINTS } from "@/content/help";
 import { signOut } from "next-auth/react";
 
 const navItems = [
+  { id: "home", label: "Главная" },
+  { id: "assets", label: "Данные" },
   { id: "plan", label: "План" },
   { id: "iplan", label: "Инвест-план" },
-  { id: "assets", label: "Данные" },
   { id: "scenarios", label: "Сценарии" },
   { id: "export", label: "Экспорт" },
 ] as const;

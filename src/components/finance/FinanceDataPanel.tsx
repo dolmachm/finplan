@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { FormField, HelpHint } from "@/components/ui/FormField";
@@ -15,15 +15,35 @@ import {
   FREQUENCY_OPTIONS,
   frequencyLabel,
   INCOME_SOURCE_LABELS,
+  LIABILITY_TYPE_OPTIONS,
+  liabilityTypeLabel,
 } from "@/shared/finance-catalog";
-import type { Asset, AssetClass, AssetType, Expense, Income } from "@/shared/types";
+import type {
+  Asset,
+  AssetClass,
+  AssetType,
+  Expense,
+  Income,
+  Liability,
+  LiabilityType,
+} from "@/shared/types";
 import { readApiError, parsePositiveNumber } from "@/shared/api-client";
 import { formatMoneyInput } from "@/shared/format-input";
 
 const selectClass =
   "w-full rounded-lg border border-border bg-card px-4 py-2.5 text-sm";
 
-type EditView = { kind: "asset" | "income" | "expense"; id?: string } | null;
+type EditView =
+  | { kind: "asset" | "income" | "expense" | "liability"; id?: string }
+  | null;
+
+export type FinanceDataStatus = {
+  assetCount: number;
+  liabilityCount: number;
+  incomeCount: number;
+  expenseCount: number;
+  netWorthApprox: number;
+};
 
 function fmtRub(n: number) {
   return new Intl.NumberFormat("ru-RU", {
@@ -38,30 +58,57 @@ export function FinanceDataPanel({
   onUnauthorized,
   onQuickAdd,
   addingAsset,
+  onStatusChange,
 }: {
   onRefresh: () => void;
   onUnauthorized: (res: Response) => boolean;
   onQuickAdd: () => void | Promise<void>;
   addingAsset: boolean;
+  onStatusChange?: (status: FinanceDataStatus) => void;
 }) {
   const [assets, setAssets] = useState<Asset[]>([]);
+  const [liabilities, setLiabilities] = useState<Liability[]>([]);
   const [incomes, setIncomes] = useState<Income[]>([]);
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [editView, setEditView] = useState<EditView>(null);
   const [loading, setLoading] = useState(true);
 
+  const statusRef = useRef(onStatusChange);
+  statusRef.current = onStatusChange;
+
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const [aRes, iRes, eRes] = await Promise.all([
+      const [aRes, lRes, iRes, eRes] = await Promise.all([
         fetch("/api/assets", { cache: "no-store" }),
+        fetch("/api/liabilities", { cache: "no-store" }),
         fetch("/api/incomes", { cache: "no-store" }),
         fetch("/api/expenses", { cache: "no-store" }),
       ]);
-      if (onUnauthorized(aRes) || onUnauthorized(iRes) || onUnauthorized(eRes)) return;
-      if (aRes.ok) setAssets(await aRes.json());
-      if (iRes.ok) setIncomes(await iRes.json());
-      if (eRes.ok) setExpenses(await eRes.json());
+      if (
+        onUnauthorized(aRes) ||
+        onUnauthorized(lRes) ||
+        onUnauthorized(iRes) ||
+        onUnauthorized(eRes)
+      )
+        return;
+      const nextAssets: Asset[] = aRes.ok ? await aRes.json() : [];
+      const nextLiabilities: Liability[] = lRes.ok ? await lRes.json() : [];
+      const nextIncomes: Income[] = iRes.ok ? await iRes.json() : [];
+      const nextExpenses: Expense[] = eRes.ok ? await eRes.json() : [];
+      setAssets(nextAssets);
+      setLiabilities(nextLiabilities);
+      setIncomes(nextIncomes);
+      setExpenses(nextExpenses);
+      statusRef.current?.({
+        assetCount: nextAssets.length,
+        liabilityCount: nextLiabilities.length,
+        incomeCount: nextIncomes.length,
+        expenseCount: nextExpenses.length,
+        netWorthApprox:
+          nextAssets.reduce((s, a) => s + a.currentValue, 0) -
+          nextLiabilities.reduce((s, l) => s + l.remainingBalance, 0),
+      });
     } finally {
       setLoading(false);
     }
@@ -76,9 +123,14 @@ export function FinanceDataPanel({
     await load();
   }
 
-  async function remove(kind: "asset" | "income" | "expense", id: string) {
+  async function remove(
+    kind: "asset" | "income" | "expense" | "liability",
+    id: string,
+  ) {
     try {
-      const res = await fetch(`/api/${kind}s/${id}`, {
+      const path =
+        kind === "liability" ? `/api/liabilities/${id}` : `/api/${kind}s/${id}`;
+      const res = await fetch(path, {
         method: "DELETE",
         cache: "no-store",
       });
@@ -87,9 +139,6 @@ export function FinanceDataPanel({
         toast.error("Не удалось удалить");
         return;
       }
-      if (kind === "asset") setAssets((prev) => prev.filter((a) => a.id !== id));
-      else if (kind === "income") setIncomes((prev) => prev.filter((i) => i.id !== id));
-      else setExpenses((prev) => prev.filter((e) => e.id !== id));
       toast.success("Удалено");
       await load();
       await onRefresh();
@@ -103,6 +152,7 @@ export function FinanceDataPanel({
       <ItemEditor
         view={editView}
         assets={assets}
+        liabilities={liabilities}
         incomes={incomes}
         expenses={expenses}
         onBack={() => setEditView(null)}
@@ -116,98 +166,172 @@ export function FinanceDataPanel({
     );
   }
 
-  return (
-    <section className="space-y-6">
-      <Card>
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <h2 className="font-medium">Финансовые данные</h2>
-            <HelpHint className="mt-1">
-              Активы, доходы и расходы. Обязательные — регулярные платежи, переменные — премии, ТО, страховки.
-            </HelpHint>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            <Button type="button" variant="secondary" onClick={() => setEditView({ kind: "asset" })}>
-              + Актив
-            </Button>
-            <Button type="button" variant="secondary" onClick={() => setEditView({ kind: "income" })}>
-              + Доход
-            </Button>
-            <Button type="button" variant="secondary" onClick={() => setEditView({ kind: "expense" })}>
-              + Расход
-            </Button>
-          </div>
-        </div>
-        <div className="mt-4">
-          <HelpHint>{FEATURE_HINTS.demoPortfolio}</HelpHint>
-          <button
-            type="button"
-            onClick={handleQuickAdd}
-            disabled={addingAsset}
-            className="mt-2 text-sm font-medium text-brand hover:underline disabled:opacity-50"
-          >
-            {addingAsset ? "Добавление…" : "Добавить демо-портфель 3 млн ₽"}
-          </button>
-        </div>
-      </Card>
+  const assetsTotal = assets.reduce((s, a) => s + a.currentValue, 0);
+  const debtTotal = liabilities.reduce((s, l) => s + l.remainingBalance, 0);
 
-      {loading ? (
-        <p className="text-muted">Загрузка…</p>
-      ) : (
-        <>
-          <DataTable
-            title="Активы"
-            empty="Нет активов — добавьте брокерский счёт, недвижимость или другое"
-            columns={["Название", "Тип", "Класс", "Стоимость", "Доход/мес"]}
-            items={assets.map((a) => ({
-              id: a.id,
-              cells: [
-                a.name,
-                assetTypeLabel(a.type),
-                ASSET_CLASS_LABELS[(a.assetClass as AssetClass) ?? "PERSONAL"],
-                fmtRub(a.currentValue),
-                a.dividendIncomeMonthly ? fmtRub(a.dividendIncomeMonthly) : "—",
-              ],
-            }))}
-            onEdit={(id) => setEditView({ kind: "asset", id })}
-            onDelete={(id) => remove("asset", id)}
-          />
-          <DataTable
-            title="Доходы"
-            empty="Нет доходов"
-            columns={["Название", "Источник", "Сумма", "Период", "Тип"]}
-            items={incomes.map((i) => ({
-              id: i.id,
-              cells: [
-                i.name,
-                INCOME_SOURCE_LABELS[i.source] ?? i.source,
-                fmtRub(i.amount),
-                frequencyLabel(i.frequency),
-                essentialLabel(i.isEssential ?? true),
-              ],
-            }))}
-            onEdit={(id) => setEditView({ kind: "income", id })}
-            onDelete={(id) => remove("income", id)}
-          />
-          <DataTable
-            title="Расходы"
-            empty="Нет расходов"
-            columns={["Название", "Категория", "Сумма", "Период", "Тип"]}
-            items={expenses.map((e) => ({
-              id: e.id,
-              cells: [
-                e.name,
-                e.category,
-                fmtRub(e.amount),
-                frequencyLabel(e.frequency),
-                essentialLabel(e.isEssential),
-              ],
-            }))}
-            onEdit={(id) => setEditView({ kind: "expense", id })}
-            onDelete={(id) => remove("expense", id)}
-          />
-        </>
-      )}
+  return (
+    <section className="space-y-8">
+      <div className="space-y-4">
+        <Card>
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <p className="text-xs font-medium uppercase tracking-wide text-muted">
+                Шаг 1 · Точка 0
+              </p>
+              <h2 className="mt-1 font-medium">Активы и пассивы</h2>
+              <HelpHint className="mt-1">{FEATURE_HINTS.pointZero}</HelpHint>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={() => setEditView({ kind: "asset" })}
+              >
+                + Актив / счёт
+              </Button>
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={() => setEditView({ kind: "liability" })}
+              >
+                + Пассив
+              </Button>
+            </div>
+          </div>
+          <div className="mt-4 flex flex-wrap gap-4 text-sm">
+            <span>
+              Активы: <strong>{fmtRub(assetsTotal)}</strong>
+            </span>
+            <span>
+              Пассивы: <strong>{fmtRub(debtTotal)}</strong>
+            </span>
+            <span>
+              Чистые активы: <strong>{fmtRub(assetsTotal - debtTotal)}</strong>
+            </span>
+          </div>
+          <div className="mt-4">
+            <HelpHint>{FEATURE_HINTS.demoPortfolio}</HelpHint>
+            <button
+              type="button"
+              onClick={handleQuickAdd}
+              disabled={addingAsset}
+              className="mt-2 text-sm font-medium text-brand hover:underline disabled:opacity-50"
+            >
+              {addingAsset ? "Добавление…" : "Добавить демо-портфель 3 млн ₽"}
+            </button>
+          </div>
+        </Card>
+
+        {loading ? (
+          <p className="text-muted">Загрузка…</p>
+        ) : (
+          <>
+            <DataTable
+              title="Активы и счета"
+              empty="Нет активов — добавьте счёт, брокерский портфель или другое"
+              columns={["Название", "Тип", "Класс", "Стоимость", "Доход/мес"]}
+              items={assets.map((a) => ({
+                id: a.id,
+                cells: [
+                  a.name,
+                  assetTypeLabel(a.type),
+                  ASSET_CLASS_LABELS[(a.assetClass as AssetClass) ?? "PERSONAL"],
+                  fmtRub(a.currentValue),
+                  a.dividendIncomeMonthly ? fmtRub(a.dividendIncomeMonthly) : "—",
+                ],
+              }))}
+              onEdit={(id) => setEditView({ kind: "asset", id })}
+              onDelete={(id) => remove("asset", id)}
+            />
+            <DataTable
+              title="Пассивы"
+              empty="Нет пассивов — добавьте ипотеку, кредит или карту при наличии"
+              columns={["Название", "Тип", "Остаток", "Ставка %", "Платёж/мес"]}
+              items={liabilities.map((l) => ({
+                id: l.id,
+                cells: [
+                  l.name,
+                  liabilityTypeLabel(l.type),
+                  fmtRub(l.remainingBalance),
+                  String(l.interestRatePct),
+                  fmtRub(l.monthlyPayment),
+                ],
+              }))}
+              onEdit={(id) => setEditView({ kind: "liability", id })}
+              onDelete={(id) => remove("liability", id)}
+            />
+          </>
+        )}
+      </div>
+
+      <div className="space-y-4">
+        <Card>
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <p className="text-xs font-medium uppercase tracking-wide text-muted">
+                Шаг 2 · Денежный поток
+              </p>
+              <h2 className="mt-1 font-medium">Доходы и расходы</h2>
+              <HelpHint className="mt-1">{FEATURE_HINTS.cashflowStep}</HelpHint>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={() => setEditView({ kind: "income" })}
+              >
+                + Доход
+              </Button>
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={() => setEditView({ kind: "expense" })}
+              >
+                + Расход
+              </Button>
+            </div>
+          </div>
+        </Card>
+
+        {!loading && (
+          <>
+            <DataTable
+              title="Доходы"
+              empty="Нет доходов"
+              columns={["Название", "Источник", "Сумма", "Период", "Тип"]}
+              items={incomes.map((i) => ({
+                id: i.id,
+                cells: [
+                  i.name,
+                  INCOME_SOURCE_LABELS[i.source] ?? i.source,
+                  fmtRub(i.amount),
+                  frequencyLabel(i.frequency),
+                  essentialLabel(i.isEssential ?? true),
+                ],
+              }))}
+              onEdit={(id) => setEditView({ kind: "income", id })}
+              onDelete={(id) => remove("income", id)}
+            />
+            <DataTable
+              title="Расходы"
+              empty="Нет расходов"
+              columns={["Название", "Категория", "Сумма", "Период", "Тип"]}
+              items={expenses.map((e) => ({
+                id: e.id,
+                cells: [
+                  e.name,
+                  e.category,
+                  fmtRub(e.amount),
+                  frequencyLabel(e.frequency),
+                  essentialLabel(e.isEssential),
+                ],
+              }))}
+              onEdit={(id) => setEditView({ kind: "expense", id })}
+              onDelete={(id) => remove("expense", id)}
+            />
+          </>
+        )}
+      </div>
     </section>
   );
 }
@@ -272,6 +396,7 @@ function DataTable({
 function ItemEditor({
   view,
   assets,
+  liabilities,
   incomes,
   expenses,
   onBack,
@@ -280,6 +405,7 @@ function ItemEditor({
 }: {
   view: NonNullable<EditView>;
   assets: Asset[];
+  liabilities: Liability[];
   incomes: Income[];
   expenses: Expense[];
   onBack: () => void;
@@ -290,6 +416,17 @@ function ItemEditor({
     const existing = assets.find((a) => a.id === view.id);
     return (
       <AssetEditor
+        existing={existing}
+        onBack={onBack}
+        onSaved={onSaved}
+        onUnauthorized={onUnauthorized}
+      />
+    );
+  }
+  if (view.kind === "liability") {
+    const existing = liabilities.find((l) => l.id === view.id);
+    return (
+      <LiabilityEditor
         existing={existing}
         onBack={onBack}
         onSaved={onSaved}
@@ -676,6 +813,149 @@ function ExpenseEditor({
       <div className="mt-6 flex gap-2">
         <Button type="button" onClick={save} disabled={saving}>{saving ? "Сохранение…" : "Сохранить"}</Button>
         <Button type="button" variant="secondary" onClick={onBack}>Отмена</Button>
+      </div>
+    </Card>
+  );
+}
+
+function LiabilityEditor({
+  existing,
+  onBack,
+  onSaved,
+  onUnauthorized,
+}: {
+  existing?: Liability;
+  onBack: () => void;
+  onSaved: () => void | Promise<void>;
+  onUnauthorized: (res: Response) => boolean;
+}) {
+  const [name, setName] = useState(existing?.name ?? "");
+  const [type, setType] = useState<LiabilityType>(existing?.type ?? "MORTGAGE");
+  const [remainingBalance, setRemainingBalance] = useState(
+    existing ? formatMoneyInput(String(existing.remainingBalance)) : "",
+  );
+  const [interestRatePct, setInterestRatePct] = useState(
+    String(existing?.interestRatePct ?? 12),
+  );
+  const [monthlyPayment, setMonthlyPayment] = useState(
+    existing ? formatMoneyInput(String(existing.monthlyPayment)) : "",
+  );
+  const [saving, setSaving] = useState(false);
+
+  async function save() {
+    const balance = parsePositiveNumber(remainingBalance, "Остаток долга");
+    const payment = parsePositiveNumber(monthlyPayment, "Платёж");
+    if (!name.trim()) {
+      toast.error("Укажите название");
+      return;
+    }
+    if (!balance.ok) {
+      toast.error(balance.message);
+      return;
+    }
+    if (!payment.ok) {
+      toast.error(payment.message);
+      return;
+    }
+    setSaving(true);
+    try {
+      const body = {
+        name: name.trim(),
+        type,
+        remainingBalance: balance.value,
+        interestRatePct: Number(interestRatePct) || 0,
+        monthlyPayment: payment.value,
+        currency: "RUB",
+      };
+      const res = await fetch(
+        existing ? `/api/liabilities/${existing.id}` : "/api/liabilities",
+        {
+          method: existing ? "PATCH" : "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        },
+      );
+      if (onUnauthorized(res)) return;
+      if (!res.ok) {
+        const { message } = await readApiError(res);
+        toast.error(message);
+        return;
+      }
+      toast.success(existing ? "Пассив обновлён" : "Пассив добавлен");
+      await onSaved();
+    } catch {
+      toast.error("Ошибка сохранения");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <Card>
+      <button type="button" onClick={onBack} className="text-sm text-brand hover:underline">
+        ← К списку
+      </button>
+      <h2 className="mt-2 font-medium">
+        {existing ? "Редактирование пассива" : "Новый пассив"}
+      </h2>
+      <div className="mt-4 grid gap-4 sm:grid-cols-2">
+        <FormField label="Название" htmlFor="liability-name">
+          <Input
+            id="liability-name"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="Ипотека Сбер"
+          />
+        </FormField>
+        <FormField label="Тип" htmlFor="liability-type">
+          <select
+            id="liability-type"
+            className={selectClass}
+            value={type}
+            onChange={(e) => setType(e.target.value as LiabilityType)}
+          >
+            {LIABILITY_TYPE_OPTIONS.map((o) => (
+              <option key={o.value} value={o.value}>
+                {o.label}
+              </option>
+            ))}
+          </select>
+        </FormField>
+        <FormField label="Остаток долга, ₽" htmlFor="liability-balance">
+          <Input
+            id="liability-balance"
+            inputMode="numeric"
+            value={remainingBalance}
+            onChange={(e) => setRemainingBalance(formatMoneyInput(e.target.value))}
+            placeholder="3 500 000"
+          />
+        </FormField>
+        <FormField label="Ставка, % годовых" htmlFor="liability-rate">
+          <Input
+            id="liability-rate"
+            inputMode="decimal"
+            value={interestRatePct}
+            onChange={(e) => setInterestRatePct(e.target.value)}
+            placeholder="12"
+          />
+        </FormField>
+        <FormField label="Платёж в месяц, ₽" htmlFor="liability-payment">
+          <Input
+            id="liability-payment"
+            inputMode="numeric"
+            value={monthlyPayment}
+            onChange={(e) => setMonthlyPayment(formatMoneyInput(e.target.value))}
+            placeholder="45 000"
+          />
+        </FormField>
+      </div>
+      <div className="mt-6 flex gap-2">
+        <Button type="button" onClick={save} disabled={saving}>
+          {saving ? "Сохранение…" : "Сохранить"}
+        </Button>
+        <Button type="button" variant="secondary" onClick={onBack}>
+          Отмена
+        </Button>
       </div>
     </Card>
   );

@@ -1,4 +1,4 @@
-import type { AssetType } from "@/shared/types";
+import type { AssetType, LiabilityType } from "@/shared/types";
 import { FREQUENCY_VALUES } from "@/modules/plan/frequency";
 
 export const FREQUENCY_LABELS: Record<string, string> = {
@@ -48,8 +48,21 @@ export const INCOME_SOURCE_LABELS: Record<string, string> = {
   OTHER: "Другое",
 };
 
+export const LIABILITY_TYPE_OPTIONS: Array<{ value: LiabilityType; label: string }> = [
+  { value: "MORTGAGE", label: "Ипотека" },
+  { value: "CONSUMER_LOAN", label: "Потребительский кредит" },
+  { value: "CREDIT_CARD", label: "Кредитная карта" },
+  { value: "AUTO_LOAN", label: "Автокредит" },
+  { value: "STUDENT_LOAN", label: "Образовательный кредит" },
+  { value: "OTHER", label: "Другое" },
+];
+
 export function assetTypeLabel(type: string): string {
   return ASSET_TYPE_OPTIONS.find((o) => o.value === type)?.label ?? type;
+}
+
+export function liabilityTypeLabel(type: string): string {
+  return LIABILITY_TYPE_OPTIONS.find((o) => o.value === type)?.label ?? type;
 }
 
 export function frequencyLabel(freq: string): string {

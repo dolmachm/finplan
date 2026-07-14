@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { FormField, HelpHint } from "@/components/ui/FormField";
@@ -33,14 +33,18 @@ function fmtRub(n: number) {
 export function GoalsPanel({
   onSaved,
   onUnauthorized,
+  onCountChange,
 }: {
   onSaved: () => void;
   onUnauthorized: (res: Response) => boolean;
+  onCountChange?: (count: number) => void;
 }) {
   const [goals, setGoals] = useState<Goal[]>([]);
   const [assets, setAssets] = useState<Asset[]>([]);
   const [editView, setEditView] = useState<EditView>(null);
   const [loading, setLoading] = useState(true);
+  const countRef = useRef(onCountChange);
+  countRef.current = onCountChange;
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -50,7 +54,11 @@ export function GoalsPanel({
         fetch("/api/assets"),
       ]);
       if (onUnauthorized(gRes) || onUnauthorized(aRes)) return;
-      if (gRes.ok) setGoals(await gRes.json());
+      if (gRes.ok) {
+        const next: Goal[] = await gRes.json();
+        setGoals(next);
+        countRef.current?.(next.length);
+      }
       if (aRes.ok) setAssets(await aRes.json());
     } finally {
       setLoading(false);

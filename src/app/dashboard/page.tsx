@@ -3,13 +3,19 @@
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Disclaimer } from "@/components/Disclaimer";
-import { DashboardShell } from "@/components/layout/DashboardShell";
+import {
+  DashboardShell,
+  type DashboardTab,
+} from "@/components/layout/DashboardShell";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { NetWorthChart } from "@/components/charts/NetWorthChart";
 import { MonteCarloBandChart } from "@/components/charts/MonteCarloBandChart";
 import { GoalsPanel } from "@/components/finance/GoalsPanel";
-import { FinanceDataPanel } from "@/components/finance/FinanceDataPanel";
+import {
+  FinanceDataPanel,
+  type FinanceDataStatus,
+} from "@/components/finance/FinanceDataPanel";
 import { InvestmentPlanPanel } from "@/components/finance/InvestmentPlanPanel";
 import { MacroSettingsCard } from "@/components/finance/MacroSettingsCard";
 import { ChangeHistoryPanel } from "@/components/finance/ChangeHistoryPanel";
@@ -19,8 +25,6 @@ import { HelpHint } from "@/components/ui/FormField";
 import { toast } from "@/components/ui/ToastProvider";
 import { FEATURE_HINTS } from "@/content/help";
 import { readApiError } from "@/shared/api-client";
-
-type Tab = "plan" | "iplan" | "assets" | "scenarios" | "export";
 
 interface Projection {
   result: {
@@ -44,7 +48,9 @@ interface Projection {
 
 export default function DashboardPage() {
   const router = useRouter();
-  const [tab, setTab] = useState<Tab>("plan");
+  const [tab, setTab] = useState<DashboardTab>("home");
+  const [dataStatus, setDataStatus] = useState<FinanceDataStatus | null>(null);
+  const [goalCount, setGoalCount] = useState(0);
   const [projection, setProjection] = useState<Projection | null>(null);
   const [scenarios, setScenarios] = useState<
     Array<{ id: string; name: string; isActive: boolean; rules: unknown }>
@@ -236,7 +242,25 @@ export default function DashboardPage() {
     <DashboardShell tab={tab} onTabChange={setTab}>
       <Disclaimer className="mb-6" />
 
-      {loading && <p className="text-muted">Загрузка…</p>}
+      {loading && tab !== "home" && <p className="text-muted">Загрузка…</p>}
+
+        {tab === "home" && (
+          <div className="rounded-lg border border-dashed border-border px-6 py-16 text-center">
+            <p className="text-sm text-muted">
+              Главная пока пустая — сюда позже вынесем сводные дашборды и рекомендации.
+            </p>
+            <p className="mt-2 text-sm text-muted">
+              Заполнение плана начните на вкладке «Данные».
+            </p>
+            <Button
+              type="button"
+              className="mt-6"
+              onClick={() => setTab("assets")}
+            >
+              Перейти к данным
+            </Button>
+          </div>
+        )}
 
         {tab === "plan" && projection && viewScenarioId && (
           <div className="space-y-8">
@@ -336,17 +360,35 @@ export default function DashboardPage() {
 
         {tab === "assets" && (
           <div className="space-y-6">
-            <MacroSettingsCard
-              onUnauthorized={handleUnauthorized}
-              onSaved={loadProjection}
+            <CfpProgressCard
+              status={dataStatus}
+              goalCount={goalCount}
+              onGoPlan={() => setTab("plan")}
+              onGoIplan={() => setTab("iplan")}
             />
             <FinanceDataPanel
               onQuickAdd={quickAddAsset}
               onRefresh={loadProjection}
               onUnauthorized={handleUnauthorized}
               addingAsset={addingAsset}
+              onStatusChange={setDataStatus}
             />
-            <GoalsPanel onSaved={loadProjection} onUnauthorized={handleUnauthorized} />
+            <div>
+              <p className="text-xs font-medium uppercase tracking-wide text-muted">
+                Шаг 3 · Цели и горизонт
+              </p>
+              <h2 className="mt-1 font-medium">Цели и макропараметры</h2>
+              <HelpHint className="mt-1">{FEATURE_HINTS.goalsStep}</HelpHint>
+            </div>
+            <MacroSettingsCard
+              onUnauthorized={handleUnauthorized}
+              onSaved={loadProjection}
+            />
+            <GoalsPanel
+              onSaved={loadProjection}
+              onUnauthorized={handleUnauthorized}
+              onCountChange={setGoalCount}
+            />
             <ChangeHistoryPanel onUnauthorized={handleUnauthorized} />
           </div>
         )}
@@ -402,6 +444,58 @@ function formatRub(n: number) {
     currency: "RUB",
     maximumFractionDigits: 0,
   }).format(n);
+}
+
+function CfpProgressCard({
+  status,
+  goalCount,
+  onGoPlan,
+  onGoIplan,
+}: {
+  status: FinanceDataStatus | null;
+  goalCount: number;
+  onGoPlan: () => void;
+  onGoIplan: () => void;
+}) {
+  const step1 = (status?.assetCount ?? 0) + (status?.liabilityCount ?? 0) > 0;
+  const step2 = (status?.incomeCount ?? 0) > 0 && (status?.expenseCount ?? 0) > 0;
+  const step3 = goalCount > 0;
+  const steps = [
+    { done: step1, label: "1. Точка 0" },
+    { done: step2, label: "2. Денежный поток" },
+    { done: step3, label: "3. Цели" },
+  ];
+  const next = !step1
+    ? "Зафиксируйте активы и/или пассивы"
+    : !step2
+      ? "Добавьте доходы и расходы"
+      : !step3
+        ? "Добавьте хотя бы одну цель"
+        : "Данные готовы — откройте «План» или «Инвест-план»";
+
+  return (
+    <Card className="flex flex-wrap items-center justify-between gap-4 p-4">
+      <div>
+        <p className="text-sm font-medium">Прогресс заполнения (CFP)</p>
+        <div className="mt-2 flex flex-wrap gap-3 text-sm">
+          {steps.map((s) => (
+            <span key={s.label} className={s.done ? "text-success" : "text-muted"}>
+              {s.done ? "✓" : "○"} {s.label}
+            </span>
+          ))}
+        </div>
+        <HelpHint className="mt-2">{next}</HelpHint>
+      </div>
+      <div className="flex flex-wrap gap-2">
+        <Button type="button" variant="secondary" onClick={onGoPlan}>
+          К плану
+        </Button>
+        <Button type="button" variant="secondary" onClick={onGoIplan}>
+          К инвест-плану
+        </Button>
+      </div>
+    </Card>
+  );
 }
 
 function CsvImport() {

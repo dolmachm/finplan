@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/shared/db";
 import { requireUserId, isErrorResponse } from "@/shared/session";
+import { recordRevision } from "@/shared/revision";
 
 const schema = z.object({
   name: z.string().min(1),
@@ -38,6 +39,15 @@ export async function POST(req: Request) {
       userId,
       endDate: data.endDate ? new Date(data.endDate) : null,
     },
+  });
+  await recordRevision({
+    userId,
+    entityType: "liability",
+    entityId: row.id,
+    action: "CREATE",
+    label: `Пассив добавлен: ${row.name}`,
+    before: null,
+    after: row,
   });
   return NextResponse.json(row, { status: 201 });
 }
