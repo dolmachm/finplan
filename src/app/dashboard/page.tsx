@@ -10,6 +10,7 @@ import { NetWorthChart } from "@/components/charts/NetWorthChart";
 import { MonteCarloBandChart } from "@/components/charts/MonteCarloBandChart";
 import { GoalsPanel } from "@/components/finance/GoalsPanel";
 import { FinanceDataPanel } from "@/components/finance/FinanceDataPanel";
+import { InvestmentPlanPanel } from "@/components/finance/InvestmentPlanPanel";
 import { ScenariosPanel } from "@/components/scenarios/ScenariosPanel";
 import { FormError } from "@/components/ui/FormError";
 import { HelpHint } from "@/components/ui/FormField";
@@ -17,7 +18,7 @@ import { toast } from "@/components/ui/ToastProvider";
 import { FEATURE_HINTS } from "@/content/help";
 import { readApiError } from "@/shared/api-client";
 
-type Tab = "plan" | "assets" | "scenarios" | "export";
+type Tab = "plan" | "iplan" | "assets" | "scenarios" | "export";
 
 interface Projection {
   result: {
@@ -322,6 +323,13 @@ export default function DashboardPage() {
             </div>
             <FormError message={simError} />
           </div>
+        )}
+
+        {tab === "iplan" && (
+          <InvestmentPlanPanel
+            onUnauthorized={handleUnauthorized}
+            onAssetsChanged={loadProjection}
+          />
         )}
 
         {tab === "assets" && (

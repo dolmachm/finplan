@@ -2,6 +2,7 @@ import type {
   User, MacroSettings, Asset, Liability, Income, Expense, Goal,
   Scenario, PlanSnapshot, SimulationJob, SimulationResult, JsonValue,
 } from "@/shared/types";
+import type { InvestmentPlan } from "@/modules/iplan/types";
 import {
   newId, now, getJson, setJson, getManyByUser, findFirstByUser, findFirstGlobal,
   findManyGlobal, countByUser, countAll, createEntity, updateEntity, deleteEntity,
@@ -210,6 +211,36 @@ const macroRepo = {
   },
 };
 
+const investmentPlanRepo = {
+  async findUnique(args: { where: { userId: string } }) {
+    return getJson<InvestmentPlan>(`iplan:${args.where.userId}`);
+  },
+  async upsert(args: {
+    where: { userId: string };
+    create: InvestmentPlan;
+    update: Partial<InvestmentPlan>;
+  }) {
+    const existing = await getJson<InvestmentPlan>(`iplan:${args.where.userId}`);
+    if (existing) {
+      const updated: InvestmentPlan = {
+        ...existing,
+        ...args.update,
+        userId: args.where.userId,
+        updatedAt: now(),
+      };
+      await setJson(`iplan:${args.where.userId}`, updated);
+      return updated;
+    }
+    const row: InvestmentPlan = {
+      ...args.create,
+      userId: args.where.userId,
+      updatedAt: now(),
+    };
+    await setJson(`iplan:${args.where.userId}`, row);
+    return row;
+  },
+};
+
 const scenarioRepo = {
   ...makeCrud<Scenario>("scenario"),
   async updateMany(args: { where: Where; data: Partial<Scenario> }) {
@@ -352,6 +383,7 @@ type Database = {
   income: EntityRepo<Income>;
   expense: EntityRepo<Expense>;
   goal: EntityRepo<Goal>;
+  investmentPlan: typeof investmentPlanRepo;
   scenario: typeof scenarioRepo;
   planSnapshot: typeof planSnapshotRepo;
   simulationJob: typeof simulationJobRepo;
@@ -367,6 +399,7 @@ export const prisma: Database = {
   income: makeCrud<Income>("income"),
   expense: makeCrud<Expense>("expense"),
   goal: makeCrud<Goal>("goal"),
+  investmentPlan: investmentPlanRepo,
   scenario: scenarioRepo,
   planSnapshot: planSnapshotRepo,
   simulationJob: simulationJobRepo,

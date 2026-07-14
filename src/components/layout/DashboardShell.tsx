@@ -9,6 +9,7 @@ import { signOut } from "next-auth/react";
 
 const navItems = [
   { id: "plan", label: "План" },
+  { id: "iplan", label: "Инвест-план" },
   { id: "assets", label: "Данные" },
   { id: "scenarios", label: "Сценарии" },
   { id: "export", label: "Экспорт" },
