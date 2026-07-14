@@ -5,6 +5,7 @@ import type { ScenarioRule } from "@/modules/scenarios/rule.types";
 import { createEmptyRule, newRuleId } from "@/modules/scenarios/rule.types";
 import { parseRulesFromJson } from "@/modules/scenarios/rule-engine";
 import { RULE_TEMPLATES } from "@/modules/scenarios/rule-catalog";
+import { toast } from "@/components/ui/ToastProvider";
 import { RuleCard } from "./RuleCard";
 
 interface ValidationIssue {
@@ -77,8 +78,21 @@ export function ScenarioRulesEditor({
     if (res.ok) {
       const data = await res.json();
       setIssues(data.issues ?? []);
+      if (data.valid) {
+        toast.success("Правила корректны");
+      } else {
+        const errors = (data.issues ?? []).filter(
+          (i: ValidationIssue) => i.level === "error",
+        ).length;
+        toast.error(
+          errors > 0
+            ? `Найдено ошибок: ${errors}`
+            : "Есть предупреждения в правилах",
+        );
+      }
       return data.valid as boolean;
     }
+    toast.error("Не удалось проверить правила");
     return false;
   }
 
@@ -99,9 +113,11 @@ export function ScenarioRulesEditor({
     if (res.ok) {
       setDirty(false);
       onSaved();
+      toast.success("Правила сохранены");
     } else {
       const data = await res.json();
       setIssues(data.issues ?? [{ ruleId: "", level: "error", message: data.error }]);
+      toast.error(data.error ?? "Не удалось сохранить правила");
     }
   }
 

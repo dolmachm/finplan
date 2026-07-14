@@ -1,6 +1,7 @@
 "use client";
 
 import { BrandLogo } from "@/components/brand/BrandLogo";
+import { toast } from "@/components/ui/ToastProvider";
 import { signOut } from "next-auth/react";
 
 const navItems = [
@@ -46,7 +47,10 @@ export function DashboardShell({
         <div className="border-t border-white/10 p-3">
           <button
             type="button"
-            onClick={() => signOut({ callbackUrl: "/" })}
+            onClick={() => {
+              toast.success("Выход выполнен");
+              signOut({ callbackUrl: "/" });
+            }}
             className="w-full rounded-lg px-3 py-2.5 text-left text-sm text-white/60 hover:bg-white/10 hover:text-white"
           >
             Выйти

@@ -8,6 +8,7 @@ import { AuthShell } from "@/components/layout/AuthShell";
 import { Button } from "@/components/ui/button";
 import { FieldError } from "@/components/ui/FormError";
 import { Input } from "@/components/ui/input";
+import { toast } from "@/components/ui/ToastProvider";
 import { issuesByField } from "@/shared/api-client";
 
 export default function RegisterPage() {
@@ -37,7 +38,9 @@ export default function RegisterPage() {
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
         const msg = data.error ?? "Ошибка регистрации";
-        setError(data.fix ? `${msg}. ${data.fix}` : msg);
+        const message = data.fix ? `${msg}. ${data.fix}` : msg;
+        setError(message);
+        toast.error(message);
         if (data.issues) setFieldErrors(issuesByField(data.issues));
         return;
       }
@@ -48,13 +51,17 @@ export default function RegisterPage() {
         redirect: false,
       });
       if (!signInRes?.ok) {
+        toast.success("Аккаунт создан");
         router.push("/login?registered=1");
         return;
       }
+      toast.success("Аккаунт создан");
       router.push("/dashboard");
       router.refresh();
     } catch {
-      setError("Не удалось связаться с сервером. Проверьте подключение и попробуйте снова.");
+      const message = "Не удалось связаться с сервером. Проверьте подключение и попробуйте снова.";
+      setError(message);
+      toast.error(message);
     } finally {
       setLoading(false);
     }

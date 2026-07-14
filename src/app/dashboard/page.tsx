@@ -11,6 +11,7 @@ import { NetWorthChart } from "@/components/charts/NetWorthChart";
 import { MonteCarloBandChart } from "@/components/charts/MonteCarloBandChart";
 import { ScenariosPanel } from "@/components/scenarios/ScenariosPanel";
 import { FieldError, FormError } from "@/components/ui/FormError";
+import { toast } from "@/components/ui/ToastProvider";
 import {
   issuesByField,
   parsePositiveNumber,
@@ -105,10 +106,12 @@ export default function DashboardPage() {
     if (!res.ok) {
       const { message } = await readApiError(res);
       setSimError(message);
+      toast.error(message);
       return;
     }
     const job = await res.json();
     setSimJob(job);
+    toast.success("Расчёт Monte Carlo запущен");
     pollJob(job.id);
   }
 
@@ -121,13 +124,15 @@ export default function DashboardPage() {
       if (job.status === "COMPLETED") {
         clearInterval(interval);
         loadProjection();
+        toast.success("Расчёт Monte Carlo завершён");
       }
       if (job.status === "FAILED") {
         clearInterval(interval);
-        setSimError(
+        const message =
           job.errorMessage ??
-            "Расчёт завершился с ошибкой. Проверьте данные плана и попробуйте снова",
-        );
+          "Расчёт завершился с ошибкой. Проверьте данные плана и попробуйте снова";
+        setSimError(message);
+        toast.error(message);
       }
     }, 2000);
   }
@@ -138,9 +143,11 @@ export default function DashboardPage() {
     if (!res.ok) {
       const { message } = await readApiError(res);
       setSimError(message);
+      toast.error(message);
       return;
     }
     await Promise.all([loadScenarios(), loadProjection()]);
+    toast.success("Сценарий применён");
   }
 
   async function quickAddAsset() {
@@ -156,8 +163,13 @@ export default function DashboardPage() {
       }),
     });
     if (handleUnauthorized(res)) return;
-    if (!res.ok) return;
+    if (!res.ok) {
+      const { message } = await readApiError(res);
+      toast.error(message);
+      return;
+    }
     await loadProjection();
+    toast.success("Демо-портфель добавлен");
   }
 
   return (
@@ -312,6 +324,7 @@ function OnboardingPanel({
       const { message, issues } = await readApiError(incomeRes);
       setError(message);
       setFieldErrors(issuesByField(issues));
+      toast.error(message);
       return;
     }
 
@@ -329,10 +342,12 @@ function OnboardingPanel({
       const { message, issues } = await readApiError(expenseRes);
       setError(message);
       setFieldErrors(issuesByField(issues));
+      toast.error(message);
       return;
     }
 
     await onRefresh();
+    toast.success("Доход и расход сохранены");
   }
 
   return (
@@ -438,10 +453,12 @@ function GoalForm({
       const { message, issues } = await readApiError(res);
       setError(message);
       setFieldErrors(issuesByField(issues));
+      toast.error(message);
       return;
     }
 
     await onSaved();
+    toast.success("Цель добавлена");
   }
 
   return (
@@ -499,7 +516,9 @@ function CsvImport() {
 
     if (!res.ok) {
       const fix = data.fix ? ` ${data.fix}` : "";
-      setError((data.error ?? "Ошибка импорта") + fix);
+      const message = (data.error ?? "Ошибка импорта") + fix;
+      setError(message);
+      toast.error(message);
       return;
     }
 
@@ -522,7 +541,9 @@ function CsvImport() {
       }
     }
 
-    setResult(lines.join(". "));
+    const message = lines.join(". ");
+    setResult(message);
+    toast.success(`Импортировано: ${data.created} из ${data.total}`);
     e.target.value = "";
   }
 

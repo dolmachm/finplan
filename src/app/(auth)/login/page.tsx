@@ -8,6 +8,7 @@ import { useRouter } from "next/navigation";
 import { AuthShell } from "@/components/layout/AuthShell";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { toast } from "@/components/ui/ToastProvider";
 
 function signInErrorMessage(code: string | null | undefined): string {
   switch (code) {
@@ -45,13 +46,18 @@ function LoginForm() {
         redirect: false,
       });
       if (!res?.ok) {
-        setError(signInErrorMessage(res?.error));
+        const message = signInErrorMessage(res?.error);
+        setError(message);
+        toast.error(message);
         return;
       }
+      toast.success("Вход выполнен");
       router.push("/dashboard");
       router.refresh();
     } catch {
-      setError("Не удалось связаться с сервером. Проверьте подключение и попробуйте снова.");
+      const message = "Не удалось связаться с сервером. Проверьте подключение и попробуйте снова.";
+      setError(message);
+      toast.error(message);
     } finally {
       setLoading(false);
     }

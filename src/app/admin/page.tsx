@@ -5,6 +5,7 @@ import { BrandLogo } from "@/components/brand/BrandLogo";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { toast } from "@/components/ui/ToastProvider";
 
 type UserRow = {
   id: string;
@@ -46,11 +47,14 @@ function LoginForm({ onSuccess }: { onSuccess: () => void }) {
       });
       if (!res.ok) {
         setError("Неверный логин или пароль");
+        toast.error("Неверный логин или пароль");
         return;
       }
+      toast.success("Вход выполнен");
       onSuccess();
     } catch {
       setError("Ошибка соединения");
+      toast.error("Ошибка соединения");
     } finally {
       setLoading(false);
     }
@@ -138,9 +142,11 @@ function UserEditor({
       });
       if (!res.ok) throw new Error();
       setMsg("Сохранено");
+      toast.success("Данные пользователя сохранены");
       onSaved();
     } catch {
       setMsg("Ошибка сохранения");
+      toast.error("Ошибка сохранения");
     } finally {
       setLoading(false);
     }
@@ -157,9 +163,11 @@ function UserEditor({
       });
       if (!res.ok) throw new Error();
       setMsg(`Статус: ${STATUS_LABELS[status]}`);
+      toast.success(`Статус изменён: ${STATUS_LABELS[status]}`);
       onSaved();
     } catch {
       setMsg("Ошибка смены статуса");
+      toast.error("Ошибка смены статуса");
     } finally {
       setLoading(false);
     }
@@ -167,7 +175,10 @@ function UserEditor({
 
   async function adjustBalance(operation: "add" | "subtract") {
     const amount = Number(balanceAmount);
-    if (!amount || amount <= 0) return;
+    if (!amount || amount <= 0) {
+      toast.error("Укажите сумму больше нуля");
+      return;
+    }
     setLoading(true);
     setMsg("");
     try {
@@ -180,10 +191,13 @@ function UserEditor({
       const data = await res.json();
       setForm((f) => ({ ...f, balance: String(data.user.balance) }));
       setBalanceAmount("");
-      setMsg(operation === "add" ? "Начислено" : "Списано");
+      const successMsg = operation === "add" ? "Начислено" : "Списано";
+      setMsg(successMsg);
+      toast.success(successMsg);
       onSaved();
     } catch {
       setMsg("Ошибка операции");
+      toast.error("Ошибка операции");
     } finally {
       setLoading(false);
     }
@@ -315,6 +329,7 @@ function AdminPanel() {
 
   async function logout() {
     await fetch("/api/admin/auth/logout", { method: "POST" });
+    toast.success("Выход выполнен");
     window.location.reload();
   }
 
