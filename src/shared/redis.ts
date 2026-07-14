@@ -1,16 +1,21 @@
 import { Redis } from "@upstash/redis";
 
-function createRedis() {
+let client: Redis | null = null;
+
+export function getRedis(): Redis {
+  if (client) return client;
   const url = process.env.UPSTASH_REDIS_REST_URL;
   const token = process.env.UPSTASH_REDIS_REST_TOKEN;
   if (!url || !token) {
     throw new Error("UPSTASH_REDIS_REST_URL and UPSTASH_REDIS_REST_TOKEN must be set");
   }
-  return new Redis({ url, token });
+  client = new Redis({ url, token });
+  return client;
 }
 
-const globalForRedis = globalThis as unknown as { redis: Redis };
-
-export const redis = globalForRedis.redis ?? createRedis();
-
-if (process.env.NODE_ENV !== "production") globalForRedis.redis = redis;
+/** @deprecated use getRedis() */
+export const redis = new Proxy({} as Redis, {
+  get(_target, prop) {
+    return (getRedis() as unknown as Record<string | symbol, unknown>)[prop];
+  },
+});
