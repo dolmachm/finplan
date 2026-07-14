@@ -1,3 +1,5 @@
+import type { PlanFrequency } from "./frequency";
+
 export interface PlanInput {
   userId: string;
   horizonMonths: number;
@@ -21,13 +23,13 @@ export interface PlanInput {
   }>;
   incomes: Array<{
     amount: number;
-    frequency: "MONTHLY" | "YEARLY" | "ONE_TIME";
+    frequency: PlanFrequency;
     taxRatePct: number;
     growthRatePct: number;
   }>;
   expenses: Array<{
     amount: number;
-    frequency: "MONTHLY" | "YEARLY" | "ONE_TIME";
+    frequency: PlanFrequency;
     growthRatePct: number;
     isEssential: boolean;
   }>;
@@ -37,6 +39,7 @@ export interface PlanInput {
     targetAmountNominal: number;
     targetMonthIndex: number;
     priority: number;
+    allowPartialFunding: boolean;
   }>;
   scenarioModifiers?: ScenarioModifiers;
 }

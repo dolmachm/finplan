@@ -113,7 +113,8 @@ export function runMonteCarlo(
       const inflatedTarget =
         g.targetAmountNominal *
         Math.pow(1 + baseInput.baseInflationPct / 100, g.targetMonthIndex / 12);
-      goalHits[g.id].push(atGoal >= inflatedTarget ? 1 : 0);
+      const threshold = g.allowPartialFunding ? 0.8 : 1;
+      goalHits[g.id].push(atGoal >= inflatedTarget * threshold ? 1 : 0);
     }
 
     if (run === 0) {

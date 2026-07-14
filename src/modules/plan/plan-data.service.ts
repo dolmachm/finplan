@@ -66,7 +66,8 @@ export async function loadPlanInputForUser(userId: string): Promise<PlanInput> {
         0,
         differenceInMonths(startOfMonth(g.targetDate), now),
       ),
-      priority: g.priority,
+      priority: g.priority ?? 1,
+      allowPartialFunding: g.allowPartialFunding ?? true,
     })),
   };
 }

@@ -1,22 +1,14 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { parseJsonBody } from "@/shared/api-validation";
-import { ASSET_TYPE_OPTIONS } from "@/shared/finance-catalog";
-import { assetSchema } from "@/shared/finance-schemas";
+import { goalSchema } from "@/shared/finance-schemas";
 import { prisma } from "@/shared/db";
 import { requireUserId, isErrorResponse } from "@/shared/session";
 import { assertOwned } from "@/shared/crud";
 
-const patchSchema = assetSchema.partial();
-
-function resolveAssetClass(
-  type: z.infer<typeof assetSchema>["type"] | undefined,
-  assetClass?: "PERSONAL" | "INVESTMENT",
-) {
-  if (assetClass) return assetClass;
-  if (!type) return undefined;
-  return ASSET_TYPE_OPTIONS.find((o) => o.value === type)?.class ?? "PERSONAL";
-}
+const patchSchema = goalSchema
+  .extend({ targetDate: z.string().datetime().optional() })
+  .partial();
 
 export async function PATCH(
   req: Request,
@@ -25,18 +17,20 @@ export async function PATCH(
   const userId = await requireUserId();
   if (isErrorResponse(userId)) return userId;
   const { id } = await params;
-  if (!(await assertOwned("asset", id, userId))) {
+  if (!(await assertOwned("goal", id, userId))) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
   const parsed = parseJsonBody(patchSchema, await req.json());
   if (!parsed.ok) return parsed.response;
-  const { assetClass, ...data } = parsed.data;
-  const resolvedClass = resolveAssetClass(data.type, assetClass);
-  const asset = await prisma.asset.update({
+  const { targetDate, ...rest } = parsed.data;
+  const row = await prisma.goal.update({
     where: { id },
-    data: { ...data, ...(resolvedClass ? { assetClass: resolvedClass } : {}) },
+    data: {
+      ...rest,
+      ...(targetDate ? { targetDate: new Date(targetDate) } : {}),
+    },
   });
-  return NextResponse.json(asset);
+  return NextResponse.json(row);
 }
 
 export async function DELETE(
@@ -46,9 +40,9 @@ export async function DELETE(
   const userId = await requireUserId();
   if (isErrorResponse(userId)) return userId;
   const { id } = await params;
-  if (!(await assertOwned("asset", id, userId))) {
+  if (!(await assertOwned("goal", id, userId))) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
-  await prisma.asset.delete({ where: { id } });
+  await prisma.goal.delete({ where: { id } });
   return NextResponse.json({ ok: true });
 }

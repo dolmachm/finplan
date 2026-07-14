@@ -2,11 +2,23 @@ export type AccountStatus = "ACTIVE" | "STAKING" | "LISTING";
 export type UserRole = "USER" | "CONSULTANT" | "ADMIN";
 export type AssetType =
   | "CASH" | "BANK_ACCOUNT" | "DEPOSIT" | "BROKERAGE" | "IIS"
-  | "MUTUAL_FUND" | "CRYPTO" | "REAL_ESTATE" | "VEHICLE" | "COLLECTIBLE" | "OTHER";
+  | "MUTUAL_FUND" | "CRYPTO" | "REAL_ESTATE" | "VEHICLE" | "COLLECTIBLE"
+  | "CROWDFUNDING" | "RENTAL_REAL_ESTATE" | "RENTAL_VEHICLE" | "OTHER";
 export type LiabilityType =
   | "MORTGAGE" | "CONSUMER_LOAN" | "CREDIT_CARD" | "AUTO_LOAN" | "STUDENT_LOAN" | "OTHER";
 export type IncomeSource = "SALARY" | "FREELANCE" | "PASSIVE" | "BUSINESS" | "OTHER";
-export type Frequency = "MONTHLY" | "YEARLY" | "ONE_TIME";
+export type Frequency = "MONTHLY" | "QUARTERLY" | "SEMI_ANNUAL" | "YEARLY" | "ONE_TIME";
+export type AssetClass = "PERSONAL" | "INVESTMENT";
+export type GoalType =
+  | "RETIREMENT"
+  | "EDUCATION"
+  | "HOME"
+  | "EMERGENCY"
+  | "MAJOR_PURCHASE"
+  | "WEALTH"
+  | "LEGACY"
+  | "OTHER";
+export type GoalStrategy = "SYSTEMATIC" | "LUMP_SUM" | "BALANCED";
 export type ScenarioKind = "PREDEFINED" | "CUSTOM";
 export type JobStatus = "PENDING" | "RUNNING" | "COMPLETED" | "FAILED";
 
@@ -41,6 +53,7 @@ export type Asset = {
   userId: string;
   name: string;
   type: AssetType;
+  assetClass: AssetClass;
   currentValue: number;
   currency: string;
   expectedReturnPct: number;
@@ -77,6 +90,7 @@ export type Income = {
   amount: number;
   currency: string;
   frequency: Frequency;
+  isEssential: boolean;
   taxRatePct: number;
   growthRatePct: number;
   startDate: Date | null;
@@ -105,12 +119,13 @@ export type Goal = {
   id: string;
   userId: string;
   name: string;
+  goalType: GoalType;
   targetAmountNominal: number;
   targetDate: Date;
   currency: string;
   priority: number;
   allowPartialFunding: boolean;
-  strategy: string;
+  strategy: GoalStrategy;
   linkedAssetId: string | null;
   createdAt: Date;
   updatedAt: Date;

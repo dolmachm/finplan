@@ -1,4 +1,5 @@
 import type { PlanInput, ScenarioModifiers } from "@/modules/plan/types";
+import { monthlyEquivalent } from "@/modules/plan/frequency";
 import type { ScenarioRule, RuleBranch, RuleAction } from "./rule.types";
 import { isActionBranch, isNestedBranch } from "./rule.types";
 
@@ -10,17 +11,15 @@ export interface RuleEvalContext {
 }
 
 export function buildRuleContext(planInput: PlanInput): RuleEvalContext {
-  const monthlyIncome = planInput.incomes.reduce((s, i) => {
-    if (i.frequency === "MONTHLY") return s + i.amount * (1 - i.taxRatePct / 100);
-    if (i.frequency === "YEARLY") return s + i.amount / 12;
-    return s;
-  }, 0);
+  const monthlyIncome = planInput.incomes.reduce(
+    (s, i) => s + monthlyEquivalent(i.amount, i.frequency) * (1 - i.taxRatePct / 100),
+    0,
+  );
 
-  const monthlyExpenses = planInput.expenses.reduce((s, e) => {
-    if (e.frequency === "MONTHLY") return s + e.amount;
-    if (e.frequency === "YEARLY") return s + e.amount / 12;
-    return s;
-  }, 0);
+  const monthlyExpenses = planInput.expenses.reduce(
+    (s, e) => s + monthlyEquivalent(e.amount, e.frequency),
+    0,
+  );
 
   const liquidAssetsValue = planInput.assets
     .filter((a) => a.liquidityDays <= 30)

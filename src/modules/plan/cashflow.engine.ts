@@ -4,16 +4,7 @@ import type {
   PlanInput,
   ScenarioModifiers,
 } from "./types";
-
-function monthlyAmount(
-  amount: number,
-  frequency: "MONTHLY" | "YEARLY" | "ONE_TIME",
-  month: number,
-): number {
-  if (frequency === "MONTHLY") return amount;
-  if (frequency === "YEARLY") return month % 12 === 0 ? amount : 0;
-  return month === 0 ? amount : 0;
-}
+import { amountForMonth } from "./frequency";
 
 function applyModifiers(
   base: PlanInput,
@@ -56,7 +47,7 @@ export function runDeterministicPlan(
     let income = 0;
     for (const inc of plan.incomes) {
       const growth = Math.pow(1 + inc.growthRatePct / 100, m / 12);
-      const gross = monthlyAmount(inc.amount, inc.frequency, m) * growth;
+      const gross = amountForMonth(inc.amount, inc.frequency, m) * growth;
       if (modifiers?.incomeLossMonths && m < modifiers.incomeLossMonths) {
         continue;
       }
@@ -67,7 +58,7 @@ export function runDeterministicPlan(
     for (const exp of plan.expenses) {
       const growth = Math.pow(1 + exp.growthRatePct / 100, m / 12);
       expenses +=
-        monthlyAmount(exp.amount, exp.frequency, m) * growth * inflationFactor;
+        amountForMonth(exp.amount, exp.frequency, m) * growth * inflationFactor;
     }
 
     for (const a of plan.assets) {
@@ -129,10 +120,12 @@ export function runDeterministicPlan(
     };
   });
 
-  const recommendedMonthlySaving = goalFunding.reduce(
-    (max, g) => Math.max(max, g.requiredMonthlySaving),
-    0,
-  );
+  const recommendedMonthlySaving = [...plan.goals]
+    .sort((a, b) => a.priority - b.priority)
+    .reduce((sum, g) => {
+      const funding = goalFunding.find((f) => f.goalId === g.id);
+      return sum + (funding?.requiredMonthlySaving ?? 0);
+    }, 0);
 
   return {
     monthly,

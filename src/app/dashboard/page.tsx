@@ -6,20 +6,16 @@ import { Disclaimer } from "@/components/Disclaimer";
 import { DashboardShell } from "@/components/layout/DashboardShell";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
 import { NetWorthChart } from "@/components/charts/NetWorthChart";
 import { MonteCarloBandChart } from "@/components/charts/MonteCarloBandChart";
+import { GoalsPanel } from "@/components/finance/GoalsPanel";
+import { FinanceDataPanel } from "@/components/finance/FinanceDataPanel";
 import { ScenariosPanel } from "@/components/scenarios/ScenariosPanel";
 import { FormError } from "@/components/ui/FormError";
-import { FormField, HelpHint } from "@/components/ui/FormField";
+import { HelpHint } from "@/components/ui/FormField";
 import { toast } from "@/components/ui/ToastProvider";
 import { FEATURE_HINTS } from "@/content/help";
-import {
-  issuesByField,
-  parsePositiveNumber,
-  readApiError,
-} from "@/shared/api-client";
-import { digitsOnly, formatMoneyInput } from "@/shared/format-input";
+import { readApiError } from "@/shared/api-client";
 
 type Tab = "plan" | "assets" | "scenarios" | "export";
 
@@ -39,6 +35,8 @@ interface Projection {
     };
   };
   scenario: string;
+  scenarioId: string | null;
+  isActive: boolean;
 }
 
 export default function DashboardPage() {
@@ -67,6 +65,8 @@ export default function DashboardPage() {
   const [simError, setSimError] = useState("");
   const [simStarting, setSimStarting] = useState(false);
   const [addingAsset, setAddingAsset] = useState(false);
+  const [viewScenarioId, setViewScenarioId] = useState<string | null>(null);
+  const [projectionLoading, setProjectionLoading] = useState(false);
 
   const simBusy =
     simStarting ||
@@ -84,11 +84,23 @@ export default function DashboardPage() {
     [router],
   );
 
-  const loadProjection = useCallback(async () => {
-    const res = await fetch("/api/plan/projection");
-    if (handleUnauthorized(res)) return;
-    if (res.ok) setProjection(await res.json());
-  }, [handleUnauthorized]);
+  const loadProjection = useCallback(
+    async (scenarioId?: string) => {
+      const id = scenarioId ?? viewScenarioId;
+      if (!id) return;
+      setProjectionLoading(true);
+      try {
+        const res = await fetch(
+          `/api/plan/projection?scenarioId=${encodeURIComponent(id)}`,
+        );
+        if (handleUnauthorized(res)) return;
+        if (res.ok) setProjection(await res.json());
+      } finally {
+        setProjectionLoading(false);
+      }
+    },
+    [handleUnauthorized, viewScenarioId],
+  );
 
   const loadScenarios = useCallback(async () => {
     const res = await fetch("/api/scenarios");
@@ -96,14 +108,28 @@ export default function DashboardPage() {
     if (res.ok) {
       const data = await res.json();
       setScenarios(data.scenarios);
+      return data.scenarios as Array<{
+        id: string;
+        name: string;
+        isActive: boolean;
+      }>;
     }
+    return [];
   }, [handleUnauthorized]);
 
   useEffect(() => {
-    Promise.all([loadProjection(), loadScenarios()]).finally(() =>
-      setLoading(false),
-    );
-  }, [loadProjection, loadScenarios]);
+    loadScenarios().finally(() => setLoading(false));
+  }, [loadScenarios]);
+
+  useEffect(() => {
+    if (viewScenarioId !== null) return;
+    const active = scenarios.find((s) => s.isActive);
+    setViewScenarioId(active?.id ?? "base");
+  }, [scenarios, viewScenarioId]);
+
+  useEffect(() => {
+    if (viewScenarioId) loadProjection(viewScenarioId);
+  }, [viewScenarioId, loadProjection]);
 
   async function runSimulation() {
     setSimError("");
@@ -112,7 +138,10 @@ export default function DashboardPage() {
       const res = await fetch("/api/simulations", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ numRuns: 5000 }),
+        body: JSON.stringify({
+          numRuns: 5000,
+          scenarioId: viewScenarioId === "base" ? undefined : viewScenarioId ?? undefined,
+        }),
       });
       if (handleUnauthorized(res)) return;
       if (!res.ok) {
@@ -165,7 +194,8 @@ export default function DashboardPage() {
       toast.error(message);
       return;
     }
-    await Promise.all([loadScenarios(), loadProjection()]);
+    await Promise.all([loadScenarios(), loadProjection(id)]);
+    setViewScenarioId(id);
     toast.success("Сценарий применён");
   }
 
@@ -178,6 +208,7 @@ export default function DashboardPage() {
         body: JSON.stringify({
           name: "Портфель",
           type: "BROKERAGE",
+          assetClass: "INVESTMENT",
           currentValue: 3_000_000,
           expectedReturnPct: 7,
           volatilityPct: 12,
@@ -204,8 +235,31 @@ export default function DashboardPage() {
 
       {loading && <p className="text-muted">Загрузка…</p>}
 
-        {tab === "plan" && projection && (
+        {tab === "plan" && projection && viewScenarioId && (
           <div className="space-y-8">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <HelpHint>
+                Выберите сценарий для просмотра прогноза. Активный сценарий отмечен — его можно сменить на вкладке «Сценарии».
+              </HelpHint>
+              <label className="flex items-center gap-2 text-sm">
+                <span className="text-muted">Отображать:</span>
+                <select
+                  value={viewScenarioId}
+                  onChange={(e) => setViewScenarioId(e.target.value)}
+                  disabled={projectionLoading}
+                  className="rounded-lg border border-border bg-card px-3 py-2 text-sm"
+                >
+                  <option value="base">Базовый (без правил)</option>
+                  {scenarios.map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {s.name}
+                      {s.isActive ? " • активный" : ""}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
+
             <section className="grid gap-4 sm:grid-cols-3">
               <SummaryCard
                 title="Рекомендуемый взнос / мес"
@@ -226,8 +280,14 @@ export default function DashboardPage() {
 
             <Card>
               <h2 className="font-medium">
-                Timeline — сценарий «{projection.scenario}»
+                Timeline — {projection.scenario}
+                {projection.isActive && (
+                  <span className="ml-2 text-xs font-normal text-brand">активный</span>
+                )}
               </h2>
+              {projectionLoading && (
+                <p className="mt-1 text-xs text-muted">Пересчёт…</p>
+              )}
               <NetWorthChart data={projection.result.monthly} />
             </Card>
 
@@ -265,12 +325,15 @@ export default function DashboardPage() {
         )}
 
         {tab === "assets" && (
-          <OnboardingPanel
-            onQuickAdd={quickAddAsset}
-            onRefresh={loadProjection}
-            onUnauthorized={handleUnauthorized}
-            addingAsset={addingAsset}
-          />
+          <div className="space-y-6">
+            <FinanceDataPanel
+              onQuickAdd={quickAddAsset}
+              onRefresh={loadProjection}
+              onUnauthorized={handleUnauthorized}
+              addingAsset={addingAsset}
+            />
+            <GoalsPanel onSaved={loadProjection} onUnauthorized={handleUnauthorized} />
+          </div>
         )}
 
         {tab === "scenarios" && (
@@ -324,299 +387,6 @@ function formatRub(n: number) {
     currency: "RUB",
     maximumFractionDigits: 0,
   }).format(n);
-}
-
-function OnboardingPanel({
-  onQuickAdd,
-  onRefresh,
-  onUnauthorized,
-  addingAsset,
-}: {
-  onQuickAdd: () => void;
-  onRefresh: () => void;
-  onUnauthorized: (res: Response) => boolean;
-  addingAsset: boolean;
-}) {
-  const [income, setIncome] = useState("50 000");
-  const [expense, setExpense] = useState("40 000");
-  const [error, setError] = useState("");
-  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
-  const [saving, setSaving] = useState(false);
-
-  const incomeValid = parsePositiveNumber(income, "Доход").ok;
-  const expenseValid = parsePositiveNumber(expense, "Расход").ok;
-  const canSave = incomeValid && expenseValid && !saving;
-
-  async function saveBasics() {
-    setError("");
-    setFieldErrors({});
-
-    const incomeNum = parsePositiveNumber(income, "Доход");
-    if (!incomeNum.ok) {
-      setFieldErrors({ amount: incomeNum.message });
-      toast.error(incomeNum.message);
-      return;
-    }
-    const expenseNum = parsePositiveNumber(expense, "Расход");
-    if (!expenseNum.ok) {
-      setFieldErrors({ category: expenseNum.message });
-      toast.error(expenseNum.message);
-      return;
-    }
-
-    setSaving(true);
-    try {
-      const incomeRes = await fetch("/api/incomes", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          name: "Зарплата",
-          source: "SALARY",
-          amount: incomeNum.value,
-        }),
-      });
-      if (onUnauthorized(incomeRes)) return;
-      if (!incomeRes.ok) {
-        const { message, issues } = await readApiError(incomeRes);
-        setError(message);
-        setFieldErrors(issuesByField(issues));
-        toast.error(message);
-        return;
-      }
-
-      const expenseRes = await fetch("/api/expenses", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          name: "Расходы",
-          category: "living",
-          amount: expenseNum.value,
-        }),
-      });
-      if (onUnauthorized(expenseRes)) return;
-      if (!expenseRes.ok) {
-        const { message, issues } = await readApiError(expenseRes);
-        setError(message);
-        setFieldErrors(issuesByField(issues));
-        toast.error(message);
-        return;
-      }
-
-      await onRefresh();
-      toast.success("Доход и расход сохранены");
-    } catch {
-      const message = "Не удалось сохранить данные. Проверьте подключение и попробуйте снова.";
-      setError(message);
-      toast.error(message);
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  return (
-    <section className="space-y-6">
-      <Card>
-        <h2 className="font-medium">Быстрый старт</h2>
-        <p className="mt-1 text-sm text-muted">
-          Шаг 1: доход и расход. Шаг 2: активы. Шаг 3: цель и Monte Carlo.
-        </p>
-        <div className="mt-4 flex flex-wrap items-end gap-4">
-          <FormField
-            label="Доход в месяц"
-            hint="Зарплата и другие поступления после налогов"
-            htmlFor="income"
-            error={fieldErrors.amount}
-            className="max-w-[180px]"
-          >
-            <Input
-              id="income"
-              inputMode="numeric"
-              value={income}
-              onChange={(e) => setIncome(formatMoneyInput(e.target.value))}
-              placeholder="50 000"
-            />
-          </FormField>
-          <FormField
-            label="Расход в месяц"
-            hint="Обязательные и регулярные траты"
-            htmlFor="expense"
-            error={fieldErrors.category}
-            className="max-w-[180px]"
-          >
-            <Input
-              id="expense"
-              inputMode="numeric"
-              value={expense}
-              onChange={(e) => setExpense(formatMoneyInput(e.target.value))}
-              placeholder="40 000"
-            />
-          </FormField>
-          <Button type="button" onClick={saveBasics} disabled={!canSave}>
-            {saving ? "Сохранение…" : "Сохранить"}
-          </Button>
-        </div>
-        <FormError message={error} />
-        <div className="mt-4">
-          <HelpHint>{FEATURE_HINTS.demoPortfolio}</HelpHint>
-          <button
-          type="button"
-          onClick={onQuickAdd}
-          disabled={addingAsset}
-          className="mt-4 text-sm font-medium text-brand hover:underline disabled:cursor-not-allowed disabled:opacity-50"
-        >
-          {addingAsset ? "Добавление…" : "Добавить демо-портфель 3 млн ₽"}
-        </button>
-        </div>
-      </Card>
-      <GoalForm onSaved={onRefresh} onUnauthorized={onUnauthorized} />
-    </section>
-  );
-}
-
-function GoalForm({
-  onSaved,
-  onUnauthorized,
-}: {
-  onSaved: () => void;
-  onUnauthorized: (res: Response) => boolean;
-}) {
-  const [name, setName] = useState("Квартира");
-  const [amount, setAmount] = useState("6 000 000");
-  const [years, setYears] = useState("7");
-  const [error, setError] = useState("");
-  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
-  const [saving, setSaving] = useState(false);
-
-  const amountNum = parsePositiveNumber(amount, "Целевая сумма");
-  const yearsNum = parsePositiveNumber(years, "Срок");
-  const canSubmit =
-    name.trim().length > 0 &&
-    amountNum.ok &&
-    amountNum.value > 0 &&
-    yearsNum.ok &&
-    yearsNum.value > 0 &&
-    !saving;
-
-  async function submit() {
-    setError("");
-    setFieldErrors({});
-
-    if (!name.trim()) {
-      const message = "Название: укажите цель. Например, «Квартира»";
-      setFieldErrors({ name: message });
-      toast.error(message);
-      return;
-    }
-
-    if (!amountNum.ok) {
-      setFieldErrors({ targetAmountNominal: amountNum.message });
-      toast.error(amountNum.message);
-      return;
-    }
-    if (amountNum.value === 0) {
-      const message = "Целевая сумма должна быть больше нуля";
-      setFieldErrors({ targetAmountNominal: message });
-      toast.error(message);
-      return;
-    }
-
-    if (!yearsNum.ok || yearsNum.value === 0) {
-      const message = "Срок: укажите число лет, например 7";
-      setFieldErrors({ targetDate: message });
-      toast.error(message);
-      return;
-    }
-
-    const targetDate = new Date();
-    targetDate.setFullYear(targetDate.getFullYear() + yearsNum.value);
-
-    setSaving(true);
-    try {
-      const res = await fetch("/api/goals", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          name: name.trim(),
-          targetAmountNominal: amountNum.value,
-          targetDate: targetDate.toISOString(),
-        }),
-      });
-      if (onUnauthorized(res)) return;
-      if (!res.ok) {
-        const { message, issues } = await readApiError(res);
-        setError(message);
-        setFieldErrors(issuesByField(issues));
-        toast.error(message);
-        return;
-      }
-
-      await onSaved();
-      toast.success("Цель добавлена");
-    } catch {
-      const message = "Не удалось добавить цель. Проверьте подключение и попробуйте снова.";
-      setError(message);
-      toast.error(message);
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  return (
-    <Card>
-      <h3 className="font-medium">Цель</h3>
-      <HelpHint className="mt-1">
-        Укажите название, сумму в рублях и срок в годах — дата цели рассчитается автоматически.
-      </HelpHint>
-      <div className="mt-4 flex flex-wrap items-end gap-3">
-        <FormField
-          label="Название"
-          htmlFor="goal-name"
-          error={fieldErrors.name}
-          className="max-w-[160px]"
-        >
-          <Input
-            id="goal-name"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            placeholder="Квартира"
-          />
-        </FormField>
-        <FormField
-          label="Сумма, ₽"
-          hint="Номинальная сумма без инфляции"
-          htmlFor="goal-amount"
-          error={fieldErrors.targetAmountNominal}
-          className="max-w-[160px]"
-        >
-          <Input
-            id="goal-amount"
-            inputMode="numeric"
-            value={amount}
-            onChange={(e) => setAmount(formatMoneyInput(e.target.value))}
-            placeholder="6 000 000"
-          />
-        </FormField>
-        <FormField
-          label="Срок, лет"
-          htmlFor="goal-years"
-          error={fieldErrors.targetDate}
-          className="w-28"
-        >
-          <Input
-            id="goal-years"
-            inputMode="numeric"
-            value={years}
-            onChange={(e) => setYears(digitsOnly(e.target.value, 2))}
-            placeholder="7"
-          />
-        </FormField>
-        <Button type="button" onClick={submit} disabled={!canSubmit}>
-          {saving ? "Добавление…" : "Добавить цель"}
-        </Button>
-      </div>
-      <FormError message={error} />
-    </Card>
-  );
 }
 
 function CsvImport() {
