@@ -1,5 +1,4 @@
-import type { Prisma } from "@prisma/client";
-import { prisma } from "@/shared/db";
+import { prisma, type InputJsonValue } from "@/shared/db";
 import { loadPlanInputForUser } from "@/modules/plan/plan-data.service";
 import { runDeterministicPlan } from "@/modules/plan/cashflow.engine";
 import {
@@ -40,7 +39,7 @@ export async function enqueueSimulation(
       userId,
       scenarioId: opts.scenarioId,
       numRuns: opts.numRuns ?? 5000,
-      params: scenarioParams as unknown as Prisma.InputJsonValue,
+      params: scenarioParams as unknown as InputJsonValue,
       status: "PENDING",
     },
   });
@@ -94,19 +93,19 @@ export async function processSimulationJob(jobId: string) {
       data: {
         userId: job.userId,
         scenarioId: job.scenarioId,
-        deterministic: deterministic as unknown as Prisma.InputJsonValue,
-        cashflowMonthly: deterministic.monthly.map((m) => m.cashflow) as unknown as Prisma.InputJsonValue,
-        netWorthMonthly: deterministic.monthly.map((m) => m.netWorth) as unknown as Prisma.InputJsonValue,
+        deterministic: deterministic as unknown as InputJsonValue,
+        cashflowMonthly: deterministic.monthly.map((m) => m.cashflow) as unknown as InputJsonValue,
+        netWorthMonthly: deterministic.monthly.map((m) => m.netWorth) as unknown as InputJsonValue,
       },
     });
 
     await prisma.simulationResult.create({
       data: {
         jobId,
-        goalProbabilities: mc.goalResults as unknown as Prisma.InputJsonValue,
-        wealthPercentiles: mc.wealthAtHorizon as unknown as Prisma.InputJsonValue,
-        samplePaths: mc.samplePaths as unknown as Prisma.InputJsonValue,
-        sensitivity: sensitivity as unknown as Prisma.InputJsonValue,
+        goalProbabilities: mc.goalResults as unknown as InputJsonValue,
+        wealthPercentiles: mc.wealthAtHorizon as unknown as InputJsonValue,
+        samplePaths: mc.samplePaths as unknown as InputJsonValue,
+        sensitivity: sensitivity as unknown as InputJsonValue,
       },
     });
 

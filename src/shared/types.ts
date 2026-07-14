@@ -1,0 +1,167 @@
+export type AccountStatus = "ACTIVE" | "STAKING" | "LISTING";
+export type UserRole = "USER" | "CONSULTANT" | "ADMIN";
+export type AssetType =
+  | "CASH" | "BANK_ACCOUNT" | "DEPOSIT" | "BROKERAGE" | "IIS"
+  | "MUTUAL_FUND" | "CRYPTO" | "REAL_ESTATE" | "VEHICLE" | "COLLECTIBLE" | "OTHER";
+export type LiabilityType =
+  | "MORTGAGE" | "CONSUMER_LOAN" | "CREDIT_CARD" | "AUTO_LOAN" | "STUDENT_LOAN" | "OTHER";
+export type IncomeSource = "SALARY" | "FREELANCE" | "PASSIVE" | "BUSINESS" | "OTHER";
+export type Frequency = "MONTHLY" | "YEARLY" | "ONE_TIME";
+export type ScenarioKind = "PREDEFINED" | "CUSTOM";
+export type JobStatus = "PENDING" | "RUNNING" | "COMPLETED" | "FAILED";
+
+export type User = {
+  id: string;
+  email: string;
+  passwordHash: string | null;
+  name: string | null;
+  role: UserRole;
+  accountStatus: AccountStatus;
+  balance: number;
+  emailVerified: Date | null;
+  image: string | null;
+  createdAt: Date;
+  updatedAt: Date;
+};
+
+export type MacroSettings = {
+  id: string;
+  userId: string;
+  baseCurrency: string;
+  baseInflationPct: number;
+  incomeTaxPct: number;
+  planHorizonYears: number;
+  discountRatePct: number | null;
+  createdAt: Date;
+  updatedAt: Date;
+};
+
+export type Asset = {
+  id: string;
+  userId: string;
+  name: string;
+  type: AssetType;
+  currentValue: number;
+  currency: string;
+  expectedReturnPct: number;
+  volatilityPct: number;
+  liquidityDays: number;
+  maintenanceCostMonthly: number;
+  dividendIncomeMonthly: number;
+  taxEffectPct: number;
+  isRealReturn: boolean;
+  notes: string | null;
+  createdAt: Date;
+  updatedAt: Date;
+};
+
+export type Liability = {
+  id: string;
+  userId: string;
+  name: string;
+  type: LiabilityType;
+  remainingBalance: number;
+  interestRatePct: number;
+  monthlyPayment: number;
+  endDate: Date | null;
+  currency: string;
+  createdAt: Date;
+  updatedAt: Date;
+};
+
+export type Income = {
+  id: string;
+  userId: string;
+  name: string;
+  source: IncomeSource;
+  amount: number;
+  currency: string;
+  frequency: Frequency;
+  taxRatePct: number;
+  growthRatePct: number;
+  startDate: Date | null;
+  endDate: Date | null;
+  oneTimeDate: Date | null;
+  createdAt: Date;
+  updatedAt: Date;
+};
+
+export type Expense = {
+  id: string;
+  userId: string;
+  name: string;
+  category: string;
+  amount: number;
+  currency: string;
+  frequency: Frequency;
+  isEssential: boolean;
+  growthRatePct: number;
+  oneTimeDate: Date | null;
+  createdAt: Date;
+  updatedAt: Date;
+};
+
+export type Goal = {
+  id: string;
+  userId: string;
+  name: string;
+  targetAmountNominal: number;
+  targetDate: Date;
+  currency: string;
+  priority: number;
+  allowPartialFunding: boolean;
+  strategy: string;
+  linkedAssetId: string | null;
+  createdAt: Date;
+  updatedAt: Date;
+};
+
+export type Scenario = {
+  id: string;
+  userId: string;
+  name: string;
+  kind: ScenarioKind;
+  templateKey: string | null;
+  isActive: boolean;
+  params: unknown;
+  rules: unknown;
+  createdAt: Date;
+  updatedAt: Date;
+};
+
+export type PlanSnapshot = {
+  id: string;
+  userId: string;
+  scenarioId: string | null;
+  deterministic: unknown;
+  cashflowMonthly: unknown;
+  netWorthMonthly: unknown;
+  computedAt: Date;
+};
+
+export type SimulationJob = {
+  id: string;
+  userId: string;
+  scenarioId: string | null;
+  status: JobStatus;
+  progressPct: number;
+  numRuns: number;
+  stepMonths: number;
+  params: unknown;
+  errorMessage: string | null;
+  createdAt: Date;
+  startedAt: Date | null;
+  completedAt: Date | null;
+};
+
+export type SimulationResult = {
+  id: string;
+  jobId: string;
+  goalProbabilities: unknown;
+  wealthPercentiles: unknown;
+  samplePaths: unknown;
+  sensitivity: unknown | null;
+  createdAt: Date;
+};
+
+export type JsonValue = string | number | boolean | null | JsonValue[] | { [key: string]: JsonValue };

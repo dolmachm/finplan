@@ -1,5 +1,5 @@
-import { prisma } from "@/shared/db";
-import type { AccountStatus, UserRole } from "@prisma/client";
+import { prisma, type Db } from "@/shared/db";
+import type { AccountStatus, UserRole } from "@/shared/db";
 
 export async function listUsers() {
   return prisma.user.findMany({
@@ -63,7 +63,7 @@ export type UpdateUserInput = {
 export async function updateUser(id: string, input: UpdateUserInput) {
   const { baseCurrency, ...userFields } = input;
 
-  return prisma.$transaction(async (tx) => {
+  return prisma.$transaction(async (tx: Db) => {
     const user = await tx.user.update({
       where: { id },
       data: userFields,

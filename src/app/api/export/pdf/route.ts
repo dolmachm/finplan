@@ -1,3 +1,4 @@
+import type { Goal, User } from "@/shared/types";
 import { NextResponse } from "next/server";
 import { auth } from "@/shared/auth";
 import { prisma } from "@/shared/db";
@@ -24,7 +25,7 @@ export async function GET() {
       orderBy: { completedAt: "desc" },
       include: { result: true },
     }),
-  ]);
+  ]) as [User | null, Awaited<ReturnType<typeof prisma.macroSettings.findUnique>>, Goal[], Awaited<ReturnType<typeof prisma.simulationJob.findFirst>>];
 
   const planInput = await loadPlanInputForUser(userId);
   const det = runDeterministicPlan(planInput);
@@ -41,7 +42,7 @@ export async function GET() {
       inflation: macro?.baseInflationPct ?? 4,
       horizonYears: macro?.planHorizonYears ?? 30,
     },
-    goals: goals.map((g) => {
+    goals: goals.map((g: Goal) => {
       const prob = goalProbs.find((p) => p.goalId === g.id);
       return {
         name: g.name,

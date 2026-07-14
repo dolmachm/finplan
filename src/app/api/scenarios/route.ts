@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import type { Prisma } from "@prisma/client";
+import type { InputJsonValue } from "@/shared/db";
 import { prisma } from "@/shared/db";
 import { requireUserId, isErrorResponse } from "@/shared/session";
 import { PREDEFINED_SCENARIOS } from "@/modules/scenarios/scenario.templates";
@@ -30,8 +30,8 @@ export async function POST(req: Request) {
       name: data.name,
       kind: data.templateKey ? "PREDEFINED" : "CUSTOM",
       templateKey: data.templateKey,
-      params: (data.params ?? { templateKey: data.templateKey }) as Prisma.InputJsonValue,
-      rules: (data.rules ?? template?.rules ?? []) as Prisma.InputJsonValue,
+      params: (data.params ?? { templateKey: data.templateKey }) as InputJsonValue,
+      rules: (data.rules ?? template?.rules ?? []) as InputJsonValue,
     },
   });
   return NextResponse.json(row, { status: 201 });

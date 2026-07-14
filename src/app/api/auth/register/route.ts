@@ -1,30 +1,7 @@
-import { Prisma } from "@prisma/client";
 import { NextResponse } from "next/server";
 import { registerSchema, registerUser } from "@/modules/auth/auth.service";
 import { seedPredefinedScenarios } from "@/modules/simulation/simulation.service";
 import { isZodError, validationErrorResponse } from "@/shared/api-validation";
-
-function prismaErrorResponse(e: Prisma.PrismaClientKnownRequestError) {
-  if (e.code === "P2021") {
-    return NextResponse.json(
-      {
-        error: "База данных не настроена",
-        fix: "Выполните в терминале: npm run db:push",
-      },
-      { status: 503 },
-    );
-  }
-  if (e.code === "P1001" || e.code === "P1000") {
-    return NextResponse.json(
-      {
-        error: "Нет подключения к базе данных",
-        fix: "Проверьте DATABASE_URL в .env и доступность PostgreSQL",
-      },
-      { status: 503 },
-    );
-  }
-  return null;
-}
 
 export async function POST(req: Request) {
   try {
@@ -58,15 +35,14 @@ export async function POST(req: Request) {
         { status: 409 },
       );
     }
-    if (e instanceof Prisma.PrismaClientKnownRequestError) {
-      const response = prismaErrorResponse(e);
-      if (response) return response;
-    }
-    if (e instanceof Error && e.message === "DATABASE_URL is not set") {
+    if (
+      e instanceof Error &&
+      (e.message.includes("UPSTASH_REDIS") || e.message.includes("must be set"))
+    ) {
       return NextResponse.json(
         {
           error: "База данных не настроена",
-          fix: "Добавьте DATABASE_URL в файл .env",
+          fix: "Добавьте UPSTASH_REDIS_REST_URL и UPSTASH_REDIS_REST_TOKEN в .env",
         },
         { status: 503 },
       );
@@ -75,7 +51,7 @@ export async function POST(req: Request) {
     return NextResponse.json(
       {
         error: "Не удалось создать аккаунт",
-        fix: "Проверьте подключение к БД и попробуйте позже",
+        fix: "Проверьте подключение к Redis и попробуйте позже",
       },
       { status: 500 },
     );

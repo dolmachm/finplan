@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import type { Prisma } from "@prisma/client";
+import type { InputJsonValue } from "@/shared/db";
 import { prisma } from "@/shared/db";
 import { requireUserId, isErrorResponse } from "@/shared/session";
 import { parseRulesFromJson } from "@/modules/scenarios/rule-engine";
@@ -65,10 +65,10 @@ export async function PATCH(
     data: {
       ...(body.name ? { name: body.name } : {}),
       ...(body.rules
-        ? { rules: body.rules as unknown as Prisma.InputJsonValue }
+        ? { rules: body.rules as unknown as InputJsonValue }
         : {}),
       ...(body.params
-        ? { params: body.params as unknown as Prisma.InputJsonValue }
+        ? { params: body.params as unknown as InputJsonValue }
         : {}),
     },
   });

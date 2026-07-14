@@ -1,4 +1,5 @@
 import { prisma } from "@/shared/db";
+import type { Asset, Expense, Goal, Income, Liability, MacroSettings } from "@/shared/types";
 import { differenceInMonths, startOfMonth } from "date-fns";
 import type { PlanInput } from "./types";
 
@@ -11,7 +12,14 @@ export async function loadPlanInputForUser(userId: string): Promise<PlanInput> {
       prisma.income.findMany({ where: { userId } }),
       prisma.expense.findMany({ where: { userId } }),
       prisma.goal.findMany({ where: { userId }, orderBy: { priority: "asc" } }),
-    ]);
+    ]) as [
+      MacroSettings | null,
+      Asset[],
+      Liability[],
+      Income[],
+      Expense[],
+      Goal[],
+    ];
 
   const horizonYears = macro?.planHorizonYears ?? 30;
   const horizonMonths = horizonYears * 12;

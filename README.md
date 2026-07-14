@@ -22,32 +22,30 @@ src/
 ## Стек
 
 - **Next.js 16** (App Router) — монолит UI + API
-- **Prisma** + **PostgreSQL (Neon)**
+- **Upstash Redis** — хранение данных
 - **NextAuth** — credentials auth
 - **Recharts** — графики
 - **jsPDF** — отчёты
 
 ## Быстрый старт
 
-1. Создайте проект в [Neon](https://neon.tech) и скопируйте connection string.
+1. Создайте базу в [Upstash Redis](https://console.upstash.com/redis/) и скопируйте REST URL и token.
 
 2. Настройте `.env` (см. `.env.example`):
 
 ```env
-DATABASE_URL="postgresql://...@ep-xxx.neon.tech/finplan?sslmode=require"
+UPSTASH_REDIS_REST_URL="https://your-instance.upstash.io"
+UPSTASH_REDIS_REST_TOKEN="your-token-here"
 AUTH_SECRET="..."   # openssl rand -base64 32
 NEXTAUTH_URL="http://localhost:3000"
 ```
 
-3. Миграции и запуск:
+3. Запуск:
 
 ```bash
 npm install
-npm run db:push   # применить схему к Neon/Postgres
 npm run dev
 ```
-
-> **Prisma 7 + Neon:** `DATABASE_URL` задаётся в `.env`; подключение через `@prisma/adapter-pg` (см. `src/shared/db.ts`).
 
 4. (Опционально) отдельный worker для очереди Monte Carlo:
 
