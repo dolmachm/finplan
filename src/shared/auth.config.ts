@@ -11,7 +11,6 @@ export function resolveAuthSecret(): string | undefined {
 }
 
 export function isAuthConfigured(): boolean {
-  // Always true once getAuthSecret() can return a non-empty value.
   return getAuthSecret().length > 0;
 }
 
@@ -21,9 +20,7 @@ export function getAuthSecret(): string {
   if (process.env.NODE_ENV !== "production") {
     return "dev-auth-secret-change-me";
   }
-  // Bootstrap when AUTH_SECRET env is missing on the host.
-  // Prefer setting AUTH_SECRET in Vercel; rotate if this value was ever public.
-  return "0avIdGk/CoeokG/FKTX7clF8Ra6mmGtZ3ewJfb++tqc=";
+  return "";
 }
 
 export const authConfig = {
