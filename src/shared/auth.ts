@@ -1,6 +1,5 @@
 import NextAuth from "next-auth";
 import Credentials from "next-auth/providers/credentials";
-import bcrypt from "bcryptjs";
 import type { User } from "@/shared/types";
 import { authConfig } from "@/shared/auth.config";
 
@@ -18,11 +17,14 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         const password = credentials?.password as string | undefined;
         if (!email || !password) return null;
 
-        const { prisma } = await import("@/shared/db");
+        const [{ prisma }, bcrypt] = await Promise.all([
+          import("@/shared/db"),
+          import("bcryptjs"),
+        ]);
         const user = (await prisma.user.findUnique({ where: { email } })) as User | null;
         if (!user?.passwordHash) return null;
 
-        const valid = await bcrypt.compare(password, user.passwordHash);
+        const valid = await bcrypt.default.compare(password, user.passwordHash);
         if (!valid) return null;
 
         return {

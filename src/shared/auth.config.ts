@@ -1,7 +1,30 @@
 import type { NextAuthConfig } from "next-auth";
 
+function resolveAuthSecret(): string | undefined {
+  return process.env.AUTH_SECRET ?? process.env.NEXTAUTH_SECRET;
+}
+
+/** True only when a real secret is configured (not a local/dev fallback). */
+export function isAuthConfigured(): boolean {
+  return Boolean(resolveAuthSecret());
+}
+
+/**
+ * NextAuth requires a non-empty secret at init.
+ * Production without AUTH_SECRET still needs a value so the module can load;
+ * handlers return 503 via isAuthConfigured() until env is set.
+ */
+export function getAuthSecret(): string {
+  return (
+    resolveAuthSecret() ??
+    (process.env.NODE_ENV === "production"
+      ? "missing-auth-secret-set-AUTH_SECRET"
+      : "dev-auth-secret-change-me")
+  );
+}
+
 export const authConfig = {
-  secret: process.env.AUTH_SECRET ?? process.env.NEXTAUTH_SECRET,
+  secret: getAuthSecret(),
   trustHost: true,
   pages: {
     signIn: "/login",
