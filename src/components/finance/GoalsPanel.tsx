@@ -292,56 +292,63 @@ function GoalEditor({
             placeholder="7"
           />
         </FormField>
-        <FormField label="Приоритет" htmlFor="goal-priority" hint={FIELD_HINTS.goalPriority}>
-          <Input
-            id="goal-priority"
-            inputMode="numeric"
-            value={priority}
-            onChange={(e) => setPriority(e.target.value.replace(/\D/g, "").slice(0, 2))}
-            placeholder="1"
-          />
-        </FormField>
-        <FormField label="Стратегия накопления" htmlFor="goal-strategy" hint={FIELD_HINTS.goalStrategy}>
-          <select
-            id="goal-strategy"
-            className={selectClass}
-            value={strategy}
-            onChange={(e) => setStrategy(e.target.value as GoalStrategy)}
-          >
-            {GOAL_STRATEGY_OPTIONS.map((o) => (
-              <option key={o.value} value={o.value}>
-                {o.label}
-              </option>
-            ))}
-          </select>
-        </FormField>
-        <FormField label="Частичное финансирование" htmlFor="goal-partial" hint="Разрешить копить не всю сумму сразу, если денег не хватает">
-          <select
-            id="goal-partial"
-            className={selectClass}
-            value={allowPartialFunding ? "1" : "0"}
-            onChange={(e) => setAllowPartialFunding(e.target.value === "1")}
-          >
-            <option value="1">Да, можно неполную сумму</option>
-            <option value="0">Нет — только полная сумма</option>
-          </select>
-        </FormField>
-        <FormField label="Привязанный актив" htmlFor="goal-asset" hint="С какого счёта планируете брать деньги (необязательно)">
-          <select
-            id="goal-asset"
-            className={selectClass}
-            value={linkedAssetId}
-            onChange={(e) => setLinkedAssetId(e.target.value)}
-          >
-            <option value="">— Не привязан —</option>
-            {assets.map((a) => (
-              <option key={a.id} value={a.id}>
-                {a.name}
-              </option>
-            ))}
-          </select>
-        </FormField>
       </div>
+      <details className="mt-4">
+        <summary className="cursor-pointer text-sm font-medium text-muted hover:text-foreground">
+          Ещё настройки
+        </summary>
+        <div className="mt-4 grid gap-4 sm:grid-cols-2">
+          <FormField label="Приоритет" htmlFor="goal-priority" hint={FIELD_HINTS.goalPriority}>
+            <Input
+              id="goal-priority"
+              inputMode="numeric"
+              value={priority}
+              onChange={(e) => setPriority(e.target.value.replace(/\D/g, "").slice(0, 2))}
+              placeholder="1"
+            />
+          </FormField>
+          <FormField label="Стратегия накопления" htmlFor="goal-strategy" hint={FIELD_HINTS.goalStrategy}>
+            <select
+              id="goal-strategy"
+              className={selectClass}
+              value={strategy}
+              onChange={(e) => setStrategy(e.target.value as GoalStrategy)}
+            >
+              {GOAL_STRATEGY_OPTIONS.map((o) => (
+                <option key={o.value} value={o.value}>
+                  {o.label}
+                </option>
+              ))}
+            </select>
+          </FormField>
+          <FormField label="Частичное финансирование" htmlFor="goal-partial" hint="Разрешить копить не всю сумму сразу, если денег не хватает">
+            <select
+              id="goal-partial"
+              className={selectClass}
+              value={allowPartialFunding ? "1" : "0"}
+              onChange={(e) => setAllowPartialFunding(e.target.value === "1")}
+            >
+              <option value="1">Да, можно неполную сумму</option>
+              <option value="0">Нет — только полная сумма</option>
+            </select>
+          </FormField>
+          <FormField label="Привязанный актив" htmlFor="goal-asset" hint="С какого счёта планируете брать деньги (необязательно)">
+            <select
+              id="goal-asset"
+              className={selectClass}
+              value={linkedAssetId}
+              onChange={(e) => setLinkedAssetId(e.target.value)}
+            >
+              <option value="">— Не привязан —</option>
+              {assets.map((a) => (
+                <option key={a.id} value={a.id}>
+                  {a.name}
+                </option>
+              ))}
+            </select>
+          </FormField>
+        </div>
+      </details>
       <div className="mt-6 flex gap-2">
         <Button type="button" onClick={save} disabled={saving}>
           {saving ? "Сохранение…" : "Сохранить"}

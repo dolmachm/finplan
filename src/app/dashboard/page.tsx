@@ -474,7 +474,7 @@ export default function DashboardPage() {
               <HelpHint className="mt-1">{FEATURE_HINTS.pdfExport}</HelpHint>
               <a
                 href="/api/export/pdf"
-                className="mt-3 inline-block rounded-lg bg-sidebar px-4 py-2 text-sm text-white hover:opacity-90"
+                className="mt-3 inline-block rounded-lg bg-brand px-4 py-2 text-sm text-white hover:opacity-90"
               >
                 Скачать PDF
               </a>

@@ -494,7 +494,7 @@ export function InvestmentPlanPanel({
             }
             className={
               v.id === plan.activeVariantId
-                ? "rounded-lg bg-sidebar px-3 py-2 text-sm text-white"
+                ? "rounded-lg bg-brand px-3 py-2 text-sm text-white"
                 : "rounded-lg border border-border bg-card px-3 py-2 text-sm hover:bg-muted/40"
             }
           >

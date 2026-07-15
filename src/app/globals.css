@@ -1,18 +1,21 @@
 @import "tailwindcss";
 
 :root {
-  --background: #f4f6f9;
-  --foreground: #0f172a;
-  --brand: #2563eb;
-  --brand-hover: #1d4ed8;
-  --brand-light: #eff6ff;
-  --brand-muted: #dbeafe;
-  --sidebar: #0f2744;
-  --sidebar-hover: #1a365d;
+  --background: #fafbfc;
+  --foreground: #0b1f3a;
+  --brand: #0b1f3a;
+  --brand-hover: #061428;
+  --brand-light: #f0f3f7;
+  --brand-muted: #d8dee8;
+  --accent: #f97316;
+  --accent-hover: #ea6a0c;
+  --accent-light: #fff7ed;
+  --sidebar: #ffffff;
+  --sidebar-hover: #f0f3f7;
   --card: #ffffff;
-  --border: #e2e8f0;
+  --border: #e8ecf1;
   --muted: #64748b;
-  --chart: #2563eb;
+  --chart: #0b1f3a;
   --success: #16a34a;
   --warning: #d97706;
   --danger: #dc2626;
@@ -25,6 +28,9 @@
   --color-brand-hover: var(--brand-hover);
   --color-brand-light: var(--brand-light);
   --color-brand-muted: var(--brand-muted);
+  --color-accent: var(--accent);
+  --color-accent-hover: var(--accent-hover);
+  --color-accent-light: var(--accent-light);
   --color-sidebar: var(--sidebar);
   --color-sidebar-hover: var(--sidebar-hover);
   --color-card: var(--card);
@@ -33,14 +39,14 @@
   --color-chart: var(--chart);
   --color-success: var(--success);
   --color-danger: var(--danger);
-  --font-sans: var(--font-geist-sans);
+  --font-sans: var(--font-jakarta);
   --font-mono: var(--font-geist-mono);
-  --radius-card: 12px;
-  --shadow-card: 0 1px 3px rgb(15 39 68 / 6%), 0 8px 24px rgb(15 39 68 / 4%);
+  --radius-card: 14px;
+  --shadow-card: 0 1px 2px rgb(11 31 58 / 4%), 0 4px 16px rgb(11 31 58 / 3%);
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: var(--font-geist-sans), system-ui, sans-serif;
+  font-family: var(--font-jakarta), system-ui, sans-serif;
 }

@@ -575,28 +575,29 @@ function AssetEditor({
             </optgroup>
           </select>
         </FormField>
-        <FormField label="Класс" htmlFor="asset-class">
-          <select id="asset-class" className={selectClass} value={assetClass} onChange={(e) => setAssetClass(e.target.value as AssetClass)}>
-            <option value="PERSONAL">Личный</option>
-            <option value="INVESTMENT">Инвестиционный</option>
-          </select>
-        </FormField>
         <FormField label="Текущая стоимость, ₽" htmlFor="asset-value">
           <Input id="asset-value" inputMode="numeric" value={currentValue} onChange={(e) => setCurrentValue(formatMoneyInput(e.target.value))} placeholder="1 000 000" />
         </FormField>
-        <FormField label="Доходность, % годовых" htmlFor="asset-return" hint={FIELD_HINTS.expectedReturn}>
-          <Input id="asset-return" inputMode="decimal" value={expectedReturnPct} onChange={(e) => setExpectedReturnPct(e.target.value)} placeholder="7" />
-        </FormField>
-        <FormField label="Риск (волатильность), %" htmlFor="asset-vol" hint={FIELD_HINTS.volatility}>
-          <Input id="asset-vol" inputMode="decimal" value={volatilityPct} onChange={(e) => setVolatilityPct(e.target.value)} placeholder="12" />
-        </FormField>
-        <FormField label="Доход в месяц, ₽" htmlFor="asset-rent" hint={FIELD_HINTS.dividendRent}>
-          <Input id="asset-rent" inputMode="numeric" value={dividendIncomeMonthly} onChange={(e) => setDividendIncomeMonthly(formatMoneyInput(e.target.value))} placeholder="30 000" />
-        </FormField>
-        <FormField label="Содержание в месяц, ₽" htmlFor="asset-maint" hint={FIELD_HINTS.maintenance}>
-          <Input id="asset-maint" inputMode="numeric" value={maintenanceCostMonthly} onChange={(e) => setMaintenanceCostMonthly(formatMoneyInput(e.target.value))} placeholder="5 000" />
-        </FormField>
       </div>
+      <details className="mt-4">
+        <summary className="cursor-pointer text-sm font-medium text-muted hover:text-foreground">
+          Ещё настройки
+        </summary>
+        <div className="mt-4 grid gap-4 sm:grid-cols-2">
+          <FormField label="Доходность, % годовых" htmlFor="asset-return" hint={FIELD_HINTS.expectedReturn}>
+            <Input id="asset-return" inputMode="decimal" value={expectedReturnPct} onChange={(e) => setExpectedReturnPct(e.target.value)} placeholder="7" />
+          </FormField>
+          <FormField label="Риск (волатильность), %" htmlFor="asset-vol" hint={FIELD_HINTS.volatility}>
+            <Input id="asset-vol" inputMode="decimal" value={volatilityPct} onChange={(e) => setVolatilityPct(e.target.value)} placeholder="12" />
+          </FormField>
+          <FormField label="Доход в месяц, ₽" htmlFor="asset-rent" hint={FIELD_HINTS.dividendRent}>
+            <Input id="asset-rent" inputMode="numeric" value={dividendIncomeMonthly} onChange={(e) => setDividendIncomeMonthly(formatMoneyInput(e.target.value))} placeholder="30 000" />
+          </FormField>
+          <FormField label="Содержание в месяц, ₽" htmlFor="asset-maint" hint={FIELD_HINTS.maintenance}>
+            <Input id="asset-maint" inputMode="numeric" value={maintenanceCostMonthly} onChange={(e) => setMaintenanceCostMonthly(formatMoneyInput(e.target.value))} placeholder="5 000" />
+          </FormField>
+        </div>
+      </details>
       <div className="mt-6 flex gap-2">
         <Button type="button" onClick={save} disabled={saving}>{saving ? "Сохранение…" : "Сохранить"}</Button>
         <Button type="button" variant="secondary" onClick={onBack}>Отмена</Button>
@@ -677,13 +678,6 @@ function IncomeEditor({
         <FormField label="Название" htmlFor="income-name">
           <Input id="income-name" value={name} onChange={(e) => setName(e.target.value)} placeholder="Зарплата / Премия" />
         </FormField>
-        <FormField label="Источник" htmlFor="income-source">
-          <select id="income-source" className={selectClass} value={source} onChange={(e) => setSource(e.target.value as Income["source"])}>
-            {Object.entries(INCOME_SOURCE_LABELS).map(([v, l]) => (
-              <option key={v} value={v}>{l}</option>
-            ))}
-          </select>
-        </FormField>
         <FormField label="Сумма, ₽" htmlFor="income-amount" hint="За один период (см. ниже)">
           <Input id="income-amount" inputMode="numeric" value={amount} onChange={(e) => setAmount(formatMoneyInput(e.target.value))} placeholder="120 000" />
         </FormField>
@@ -694,16 +688,30 @@ function IncomeEditor({
             ))}
           </select>
         </FormField>
-        <FormField label="Тип дохода" htmlFor="income-kind" hint="Обязательный — зарплата; переменный — премия, бонус">
-          <select id="income-kind" className={selectClass} value={isEssential ? "1" : "0"} onChange={(e) => setIsEssential(e.target.value === "1")}>
-            <option value="1">Обязательный (регулярный)</option>
-            <option value="0">Переменный</option>
-          </select>
-        </FormField>
-        <FormField label="Налог, %" htmlFor="income-tax">
-          <Input id="income-tax" inputMode="decimal" value={taxRatePct} onChange={(e) => setTaxRatePct(e.target.value)} placeholder="13" />
-        </FormField>
       </div>
+      <details className="mt-4">
+        <summary className="cursor-pointer text-sm font-medium text-muted hover:text-foreground">
+          Ещё настройки
+        </summary>
+        <div className="mt-4 grid gap-4 sm:grid-cols-2">
+          <FormField label="Источник" htmlFor="income-source">
+            <select id="income-source" className={selectClass} value={source} onChange={(e) => setSource(e.target.value as Income["source"])}>
+              {Object.entries(INCOME_SOURCE_LABELS).map(([v, l]) => (
+                <option key={v} value={v}>{l}</option>
+              ))}
+            </select>
+          </FormField>
+          <FormField label="Тип дохода" htmlFor="income-kind" hint="Обязательный — зарплата; переменный — премия, бонус">
+            <select id="income-kind" className={selectClass} value={isEssential ? "1" : "0"} onChange={(e) => setIsEssential(e.target.value === "1")}>
+              <option value="1">Обязательный (регулярный)</option>
+              <option value="0">Переменный</option>
+            </select>
+          </FormField>
+          <FormField label="Налог, %" htmlFor="income-tax">
+            <Input id="income-tax" inputMode="decimal" value={taxRatePct} onChange={(e) => setTaxRatePct(e.target.value)} placeholder="13" />
+          </FormField>
+        </div>
+      </details>
       <div className="mt-6 flex gap-2">
         <Button type="button" onClick={save} disabled={saving}>{saving ? "Сохранение…" : "Сохранить"}</Button>
         <Button type="button" variant="secondary" onClick={onBack}>Отмена</Button>
@@ -724,7 +732,6 @@ function ExpenseEditor({
   onUnauthorized: (res: Response) => boolean;
 }) {
   const [name, setName] = useState(existing?.name ?? "");
-  const [category, setCategory] = useState(existing?.category ?? "living");
   const [amount, setAmount] = useState(
     existing ? formatMoneyInput(String(existing.amount)) : "",
   );
@@ -746,7 +753,7 @@ function ExpenseEditor({
     try {
       const body = {
         name: name.trim(),
-        category: category.trim() || "general",
+        category: existing?.category?.trim() || "general",
         amount: amountNum.value,
         frequency,
         isEssential,
@@ -782,9 +789,6 @@ function ExpenseEditor({
         <FormField label="Название" htmlFor="expense-name">
           <Input id="expense-name" value={name} onChange={(e) => setName(e.target.value)} placeholder="Ипотека / ОСАГО" />
         </FormField>
-        <FormField label="Категория" htmlFor="expense-cat">
-          <Input id="expense-cat" value={category} onChange={(e) => setCategory(e.target.value)} placeholder="housing, auto, insurance" />
-        </FormField>
         <FormField label="Сумма, ₽" htmlFor="expense-amount" hint="За выбранный период">
           <Input id="expense-amount" inputMode="numeric" value={amount} onChange={(e) => setAmount(formatMoneyInput(e.target.value))} placeholder="15 000" />
         </FormField>
@@ -795,13 +799,20 @@ function ExpenseEditor({
             ))}
           </select>
         </FormField>
-        <FormField label="Тип расхода" htmlFor="expense-kind" hint="Обязательный — аренда; переменный — ТО, страховка раз в год">
-          <select id="expense-kind" className={selectClass} value={isEssential ? "1" : "0"} onChange={(e) => setIsEssential(e.target.value === "1")}>
-            <option value="1">Обязательный</option>
-            <option value="0">Переменный</option>
-          </select>
-        </FormField>
       </div>
+      <details className="mt-4">
+        <summary className="cursor-pointer text-sm font-medium text-muted hover:text-foreground">
+          Ещё настройки
+        </summary>
+        <div className="mt-4 grid gap-4 sm:grid-cols-2">
+          <FormField label="Тип расхода" htmlFor="expense-kind" hint="Обязательный — аренда; переменный — ТО, страховка раз в год">
+            <select id="expense-kind" className={selectClass} value={isEssential ? "1" : "0"} onChange={(e) => setIsEssential(e.target.value === "1")}>
+              <option value="1">Обязательный</option>
+              <option value="0">Переменный</option>
+            </select>
+          </FormField>
+        </div>
+      </details>
       <div className="mt-6 flex gap-2">
         <Button type="button" onClick={save} disabled={saving}>{saving ? "Сохранение…" : "Сохранить"}</Button>
         <Button type="button" variant="secondary" onClick={onBack}>Отмена</Button>
