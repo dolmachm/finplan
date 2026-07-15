@@ -1,8 +1,20 @@
 import { notFoundResponse } from "@/shared/api-validation";
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { getUser, updateUser, adjustBalance, setAccountStatus } from "@/modules/admin/admin.service";
+import { recordAdminAction } from "@/modules/admin/admin-log";
+import {
+  getUser,
+  updateUser,
+  adjustBalance,
+  setAccountStatus,
+} from "@/modules/admin/admin.service";
 import { requireAdmin } from "@/shared/admin-auth";
+
+const STATUS_LABELS: Record<string, string> = {
+  ACTIVE: "Активен",
+  STAKING: "Стейкинг",
+  LISTING: "Листинг",
+};
 
 const updateSchema = z.object({
   email: z.string().email().optional(),
@@ -30,9 +42,7 @@ export async function GET(_req: Request, { params }: Params) {
 
   const { id } = await params;
   const user = await getUser(id);
-  if (!user) {
-    return notFoundResponse();
-  }
+  if (!user) return notFoundResponse();
   return NextResponse.json({ user });
 }
 
@@ -48,7 +58,14 @@ export async function PATCH(req: Request, { params }: Params) {
   }
 
   try {
+    const before = await getUser(id);
     const user = await updateUser(id, parsed.data);
+    void recordAdminAction({
+      targetUserId: id,
+      action: "USER_UPDATE",
+      label: `Профиль обновлён: ${user.email}`,
+      detail: { before, after: parsed.data },
+    }).catch(() => {});
     return NextResponse.json({ user });
   } catch {
     return NextResponse.json({ error: "Update failed" }, { status: 400 });
@@ -71,6 +88,13 @@ export async function POST(req: Request, { params }: Params) {
     const delta =
       parsed.data.operation === "add" ? parsed.data.amount : -parsed.data.amount;
     const user = await adjustBalance(id, delta);
+    const verb = parsed.data.operation === "add" ? "Начислено" : "Списано";
+    void recordAdminAction({
+      targetUserId: id,
+      action: "BALANCE",
+      label: `${verb} ${parsed.data.amount.toLocaleString("ru-RU")} ₽ (баланс: ${user.balance})`,
+      detail: { operation: parsed.data.operation, amount: parsed.data.amount, balance: user.balance },
+    }).catch(() => {});
     return NextResponse.json({ user });
   }
 
@@ -80,6 +104,12 @@ export async function POST(req: Request, { params }: Params) {
       return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
     }
     const user = await setAccountStatus(id, parsed.data.status);
+    void recordAdminAction({
+      targetUserId: id,
+      action: "STATUS",
+      label: `Статус → ${STATUS_LABELS[parsed.data.status] ?? parsed.data.status}`,
+      detail: { status: parsed.data.status },
+    }).catch(() => {});
     return NextResponse.json({ user });
   }
 

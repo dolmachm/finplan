@@ -1,6 +1,27 @@
 import { prisma, type Db } from "@/shared/db";
 import type { AccountStatus, UserRole } from "@/shared/db";
 
+export type FinanceEntityKind =
+  | "asset"
+  | "liability"
+  | "income"
+  | "expense"
+  | "goal"
+  | "macro";
+
+const ENTITY_LABELS: Record<FinanceEntityKind, string> = {
+  asset: "Актив",
+  liability: "Обязательство",
+  income: "Доход",
+  expense: "Расход",
+  goal: "Цель",
+  macro: "Макропараметры",
+};
+
+export function financeEntityLabel(kind: FinanceEntityKind) {
+  return ENTITY_LABELS[kind];
+}
+
 export async function listUsers() {
   return prisma.user.findMany({
     orderBy: { createdAt: "desc" },
@@ -49,6 +70,69 @@ export async function getUser(id: string) {
       },
     },
   });
+}
+
+export async function getUserFinance(userId: string) {
+  const [assets, liabilities, incomes, expenses, goals, macro] =
+    await Promise.all([
+      prisma.asset.findMany({ where: { userId } }),
+      prisma.liability.findMany({ where: { userId } }),
+      prisma.income.findMany({ where: { userId } }),
+      prisma.expense.findMany({ where: { userId } }),
+      prisma.goal.findMany({ where: { userId } }),
+      prisma.macroSettings.findUnique({ where: { userId } }),
+    ]);
+  return { assets, liabilities, incomes, expenses, goals, macro };
+}
+
+export async function updateFinanceEntity(
+  userId: string,
+  kind: FinanceEntityKind,
+  entityId: string,
+  data: Record<string, unknown>,
+) {
+  const clean = { ...data };
+  delete clean.id;
+  delete clean.userId;
+  delete clean.createdAt;
+
+  if (kind === "macro") {
+    return prisma.macroSettings.upsert({
+      where: { userId },
+      create: { userId, ...clean },
+      update: clean,
+    });
+  }
+
+  const repo = {
+    asset: prisma.asset,
+    liability: prisma.liability,
+    income: prisma.income,
+    expense: prisma.expense,
+    goal: prisma.goal,
+  }[kind];
+
+  const existing = await repo.findFirst({ where: { id: entityId, userId } });
+  if (!existing) throw new Error("NOT_FOUND");
+  return repo.update({ where: { id: entityId }, data: clean });
+}
+
+export async function deleteFinanceEntity(
+  userId: string,
+  kind: Exclude<FinanceEntityKind, "macro">,
+  entityId: string,
+) {
+  const repo = {
+    asset: prisma.asset,
+    liability: prisma.liability,
+    income: prisma.income,
+    expense: prisma.expense,
+    goal: prisma.goal,
+  }[kind];
+  const existing = await repo.findFirst({ where: { id: entityId, userId } });
+  if (!existing) throw new Error("NOT_FOUND");
+  await repo.delete({ where: { id: entityId } });
+  return existing;
 }
 
 export type UpdateUserInput = {
