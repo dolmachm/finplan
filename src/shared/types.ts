@@ -158,6 +158,13 @@ export type Goal = {
   allowPartialFunding: boolean;
   strategy: GoalStrategy;
   linkedAssetId: string | null;
+  /** Параметры сравнения путей: накопления / кредит / гибрид */
+  pathSettings: {
+    preferredKind: "SAVE" | "LOAN" | "HYBRID" | "CAPITAL" | null;
+    loanRatePct: number;
+    loanTermMonths: number;
+    downPaymentPct: number;
+  } | null;
   createdAt: Date;
   updatedAt: Date;
 };

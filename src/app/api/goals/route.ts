@@ -19,6 +19,7 @@ export async function GET() {
       minAmount: g.minAmount ?? null,
       maxAmount: g.maxAmount ?? null,
       stages: g.stages ?? [],
+      pathSettings: g.pathSettings ?? null,
     })),
   );
 }
@@ -53,6 +54,7 @@ export async function POST(req: Request) {
         ...s,
         targetDate: new Date(s.targetDate),
       })),
+      pathSettings: data.pathSettings ?? null,
     },
   });
   await recordRevision({

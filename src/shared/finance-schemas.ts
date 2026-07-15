@@ -91,6 +91,18 @@ export const goalBaseSchema = z.object({
   allowPartialFunding: z.boolean().default(true),
   strategy: z.enum(["SYSTEMATIC", "LUMP_SUM", "BALANCED"]).default("SYSTEMATIC"),
   linkedAssetId: z.string().nullable().optional(),
+  pathSettings: z
+    .object({
+      preferredKind: z
+        .enum(["SAVE", "LOAN", "HYBRID", "CAPITAL"])
+        .nullable()
+        .default(null),
+      loanRatePct: z.number().min(0).max(50).default(14),
+      loanTermMonths: z.number().int().min(1).max(360).default(60),
+      downPaymentPct: z.number().min(0).max(90).default(30),
+    })
+    .nullable()
+    .optional(),
 });
 
 function refineGoalAmounts(

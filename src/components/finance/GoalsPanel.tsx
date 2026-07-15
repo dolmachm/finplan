@@ -18,6 +18,11 @@ import {
   goalTypeLabel,
 } from "@/shared/goals-catalog";
 import type { GoalFundingResult } from "@/modules/plan/types";
+import {
+  analyzeGoalPaths,
+  normalizePathSettings,
+  type GoalPathSettings,
+} from "@/modules/plan/goal-paths";
 import type { Asset, Goal, GoalStrategy, GoalType } from "@/shared/types";
 
 const selectClass =
@@ -62,6 +67,7 @@ export function GoalsPanel({
   const [goals, setGoals] = useState<Goal[]>([]);
   const [assets, setAssets] = useState<Asset[]>([]);
   const [funding, setFunding] = useState<Record<string, GoalFundingResult>>({});
+  const [avgSurplus, setAvgSurplus] = useState(0);
   const [editView, setEditView] = useState<EditView>(null);
   const [loading, setLoading] = useState(true);
   const editorRef = useRef<HTMLDivElement>(null);
@@ -90,6 +96,7 @@ export function GoalsPanel({
           map[f.goalId] = f;
         }
         setFunding(map);
+        setAvgSurplus(data.result?.summary?.avgMonthlySurplus ?? 0);
       }
     } finally {
       setLoading(false);
@@ -116,6 +123,23 @@ export function GoalsPanel({
     toast.success("Цель удалена");
     await load();
     onSaved?.();
+  }
+
+  async function savePathSettings(goalId: string, pathSettings: GoalPathSettings) {
+    const res = await fetch(`/api/goals/${goalId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ pathSettings }),
+    });
+    if (onUnauthorized(res)) return;
+    if (!res.ok) {
+      toast.error((await readApiError(res)).message);
+      return;
+    }
+    setGoals((prev) =>
+      prev.map((g) => (g.id === goalId ? { ...g, pathSettings } : g)),
+    );
+    toast.success("Вариант достижения сохранён");
   }
 
   const existing = editView?.id ? goals.find((g) => g.id === editView.id) : undefined;
@@ -166,8 +190,10 @@ export function GoalsPanel({
               key={g.id}
               goal={g}
               funding={funding[g.id]}
+              avgSurplus={avgSurplus}
               onEdit={() => setEditView({ id: g.id })}
               onDelete={() => remove(g.id)}
+              onSavePaths={(ps) => savePathSettings(g.id, ps)}
             />
           ))}
         </div>
@@ -179,16 +205,46 @@ export function GoalsPanel({
 function GoalCard({
   goal,
   funding,
+  avgSurplus,
   onEdit,
   onDelete,
+  onSavePaths,
 }: {
   goal: Goal;
   funding?: GoalFundingResult;
+  avgSurplus: number;
   onEdit: () => void;
   onDelete: () => void;
+  onSavePaths: (ps: GoalPathSettings) => void | Promise<void>;
 }) {
   const stages = goal.stages ?? [];
   const achieve = funding?.achievability;
+  const [draft, setDraft] = useState(() =>
+    normalizePathSettings(goal.pathSettings),
+  );
+  const [savingPaths, setSavingPaths] = useState(false);
+
+  useEffect(() => {
+    setDraft(normalizePathSettings(goal.pathSettings));
+  }, [goal.pathSettings, goal.id]);
+
+  const analysis = analyzeGoalPaths({
+    targetAmount: goal.targetAmountNominal,
+    monthsToGoal: funding?.monthsToGoal ?? 12,
+    avgMonthlySurplus: avgSurplus,
+    funding,
+    settings: draft,
+  });
+
+  async function persist(next: GoalPathSettings) {
+    setDraft(next);
+    setSavingPaths(true);
+    try {
+      await onSavePaths(next);
+    } finally {
+      setSavingPaths(false);
+    }
+  }
 
   return (
     <Card className="!p-4 space-y-3">
@@ -239,14 +295,6 @@ function GoalCard({
               <dt className="text-[11px] text-muted">Из профицита плана</dt>
               <dd>{formatRub(funding.allocatedMonthlySaving)}</dd>
             </div>
-            <div>
-              <dt className="text-[11px] text-muted">Цель с инфляцией</dt>
-              <dd>{formatRub(funding.inflationAdjustedDesired)}</dd>
-            </div>
-            <div>
-              <dt className="text-[11px] text-muted">Доступно к сроку*</dt>
-              <dd>{formatRub(funding.availableAtTarget)}</dd>
-            </div>
           </>
         )}
       </dl>
@@ -269,6 +317,117 @@ function GoalCard({
         </div>
       )}
 
+      <div className="space-y-2 border-t border-border pt-3">
+        <div className="flex flex-wrap items-center justify-between gap-1">
+          <p className="text-[11px] font-medium uppercase tracking-wide text-muted">
+            Способы достижения
+          </p>
+          <span className="text-[11px] text-brand">
+            Лучший:{" "}
+            {analysis.options.find((o) => o.kind === analysis.recommendedKind)?.label}
+          </span>
+        </div>
+        <div className="grid gap-1.5">
+          {analysis.options.map((o) => {
+            const selected = analysis.selectedKind === o.kind;
+            const recommended = analysis.recommendedKind === o.kind;
+            return (
+              <button
+                key={o.kind}
+                type="button"
+                disabled={savingPaths}
+                onClick={() =>
+                  persist({
+                    ...draft,
+                    preferredKind: o.kind,
+                  })
+                }
+                className={
+                  selected
+                    ? "rounded-lg border border-brand bg-brand/5 px-2.5 py-2 text-left"
+                    : "rounded-lg border border-border px-2.5 py-2 text-left hover:bg-muted/30"
+                }
+              >
+                <div className="flex items-center justify-between gap-2 text-sm">
+                  <span className="font-medium">
+                    {o.label}
+                    {recommended && (
+                      <span className="ml-1 text-[10px] font-normal text-brand">
+                        рек.
+                      </span>
+                    )}
+                  </span>
+                  <span className={o.feasible ? "" : "text-red-600"}>
+                    {formatRub(o.monthlyOutflow)}/мес
+                  </span>
+                </div>
+                <p className="mt-0.5 text-[11px] text-muted">
+                  Итого ≈ {formatRub(o.totalCost)}
+                  {o.months > 0 ? ` · ${o.months} мес.` : ""} · {o.note}
+                </p>
+              </button>
+            );
+          })}
+        </div>
+        <div className="grid grid-cols-3 gap-2">
+          <FormField label="Ставка, %" htmlFor={`rate-${goal.id}`}>
+            <Input
+              id={`rate-${goal.id}`}
+              inputMode="decimal"
+              className="!py-1.5 text-xs"
+              value={String(draft.loanRatePct)}
+              onChange={(e) =>
+                setDraft((d) => ({
+                  ...d,
+                  loanRatePct: Number(e.target.value.replace(",", ".")) || 0,
+                }))
+              }
+              onBlur={() => persist(draft)}
+            />
+          </FormField>
+          <FormField label="Срок кр., мес" htmlFor={`term-${goal.id}`}>
+            <Input
+              id={`term-${goal.id}`}
+              inputMode="numeric"
+              className="!py-1.5 text-xs"
+              value={String(draft.loanTermMonths)}
+              onChange={(e) =>
+                setDraft((d) => ({
+                  ...d,
+                  loanTermMonths: Number(e.target.value.replace(/\D/g, "")) || 1,
+                }))
+              }
+              onBlur={() => persist(draft)}
+            />
+          </FormField>
+          <FormField label="Взнос, %" htmlFor={`down-${goal.id}`}>
+            <Input
+              id={`down-${goal.id}`}
+              inputMode="numeric"
+              className="!py-1.5 text-xs"
+              value={String(draft.downPaymentPct)}
+              onChange={(e) =>
+                setDraft((d) => ({
+                  ...d,
+                  downPaymentPct: Number(e.target.value.replace(/\D/g, "")) || 0,
+                }))
+              }
+              onBlur={() => persist(draft)}
+            />
+          </FormField>
+        </div>
+        <button
+          type="button"
+          className="text-[11px] text-muted underline hover:text-foreground"
+          disabled={savingPaths}
+          onClick={() =>
+            persist({ ...draft, preferredKind: null })
+          }
+        >
+          Сбросить выбор → следовать рекомендации
+        </button>
+      </div>
+
       {funding && funding.requiredMonthlyDesired > funding.allocatedMonthlySaving + 1 && (
         <p className="text-xs text-amber-700">
           Не хватает ≈{" "}
@@ -276,10 +435,6 @@ function GoalCard({
           /мес при текущем приоритете и прочих целях.
         </p>
       )}
-
-      <p className="text-[10px] text-muted">
-        * после резерва под цели с более высоким приоритетом
-      </p>
 
       <div className="flex gap-2 border-t border-border pt-3">
         <Button type="button" variant="secondary" className="flex-1" onClick={onEdit}>
