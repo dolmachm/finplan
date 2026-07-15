@@ -123,7 +123,7 @@ export function ReportEditor({
   return (
     <div className="space-y-5">
       <div>
-        <h2 className="font-medium">PDF-отчёт (CFP)</h2>
+        <h2 className="font-medium">Финансовый отчёт в PDF</h2>
         <HelpHint className="mt-1">{FEATURE_HINTS.pdfExport}</HelpHint>
       </div>
 

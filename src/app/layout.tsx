@@ -17,7 +17,7 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "ФИНКОН — персональное финансовое планирование",
   description:
-    "Cash-flow, net worth, цели и Monte Carlo. Информационный сервис, не ИИР.",
+    "Доходы и расходы, чистые активы, цели и прогноз риска. Информационный сервис, не индивидуальная инвестиционная рекомендация.",
 };
 
 export default function RootLayout({

@@ -329,13 +329,13 @@ function FlowPreview({ rules }: { rules: ScenarioRule[] }) {
             <span className={r.enabled ? "text-brand" : "text-zinc-400"}>
               {r.enabled ? "●" : "○"}
             </span>
-            <span className="text-amber-700">IF</span>
+            <span className="text-amber-700">ЕСЛИ</span>
             <span className="text-zinc-800">{r.condition.type}</span>
-            <span className="text-brand">→ THEN</span>
+            <span className="text-brand">→ ТО</span>
             <BranchLabel branch={r.then} />
             {r.else && (
               <>
-                <span className="text-blue-700">→ ELSE</span>
+                <span className="text-blue-700">→ ИНАЧЕ</span>
                 <BranchLabel branch={r.else} />
               </>
             )}

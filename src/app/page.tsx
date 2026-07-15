@@ -35,19 +35,19 @@ const portfolioPoints = [
     text: "Доходность, взносы и горизонт видимы. Формулы и допущения — на странице «Как это считается».",
   },
   {
-    title: "Monte Carlo",
-    text: "Тысячи случайных сценариев рынка: вероятность цели, медиана и коридор исходов.",
+    title: "Прогноз риска",
+    text: "Тысячи случайных сценариев рынка: вероятность цели, типичный исход и коридор результатов.",
   },
   {
     title: "Сценарии и план",
-    text: "IF/THEN-шаблоны, сравнение вариантов и годовой инвест-план без двойного учёта.",
+    text: "Шаблоны «если → то», сравнение вариантов и годовой инвест-план без двойного учёта.",
   },
 ] as const;
 
 const useCases = [
   {
     title: "Кредиты и долги",
-    text: "Учёт пассивов, платёж и стратегии погашения рядом с cash-flow — чтобы видеть реальный остаток.",
+    text: "Учёт пассивов, платёж и стратегии погашения рядом с доходами и расходами — чтобы видеть реальный остаток.",
   },
   {
     title: "Планирование бюджета",
@@ -149,7 +149,7 @@ export default function HomePage() {
                     <div className="h-full w-[72%] rounded-full bg-accent" />
                   </div>
                   <p className="mt-2 text-xs text-muted">
-                    Вероятность по Monte Carlo · взнос 45 000 ₽/мес
+                    Вероятность в прогнозе риска · взнос 45 000 ₽/мес
                   </p>
                 </div>
               </div>
@@ -189,7 +189,7 @@ export default function HomePage() {
             <div className="flex flex-col rounded-[var(--radius-card)] bg-brand p-6 text-white sm:p-8">
               <h3 className="text-xl font-semibold">Персональный финансовый план</h3>
               <p className="mt-3 flex-1 text-sm leading-relaxed text-white/80">
-                Соберите активы, cash-flow и цели — сервис покажет рекомендуемый взнос,
+                Соберите активы, доходы и расходы, цели — сервис покажет рекомендуемый взнос,
                 график капитала и узкие места бюджета.
               </p>
               <Link
@@ -202,7 +202,7 @@ export default function HomePage() {
             <div className="flex flex-col rounded-[var(--radius-card)] bg-brand p-6 text-white sm:p-8">
               <h3 className="text-xl font-semibold">Симуляции и сценарии</h3>
               <p className="mt-3 flex-1 text-sm leading-relaxed text-white/80">
-                Запустите Monte Carlo, сравните кризисный и базовый сценарии,
+                Запустите прогноз риска, сравните кризисный и базовый сценарии,
                 настройте правила «что если» — без таблиц вручную.
               </p>
               <Link
@@ -308,7 +308,7 @@ export default function HomePage() {
                   </li>
                   <li>
                     <Link href="/faq" className="hover:text-foreground">
-                      Monte Carlo
+                      Прогноз риска
                     </Link>
                   </li>
                 </ul>

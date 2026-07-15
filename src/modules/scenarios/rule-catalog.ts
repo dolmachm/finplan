@@ -85,7 +85,7 @@ export const CONDITION_CATALOG: CatalogEntry[] = [
         default: "BROKERAGE",
       },
       { key: "targetPct", label: "Целевая доля, %", type: "number", default: 60, min: 0, max: 100 },
-      { key: "deltaPct", label: "Допуск δ, %", type: "number", default: 5, min: 0, max: 30 },
+      { key: "deltaPct", label: "Допуск, %", type: "number", default: 5, min: 0, max: 30 },
     ],
   },
 ];
@@ -107,7 +107,7 @@ export const ACTION_CATALOG: CatalogEntry[] = [
   },
   {
     type: "increase_volatility",
-    label: "Увеличить волатильность",
+    label: "Увеличить риск доходности",
     fields: [{ key: "pct", label: "На сколько %", type: "number", default: 10, min: 0, max: 100 }],
   },
   {
@@ -159,7 +159,7 @@ export const ACTION_CATALOG: CatalogEntry[] = [
   {
     type: "buy_asset",
     label: "Купить актив на выручку",
-    description: "Покупка нового актива из денег от продаж (CFP realloc)",
+    description: "Покупка нового актива из денег от продаж",
     fields: [
       { key: "monthIndex", label: "Месяц покупки", type: "month", default: 0 },
       { key: "amount", label: "Сумма, ₽", type: "number", default: 1000000, min: 0 },
@@ -177,12 +177,12 @@ export const ACTION_CATALOG: CatalogEntry[] = [
         label: "Режим",
         type: "select",
         options: [
-          { value: "delta", label: "Сдвиг, п.п." },
+          { value: "delta", label: "Сдвиг, пункты %" },
           { value: "multiply", label: "Множитель" },
         ],
         default: "delta",
       },
-      { key: "deltaPct", label: "Сдвиг, п.п.", type: "number", default: 2, min: -20, max: 50 },
+      { key: "deltaPct", label: "На сколько пунктов %", type: "number", default: 2, min: -20, max: 50 },
       { key: "factor", label: "Множитель", type: "number", default: 1.25, min: 0.5, max: 5 },
     ],
   },
@@ -299,10 +299,10 @@ export const RULE_TEMPLATES: Array<{ key: string; label: string; rule: ScenarioR
   },
   {
     key: "inflation_shock",
-    label: "Инфляционный шок +2 п.п.",
+    label: "Инфляция выше на 2 пункта",
     rule: {
       id: newRuleId(),
-      name: "Инфляция +2 п.п.",
+      name: "Инфляция +2 пункта",
       enabled: true,
       condition: { type: "always", params: {} },
       then: { type: "change_inflation", params: { mode: "delta", deltaPct: 2 } },

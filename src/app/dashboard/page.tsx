@@ -45,7 +45,7 @@ const DATA_SUB_ITEMS = [
 
 const PLAN_SUB_ITEMS = [
   { id: "overview" as const, label: "Обзор" },
-  { id: "montecarlo" as const, label: "Monte Carlo" },
+  { id: "montecarlo" as const, label: "Прогноз риска" },
   { id: "iplan" as const, label: "Инвест-план" },
   { id: "scenarios" as const, label: "Сценарии" },
 ];
@@ -274,7 +274,7 @@ export default function DashboardPage() {
       }
       const job = await res.json();
       setSimJob(job);
-      toast.success("Расчёт Monte Carlo запущен");
+      toast.success("Прогноз риска запущен");
       pollJob(job.id);
     } catch {
       const message = NETWORK_ERROR_MESSAGE;
@@ -294,7 +294,7 @@ export default function DashboardPage() {
       if (job.status === "COMPLETED") {
         clearInterval(interval);
         loadProjection();
-        toast.success("Расчёт Monte Carlo завершён");
+        toast.success("Прогноз риска готов");
       }
       if (job.status === "FAILED") {
         clearInterval(interval);
@@ -469,7 +469,7 @@ function CfpProgressCard({
   return (
     <Card className="flex flex-wrap items-center justify-between gap-4">
       <div>
-        <p className="text-sm font-medium">Прогресс заполнения (CFP)</p>
+        <p className="text-sm font-medium">Прогресс заполнения финплана</p>
         <div className="mt-2 flex flex-wrap gap-3 text-sm">
           {steps.map((s) => (
             <button

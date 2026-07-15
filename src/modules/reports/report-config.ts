@@ -81,7 +81,7 @@ export const REPORT_BLOCK_DEFS: ReportBlockDef[] = [
       { id: "exec_netWorth", label: "Чистые активы" },
       { id: "exec_surplus", label: "Профицит" },
       { id: "exec_cushion", label: "Подушка" },
-      { id: "exec_kdr", label: "КДР" },
+      { id: "exec_kdr", label: "Доходы и расходы" },
       { id: "exec_saving", label: "Рекомендуемый взнос" },
       { id: "exec_narrative", label: "Текст резюме" },
     ],
@@ -109,8 +109,8 @@ export const REPORT_BLOCK_DEFS: ReportBlockDef[] = [
     label: "Цели",
     items: [
       { id: "goals_list", label: "Список целей" },
-      { id: "goals_funding", label: "Финансируемость" },
-      { id: "goals_probability", label: "Вероятности MC" },
+      { id: "goals_funding", label: "Достижимость" },
+      { id: "goals_probability", label: "Вероятности достижения целей" },
     ],
   },
   {
@@ -126,15 +126,15 @@ export const REPORT_BLOCK_DEFS: ReportBlockDef[] = [
     id: "projection",
     label: "Прогноз",
     items: [
-      { id: "proj_finalNw", label: "Итог NW" },
-      { id: "proj_chart", label: "График NW" },
+      { id: "proj_finalNw", label: "Чистые активы в конце" },
+      { id: "proj_chart", label: "График чистых активов" },
       { id: "proj_avgSurplus", label: "Средний профицит" },
     ],
   },
   {
     id: "insights",
-    label: "Инсайты",
-    items: [{ id: "insights_list", label: "Список инсайтов" }],
+    label: "Выводы",
+    items: [{ id: "insights_list", label: "Список выводов" }],
   },
   {
     id: "recommendations",
@@ -144,7 +144,7 @@ export const REPORT_BLOCK_DEFS: ReportBlockDef[] = [
 ];
 
 export const DEFAULT_REPORT_TEXTS: Record<ReportTextKey, string> = {
-  title: "FinPlan — финансовый план (CFP)",
+  title: "Финкон — финансовый план",
   disclaimer: REGULATORY_DISCLAIMER,
   executiveNarrative:
     "Краткий обзор текущего финансового положения и ключевых показателей плана. Ниже — точка 0, денежный поток, цели и прогноз.",

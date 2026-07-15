@@ -282,7 +282,7 @@ export function buildInsights(
       kind: "recommendation",
       severity: "warning",
       title: "Цели не заполнены",
-      body: "Укажите финансовые цели, чтобы план и Monte Carlo имели смысл.",
+      body: "Укажите финансовые цели, чтобы план и прогноз риска были полезны.",
       ctaTab: "assets",
       ctaLabel: "К целям",
     });
@@ -310,7 +310,7 @@ export function buildInsights(
       kind: "recommendation",
       severity: "positive",
       title: "Базовый профиль собран",
-      body: "Точка 0, cashflow и цели на месте — можно смотреть прогноз и риск.",
+      body: "Точка 0, доходы, расходы и цели заполнены — можно смотреть прогноз и риск.",
       ctaTab: "plan",
       ctaLabel: "К плану",
     });
@@ -331,7 +331,7 @@ export function buildInsights(
         id: "rec-kdr-low",
         kind: "recommendation",
         severity: "critical",
-        title: "Дефицит бюджета (КДР < 1)",
+        title: "Расходы выше доходов",
         body: "Сократите расходы или увеличьте доход, цель — профицит от 10–20%.",
         ctaTab: "assets",
       });
@@ -341,7 +341,7 @@ export function buildInsights(
         kind: "recommendation",
         severity: "warning",
         title: "Небольшой профицит",
-        body: `КДР ≈ ${m.kdr.toFixed(2)}. Усильте остаток до 1.3–1.5 для запаса и инвестиций.`,
+        body: `Доходы лишь немного выше расходов. Увеличьте остаток до запаса 1.3–1.5× расходов для подушки и инвестиций.`,
         ctaTab: "assets",
       });
     } else if (m.kdr >= 1.5) {
@@ -350,7 +350,7 @@ export function buildInsights(
         kind: "insight",
         severity: "positive",
         title: "Сильный профицит",
-        body: `КДР ≈ ${m.kdr.toFixed(2)}, остаток ${formatRub(m.surplusMonthly)}/мес — хороший запас для целей.`,
+        body: `Доходы заметно выше расходов, остаток ${formatRub(m.surplusMonthly)}/мес — хороший запас для целей.`,
       });
       push(recs, {
         id: "rec-deploy-surplus",
@@ -400,7 +400,7 @@ export function buildInsights(
         kind: "insight",
         severity: "critical",
         title: "Платежи по кредитам >30% дохода",
-        body: `Долговой сервис ${(m.debtServiceRatio * 100).toFixed(0)}% дохода — зона риска.`,
+        body: `Платежи по кредитам ${(m.debtServiceRatio * 100).toFixed(0)}% дохода — зона риска.`,
         ctaTab: "assets",
       });
     }
@@ -409,8 +409,8 @@ export function buildInsights(
         id: "rec-ko-high",
         kind: "recommendation",
         severity: "critical",
-        title: "Коэффициент обязательств > 0.7",
-        body: "Приоритетно снизьте долг: цель — КО ниже 0.5.",
+        title: "Слишком большая доля долгов",
+        body: "Приоритетно снизьте долг: цель — снизить долю долгов.",
         ctaTab: "assets",
       });
     } else if (m.debtRatio > 0.5) {
@@ -419,7 +419,7 @@ export function buildInsights(
         kind: "recommendation",
         severity: "warning",
         title: "Высокая долговая нагрузка",
-        body: `КО ≈ ${(m.debtRatio * 100).toFixed(0)}%. Снизьте обязательства до комфортного уровня.`,
+        body: `Долги составляют около ${(m.debtRatio * 100).toFixed(0)}% активов. Снизьте обязательства до комфортного уровня.`,
         ctaTab: "assets",
       });
     } else if (m.debtRatio < 0.2) {
@@ -677,7 +677,7 @@ export function buildInsights(
         id: "ins-mc-low",
         kind: "insight",
         severity: "warning",
-        title: "Низкая вероятность целей в Monte Carlo",
+        title: "Низкая вероятность достижения целей",
         body: `Средняя вероятность ≈ ${(p * 100).toFixed(0)}%. Усильте взнос или смягчите цели.`,
         ctaTab: "plan",
       });
@@ -686,7 +686,7 @@ export function buildInsights(
         id: "ins-mc-high",
         kind: "insight",
         severity: "positive",
-        title: "Высокая достижимость по Monte Carlo",
+        title: "Высокая вероятность достижения целей",
         body: `Средняя вероятность ≈ ${(p * 100).toFixed(0)}% — план выглядит устойчивым.`,
       });
     }
@@ -695,7 +695,7 @@ export function buildInsights(
       id: "rec-run-mc",
       kind: "recommendation",
       severity: "info",
-      title: "Запустите Monte Carlo",
+      title: "Запустите прогноз риска",
       body: "Увидите вероятности достижения целей с учётом риска доходности.",
       ctaTab: "plan",
       ctaLabel: "К плану",
@@ -715,7 +715,7 @@ export function buildInsights(
       kind: "insight",
       severity: "positive",
       title: "Финансовая база в хорошей форме",
-      body: "Есть профицит, умеренный долг и подушка — сильная отправная точка CFP.",
+      body: "Есть профицит, умеренный долг и подушка — хорошая основа для финансового плана.",
     });
   }
 

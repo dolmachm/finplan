@@ -29,7 +29,7 @@ export function ChangeHistoryPanel({
       <div>
         <h2 className="font-medium">История изменений</h2>
         <HelpHint>
-          Журнал правок активов, целей, макропараметров и инвест-плана (CFP audit trail).
+          История изменений активов, целей, настроек прогноза и инвест-плана.
         </HelpHint>
       </div>
       {items.length === 0 ? (

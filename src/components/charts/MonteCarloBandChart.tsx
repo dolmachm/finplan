@@ -58,7 +58,7 @@ export function MonteCarloBandChart({
             dataKey="median"
             stroke="#2563eb"
             dot={false}
-            name="Медиана"
+            name="Типичный"
           />
         </ComposedChart>
       </ResponsiveContainer>

@@ -134,7 +134,7 @@ export function PlanWorkspace({
 
           <Card>
             <h3 className="text-sm font-medium">
-              Timeline — {projection.scenario}
+              График по месяцам — {projection.scenario}
               {projection.isActive && (
                 <span className="ml-2 text-xs font-normal text-accent">активный</span>
               )}
@@ -150,12 +150,12 @@ export function PlanWorkspace({
       {section === "montecarlo" && (
         <Card className="space-y-4">
           <div>
-            <h2 className="font-medium">Monte Carlo</h2>
+            <h2 className="font-medium">Прогноз риска</h2>
             <HelpHint className="mt-1">{FEATURE_HINTS.monteCarlo}</HelpHint>
           </div>
           <div className="flex flex-wrap items-end gap-2">
             <Button type="button" onClick={onRunSimulation} disabled={simBusy}>
-              {simBusy ? "Расчёт…" : "Запустить (5k прогонов)"}
+              {simBusy ? "Расчёт…" : "Запустить прогноз"}
             </Button>
             {simJob && (
               <span className="text-sm text-muted">
@@ -170,8 +170,8 @@ export function PlanWorkspace({
               <ul className="space-y-1 text-sm">
                 {simJob.result.goalProbabilities.map((g) => (
                   <li key={g.goalId}>
-                    Цель: {(g.probability * 100).toFixed(1)}% · медиана{" "}
-                    {formatRub(g.median)} · 5%: {formatRub(g.p5)} · 95%:{" "}
+                    Цель: {(g.probability * 100).toFixed(1)}% · типичный{" "}
+                    {formatRub(g.median)} · осторожный: {formatRub(g.p5)} · удачный:{" "}
                     {formatRub(g.p95)}
                   </li>
                 ))}

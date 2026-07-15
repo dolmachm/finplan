@@ -75,7 +75,7 @@ export function RebalanceCalculator({
   return (
     <div className="mt-3 space-y-3 border-t border-border/60 pt-3">
       <div>
-        <p className="text-sm font-medium">Ребалансировка</p>
+        <p className="text-sm font-medium">Выровнять доли портфеля</p>
         <HelpHint className="mt-1">{FEATURE_HINTS.rebalance}</HelpHint>
       </div>
 
@@ -130,7 +130,7 @@ export function RebalanceCalculator({
           Записать цели
         </Button>
         <Button type="button" onClick={applyRebalance} disabled={!sumOk}>
-          Применить ребаланс
+          Применить выравнивание
         </Button>
       </div>
     </div>

@@ -115,7 +115,7 @@ export function PortfolioHoldingsEditor({
   return (
     <div className="mt-4 space-y-3 rounded-lg border border-border/80 p-3">
       <div>
-        <p className="text-sm font-medium">Портфель по классам активов (CFP)</p>
+        <p className="text-sm font-medium">Портфель по классам активов</p>
         <HelpHint className="mt-1">{FEATURE_HINTS.portfolioHoldings}</HelpHint>
       </div>
 
@@ -196,7 +196,7 @@ export function PortfolioHoldingsEditor({
                 />
               </FormField>
               <FormField
-                label="Выплаты (yield), % год"
+                label="Выплаты, % в год"
                 htmlFor={`ph-yield-${d.id}`}
                 hint={FIELD_HINTS.holdingYield}
               >
@@ -268,7 +268,7 @@ export function PortfolioHoldingsEditor({
           <p className="font-medium">Сводка портфеля</p>
           <p>
             Стоимость: {formatRub(metrics.totalValue)} · доходность{" "}
-            {metrics.expectedReturnPct.toFixed(1)}% · yield{" "}
+            {metrics.expectedReturnPct.toFixed(1)}% · выплаты{" "}
             {metrics.dividendYieldPct.toFixed(1)}% · доход/мес{" "}
             {formatRub(metrics.dividendIncomeMonthly)}
           </p>

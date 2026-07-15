@@ -83,7 +83,7 @@ export function MacroSettingsCard({
         <div>
           <h2 className="font-medium">Общие настройки прогноза</h2>
           <HelpHint className="mt-1">
-            Инфляция, НДФЛ и горизонт плана — общие допущения для расчётов.
+            Инфляция, налог на доход (НДФЛ) и горизонт плана — общие настройки для расчётов.
           </HelpHint>
           {macro && (
             <p className="mt-3 text-sm text-muted">

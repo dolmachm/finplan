@@ -67,7 +67,7 @@ function LoginForm() {
   return (
     <AuthShell
       title="Вход"
-      subtitle="Персональное финансовое планирование с Monte Carlo"
+      subtitle="Персональное финансовое планирование с прогнозом риска"
     >
       {registered && (
         <p className="mt-4 rounded-lg bg-brand-light px-4 py-2 text-sm text-brand">

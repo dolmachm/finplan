@@ -773,7 +773,7 @@ function AssetEditor({
               disabled={hasHoldings}
             />
           </FormField>
-          <FormField label="Риск (волатильность), %" htmlFor="asset-vol" hint={FIELD_HINTS.volatility}>
+          <FormField label="Риск, %" htmlFor="asset-vol" hint={FIELD_HINTS.volatility}>
             <Input
               id="asset-vol"
               inputMode="decimal"

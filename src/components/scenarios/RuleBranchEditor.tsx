@@ -65,7 +65,7 @@ export function RuleBranchEditor({
             })
           }
         >
-          + Добавить вложенное IF
+          + Добавить вложенное условие
         </button>
         <button
           type="button"
@@ -109,7 +109,7 @@ export function RuleBranchEditor({
               {a.label}
             </option>
           ))}
-          <option value="nested">↳ Вложенный IF/ELSE</option>
+          <option value="nested">↳ Вложенное ЕСЛИ / ИНАЧЕ</option>
         </select>
         {entry && (
           <span className="text-xs text-zinc-500">{entry.description}</span>
@@ -142,7 +142,7 @@ export function ConditionEditor({
     <div className="space-y-2">
       <div className="flex flex-wrap items-center gap-2">
         <span className="rounded bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-900">
-          IF
+          ЕСЛИ
         </span>
         <select
           value={condition.type}

@@ -113,8 +113,8 @@ export function ScenarioCompare({
         <h2 className={compact ? "text-sm font-medium" : "font-medium"}>Сравнение сценариев</h2>
         {!compact && (
           <HelpHint>
-            Выберите до 5 сохранённых сценариев — базовый план всегда в сравнении. CFP: «what-if»
-            рядом.
+            Выберите до 5 сохранённых сценариев — базовый план всегда в сравнении.
+            Проверьте: «что, если» изменится ситуация.
           </HelpHint>
         )}
       </div>

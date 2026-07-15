@@ -142,7 +142,7 @@ function writeCover(ctx: DocCtx, data: PdfReportData) {
     ensureSpace(ctx, 16);
     ctx.doc.setFontSize(18);
     ctx.doc.setFont(REPORT_FONT, "bold");
-    const title = config.texts.title || "FinPlan — финансовый план (CFP)";
+    const title = config.texts.title || "Финкон — финансовый план";
     const lines: string[] = ctx.doc.splitTextToSize(title, CONTENT_W);
     ctx.doc.text(lines, MARGIN, ctx.y);
     ctx.doc.setFont(REPORT_FONT, "normal");
@@ -194,7 +194,7 @@ function writeExecutive(ctx: DocCtx, data: PdfReportData) {
     );
   }
   if (isItemEnabled(config, "executive", "exec_kdr")) {
-    kvLine(ctx, "КДР", metrics.kdr.toFixed(2));
+    kvLine(ctx, "Доходы к расходам", metrics.kdr.toFixed(2));
   }
   if (isItemEnabled(config, "executive", "exec_saving")) {
     kvLine(
@@ -421,7 +421,7 @@ export function generatePlanPdf(data: PdfReportData): Uint8Array {
   if (isBlockEnabled(data.config, "insights")) {
     writeInsightBlock(
       ctx,
-      "Инсайты",
+      "Выводы",
       data.config.texts.insightsIntro,
       isItemEnabled(data.config, "insights", "insights_list")
         ? data.insights

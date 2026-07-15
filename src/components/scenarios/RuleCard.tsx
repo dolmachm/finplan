@@ -52,14 +52,14 @@ export function RuleCard({ rule, assets, depth, onChange, onRemove }: Props) {
       <div className="mt-4 space-y-3">
         <RuleBranchEditor
           branch={rule.then}
-          sideLabel="THEN"
+          sideLabel="ТО"
           assets={assets}
           depth={depth}
           onChange={(then) => onChange({ ...rule, then })}
         />
         <RuleBranchEditor
           branch={rule.else ?? { type: "noop", params: {} }}
-          sideLabel="ELSE"
+          sideLabel="ИНАЧЕ"
           assets={assets}
           depth={depth}
           onChange={(elseBranch) => onChange({ ...rule, else: elseBranch })}

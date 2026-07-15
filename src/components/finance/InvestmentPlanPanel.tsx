@@ -257,7 +257,7 @@ export function InvestmentPlanPanel({
         budgetExpenses,
       );
       setMc(result);
-      toast.success(`Монте-Карло: ${active.mcRuns} прогонов`);
+      toast.success(`Прогноз риска: ${active.mcRuns} вариантов`);
     } finally {
       setMcBusy(false);
     }
@@ -543,7 +543,7 @@ export function InvestmentPlanPanel({
         <div className="ml-auto flex flex-wrap gap-2">
           {!hideMcChart && (
             <Button type="button" variant="secondary" onClick={rerunMc} disabled={mcBusy}>
-              {mcBusy ? "…" : "Пересчёт MC"}
+              {mcBusy ? "…" : "Обновить прогноз риска"}
             </Button>
           )}
           <Button type="button" onClick={save} disabled={saving}>
@@ -558,11 +558,11 @@ export function InvestmentPlanPanel({
           <p className={`mt-1 font-semibold ${compact ? "text-lg" : "text-2xl"}`}>{formatRub(data.initialCapital)}</p>
         </Card>
         <Card className={compact ? "!p-3" : undefined}>
-          <p className={compact ? "text-xs text-muted" : "text-sm text-muted"}>Детерминированный конец</p>
+          <p className={compact ? "text-xs text-muted" : "text-sm text-muted"}>Прогнозный капитал в конце</p>
           <p className={`mt-1 font-semibold ${compact ? "text-lg" : "text-2xl"}`}>{formatRub(projection.finalCapital)}</p>
         </Card>
         <Card className={compact ? "!p-3" : undefined}>
-          <p className={compact ? "text-xs text-muted" : "text-sm text-muted"}>MC медиана (конец)</p>
+          <p className={compact ? "text-xs text-muted" : "text-sm text-muted"}>Типичный результат в конце</p>
           <p className={`mt-1 font-semibold ${compact ? "text-lg" : "text-2xl"}`}>
             {liveMc ? formatRub(liveMc.finalMedian) : "—"}
           </p>
@@ -654,7 +654,7 @@ export function InvestmentPlanPanel({
               <option value="AGE">Возраст</option>
             </select>
           </FormField>
-          <FormField label="Нижний процентиль, %" hint="Осторожный исход: редко бывает хуже этого">
+          <FormField label="Осторожный результат, %" hint="Осторожный исход: редко бывает хуже этого">
             <Input
               type="number"
               value={active.percentileLow}
@@ -666,7 +666,7 @@ export function InvestmentPlanPanel({
               }
             />
           </FormField>
-          <FormField label="Верхний процентиль, %" hint="Удачный исход: редко бывает лучше этого">
+          <FormField label="Удачный результат, %" hint="Удачный исход: редко бывает лучше этого">
             <Input
               type="number"
               value={active.percentileHigh}
@@ -678,7 +678,7 @@ export function InvestmentPlanPanel({
               }
             />
           </FormField>
-          <FormField label="Прогоны MC" hint={FIELD_HINTS.iplanMc}>
+          <FormField label="Варианты расчёта" hint={FIELD_HINTS.iplanMc}>
             <Input
               type="number"
               value={active.mcRuns}
@@ -758,7 +758,7 @@ export function InvestmentPlanPanel({
                 }}
               />
               <Input
-                placeholder="St.D. %"
+                placeholder="Риск, %"
                 value={step.volatilityPct}
                 onChange={(e) => {
                   const volatilityPct =
@@ -831,7 +831,7 @@ export function InvestmentPlanPanel({
                   }
                 }}
               />
-              <span className="text-muted">σ%</span>
+              <span className="text-muted">Риск, %</span>
             </li>
           ))}
           {data.capitalAssets.length === 0 && (
@@ -859,7 +859,7 @@ export function InvestmentPlanPanel({
             }
           />
           <Input
-            placeholder="Риск σ%"
+            placeholder="Риск, %"
             value={assetDraft.volatilityPct}
             onChange={(e) =>
               setAssetDraft((d) => ({ ...d, volatilityPct: e.target.value }))
@@ -886,7 +886,7 @@ export function InvestmentPlanPanel({
       />
 
       <Card className={compact ? "!p-3" : undefined}>
-        <h2 className={compact ? "text-sm font-medium" : "font-medium"}>Детерминированный капитал — {active.name}</h2>
+        <h2 className={compact ? "text-sm font-medium" : "font-medium"}>Прогноз капитала — {active.name}</h2>
         <div className={`mt-3 ${compact ? "h-48" : "h-72"}`}>
           <ResponsiveContainer width="100%" height="100%">
             <AreaChart data={projection.rows}>
@@ -923,7 +923,8 @@ export function InvestmentPlanPanel({
       {liveMc && !hideMcChart && (
         <Card>
           <h2 className="font-medium">
-            Монте-Карло — P{active.percentileLow}/медиана/P{active.percentileHigh}
+            Прогноз риска — осторожный, типичный и удачный результаты
+            (P{active.percentileLow} / типичный / P{active.percentileHigh})
           </h2>
           <p className="mt-1 text-xs text-muted">
             Распределение: {DIST_OPTIONS.find((d) => d.value === active.distribution)?.label}.
@@ -973,7 +974,7 @@ export function InvestmentPlanPanel({
                   stroke="#059669"
                   dot={false}
                   strokeWidth={2}
-                  name="Медиана"
+                  name="Типичный"
                 />
               </AreaChart>
             </ResponsiveContainer>
@@ -1028,7 +1029,7 @@ export function InvestmentPlanPanel({
               <th className="py-2 pr-2">Год</th>
               <th className="py-2 pr-2">Возраст</th>
               <th className="py-2 pr-2">%</th>
-              <th className="py-2 pr-2">σ%</th>
+              <th className="py-2 pr-2">Риск, %</th>
               <th className="py-2 pr-2">Начало</th>
               <th className="py-2 pr-2">Рост</th>
               <th className="py-2 pr-2">Доходы</th>

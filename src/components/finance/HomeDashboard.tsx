@@ -88,14 +88,14 @@ export function HomeDashboard({
       )}
       <div className="grid gap-6 lg:grid-cols-2">
         <InsightList
-          title="Инсайты"
-          empty="Пока мало данных для инсайтов — заполните «Данные»."
+          title="Выводы"
+          empty="Пока мало данных для выводов — заполните «Данные»."
           items={insights}
           onNavigate={onNavigate}
         />
         <InsightList
           title="Рекомендации"
-          empty="Рекомендации появятся после ввода баланса и cashflow."
+          empty="Рекомендации появятся после ввода баланса, доходов и расходов."
           items={recs}
           onNavigate={onNavigate}
         />
@@ -169,7 +169,7 @@ function StageCard({
             : !m.step2
               ? "Добавьте доходы и расходы."
               : !m.step3
-                ? "Задайте цели и макропараметры."
+                ? "Задайте цели и настройки прогноза."
                 : "Профиль готов — смотрите план и риски."}
         </HelpHint>
       </div>
