@@ -4,8 +4,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { FormField, HelpHint } from "@/components/ui/FormField";
-import { FormPanelHeader } from "@/components/ui/FormPanelHeader";
 import { Input } from "@/components/ui/input";
+import { Modal, ModalFormBox } from "@/components/ui/Modal";
 import { toast } from "@/components/ui/ToastProvider";
 import { FEATURE_HINTS, FIELD_HINTS } from "@/content/help";
 import {
@@ -47,11 +47,30 @@ import { monthlyEquivalent } from "@/modules/plan/frequency";
 import type { PlanFrequency } from "@/modules/plan/frequency";
 
 const selectClass =
-  "w-full rounded-lg border border-border bg-card px-4 py-2.5 text-sm";
+  "w-full rounded-xl border border-transparent bg-brand-light px-4 py-2.5 text-sm";
+
+const editorActionsClass =
+  "mt-5 flex flex-col-reverse gap-2 sm:mt-6 sm:flex-row-reverse sm:justify-center";
+
+const editorBtnClass = "w-full sm:w-auto sm:min-w-[8rem]";
 
 type EditView =
   | { kind: "asset" | "income" | "expense" | "liability"; id?: string }
   | null;
+
+function editModalTitle(view: NonNullable<EditView>): string {
+  const isNew = !view.id;
+  switch (view.kind) {
+    case "asset":
+      return isNew ? "Добавить актив" : "Редактировать актив";
+    case "liability":
+      return isNew ? "Добавить пассив" : "Редактировать пассив";
+    case "income":
+      return isNew ? "Добавить доход" : "Редактировать доход";
+    case "expense":
+      return isNew ? "Добавить расход" : "Редактировать расход";
+  }
+}
 
 export type FinanceDataStatus = {
   assetCount: number;
@@ -67,12 +86,14 @@ export function FinanceDataPanel({
   onQuickAdd,
   addingAsset,
   onStatusChange,
+  mode = "balance",
 }: {
   onRefresh?: () => void;
   onUnauthorized: (res: Response) => boolean;
   onQuickAdd: () => void | Promise<void>;
   addingAsset: boolean;
   onStatusChange?: (status: FinanceDataStatus) => void;
+  mode?: "balance" | "cashflow";
 }) {
   const [assets, setAssets] = useState<Asset[]>([]);
   const [liabilities, setLiabilities] = useState<Liability[]>([]);
@@ -81,7 +102,6 @@ export function FinanceDataPanel({
   const [categories, setCategories] = useState<BudgetCategory[]>([]);
   const [editView, setEditView] = useState<EditView>(null);
   const [loading, setLoading] = useState(true);
-  const editorRef = useRef<HTMLDivElement>(null);
 
   const statusRef = useRef(onStatusChange);
   statusRef.current = onStatusChange;
@@ -133,10 +153,8 @@ export function FinanceDataPanel({
   }, [load]);
 
   useEffect(() => {
-    if (editView && editorRef.current) {
-      editorRef.current.scrollIntoView({ behavior: "smooth", block: "nearest" });
-    }
-  }, [editView]);
+    setEditView(null);
+  }, [mode]);
 
   const closeEditor = () => setEditView(null);
   const onEditorSaved = async () => {
@@ -144,10 +162,6 @@ export function FinanceDataPanel({
     setEditView(null);
     onRefresh?.();
   };
-  const isBalanceEdit =
-    editView?.kind === "asset" || editView?.kind === "liability";
-  const isCashflowEdit =
-    editView?.kind === "income" || editView?.kind === "expense";
 
   async function handleQuickAdd() {
     await onQuickAdd();
@@ -185,6 +199,7 @@ export function FinanceDataPanel({
 
   return (
     <section className="space-y-8">
+      {mode === "balance" && (
       <div className="space-y-4">
         <Card>
           <div className="flex flex-wrap items-center justify-between gap-3">
@@ -236,22 +251,6 @@ export function FinanceDataPanel({
           </div>
         </Card>
 
-        {isBalanceEdit && editView && (
-          <div ref={editorRef} className="scroll-mt-4">
-            <ItemEditor
-              view={editView}
-              assets={assets}
-              liabilities={liabilities}
-              incomes={incomes}
-              expenses={expenses}
-              categories={categories}
-              onBack={closeEditor}
-              onSaved={onEditorSaved}
-              onUnauthorized={onUnauthorized}
-            />
-          </div>
-        )}
-
         {loading ? (
           <p className="text-muted">Загрузка…</p>
         ) : (
@@ -295,7 +294,9 @@ export function FinanceDataPanel({
           </>
         )}
       </div>
+      )}
 
+      {mode === "cashflow" && (
       <div className="space-y-4">
         <Card>
           <div className="flex flex-wrap items-center justify-between gap-3">
@@ -324,22 +325,6 @@ export function FinanceDataPanel({
             </div>
           </div>
         </Card>
-
-        {isCashflowEdit && editView && (
-          <div ref={editorRef} className="scroll-mt-4">
-            <ItemEditor
-              view={editView}
-              assets={assets}
-              liabilities={liabilities}
-              incomes={incomes}
-              expenses={expenses}
-              categories={categories}
-              onBack={closeEditor}
-              onSaved={onEditorSaved}
-              onUnauthorized={onUnauthorized}
-            />
-          </div>
-        )}
 
         {!loading && (
           <>
@@ -389,7 +374,29 @@ export function FinanceDataPanel({
             />
           </>
         )}
+        {loading && <p className="text-muted">Загрузка…</p>}
       </div>
+      )}
+
+      {editView && (
+        <Modal
+          open
+          title={editModalTitle(editView)}
+          onClose={closeEditor}
+        >
+          <ItemEditor
+            view={editView}
+            assets={assets}
+            liabilities={liabilities}
+            incomes={incomes}
+            expenses={expenses}
+            categories={categories}
+            onBack={closeEditor}
+            onSaved={onEditorSaved}
+            onUnauthorized={onUnauthorized}
+          />
+        </Modal>
+      )}
     </section>
   );
 }
@@ -694,12 +701,8 @@ function AssetEditor({
   }
 
   return (
-    <Card className="border-accent/20 bg-accent-light/30">
-      <FormPanelHeader
-        title={existing ? "Редактирование актива" : "Новый актив"}
-        onCancel={onBack}
-      />
-      <div className="mt-4 grid gap-4 sm:grid-cols-2">
+    <ModalFormBox>
+      <div className="grid gap-3 sm:grid-cols-2">
         <FormField label="Название" htmlFor="asset-name">
           <Input id="asset-name" value={name} onChange={(e) => setName(e.target.value)} placeholder="Брокерский счёт Тинькофф" />
         </FormField>
@@ -761,7 +764,7 @@ function AssetEditor({
         <summary className="cursor-pointer text-sm font-medium text-muted hover:text-foreground">
           Ещё настройки
         </summary>
-        <div className="mt-4 grid gap-4 sm:grid-cols-2">
+        <div className="mt-3 grid gap-3 sm:grid-cols-2">
           <FormField label="Доходность, % годовых" htmlFor="asset-return" hint={FIELD_HINTS.expectedReturn}>
             <Input
               id="asset-return"
@@ -813,11 +816,15 @@ function AssetEditor({
           </FormField>
         </div>
       </details>
-      <div className="mt-6 flex gap-2">
-        <Button type="button" onClick={save} disabled={saving}>{saving ? "Сохранение…" : "Сохранить"}</Button>
-        <Button type="button" variant="secondary" onClick={onBack}>Отмена</Button>
+      <div className={editorActionsClass}>
+        <Button type="button" variant="secondary" className={editorBtnClass} onClick={onBack}>
+          Отмена
+        </Button>
+        <Button type="button" className={editorBtnClass} onClick={save} disabled={saving}>
+          {saving ? "Сохранение…" : existing ? "Сохранить" : "Добавить"}
+        </Button>
       </div>
-    </Card>
+    </ModalFormBox>
   );
 }
 
@@ -886,12 +893,8 @@ function IncomeEditor({
   }
 
   return (
-    <Card className="border-accent/20 bg-accent-light/30">
-      <FormPanelHeader
-        title={existing ? "Редактирование дохода" : "Новый доход"}
-        onCancel={onBack}
-      />
-      <div className="mt-4 grid gap-4 sm:grid-cols-2">
+    <ModalFormBox>
+      <div className="grid gap-3 sm:grid-cols-2">
         <FormField label="Название" htmlFor="income-name">
           <Input id="income-name" value={name} onChange={(e) => setName(e.target.value)} placeholder="Зарплата / Премия" />
         </FormField>
@@ -910,7 +913,7 @@ function IncomeEditor({
         <summary className="cursor-pointer text-sm font-medium text-muted hover:text-foreground">
           Ещё настройки
         </summary>
-        <div className="mt-4 grid gap-4 sm:grid-cols-2">
+        <div className="mt-3 grid gap-3 sm:grid-cols-2">
           <FormField label="Источник" htmlFor="income-source">
             <select id="income-source" className={selectClass} value={source} onChange={(e) => setSource(e.target.value as Income["source"])}>
               {Object.entries(INCOME_SOURCE_LABELS).map(([v, l]) => (
@@ -929,11 +932,15 @@ function IncomeEditor({
           </FormField>
         </div>
       </details>
-      <div className="mt-6 flex gap-2">
-        <Button type="button" onClick={save} disabled={saving}>{saving ? "Сохранение…" : "Сохранить"}</Button>
-        <Button type="button" variant="secondary" onClick={onBack}>Отмена</Button>
+      <div className={editorActionsClass}>
+        <Button type="button" variant="secondary" className={editorBtnClass} onClick={onBack}>
+          Отмена
+        </Button>
+        <Button type="button" className={editorBtnClass} onClick={save} disabled={saving}>
+          {saving ? "Сохранение…" : existing ? "Сохранить" : "Добавить"}
+        </Button>
       </div>
-    </Card>
+    </ModalFormBox>
   );
 }
 
@@ -1009,12 +1016,8 @@ function ExpenseEditor({
   }
 
   return (
-    <Card className="border-accent/20 bg-accent-light/30">
-      <FormPanelHeader
-        title={existing ? "Редактирование расхода" : "Новый расход"}
-        onCancel={onBack}
-      />
-      <div className="mt-4 grid gap-4 sm:grid-cols-2">
+    <ModalFormBox>
+      <div className="grid gap-3 sm:grid-cols-2">
         <FormField label="Название" htmlFor="expense-name">
           <Input id="expense-name" value={name} onChange={(e) => setName(e.target.value)} placeholder="Ипотека / ОСАГО" />
         </FormField>
@@ -1051,7 +1054,7 @@ function ExpenseEditor({
         <summary className="cursor-pointer text-sm font-medium text-muted hover:text-foreground">
           Ещё настройки
         </summary>
-        <div className="mt-4 grid gap-4 sm:grid-cols-2">
+        <div className="mt-3 grid gap-3 sm:grid-cols-2">
           <FormField label="Тип расхода" htmlFor="expense-kind" hint="Обязательный — аренда; переменный — ТО, страховка раз в год">
             <select id="expense-kind" className={selectClass} value={isEssential ? "1" : "0"} onChange={(e) => setIsEssential(e.target.value === "1")}>
               <option value="1">Обязательный</option>
@@ -1060,11 +1063,15 @@ function ExpenseEditor({
           </FormField>
         </div>
       </details>
-      <div className="mt-6 flex gap-2">
-        <Button type="button" onClick={save} disabled={saving}>{saving ? "Сохранение…" : "Сохранить"}</Button>
-        <Button type="button" variant="secondary" onClick={onBack}>Отмена</Button>
+      <div className={editorActionsClass}>
+        <Button type="button" variant="secondary" className={editorBtnClass} onClick={onBack}>
+          Отмена
+        </Button>
+        <Button type="button" className={editorBtnClass} onClick={save} disabled={saving}>
+          {saving ? "Сохранение…" : existing ? "Сохранить" : "Добавить"}
+        </Button>
       </div>
-    </Card>
+    </ModalFormBox>
   );
 }
 
@@ -1141,12 +1148,8 @@ function LiabilityEditor({
   }
 
   return (
-    <Card className="border-accent/20 bg-accent-light/30">
-      <FormPanelHeader
-        title={existing ? "Редактирование пассива" : "Новый пассив"}
-        onCancel={onBack}
-      />
-      <div className="mt-4 grid gap-4 sm:grid-cols-2">
+    <ModalFormBox>
+      <div className="grid gap-3 sm:grid-cols-2">
         <FormField label="Название" htmlFor="liability-name">
           <Input
             id="liability-name"
@@ -1197,15 +1200,15 @@ function LiabilityEditor({
           />
         </FormField>
       </div>
-      <div className="mt-6 flex gap-2">
-        <Button type="button" onClick={save} disabled={saving}>
-          {saving ? "Сохранение…" : "Сохранить"}
-        </Button>
-        <Button type="button" variant="secondary" onClick={onBack}>
+      <div className={editorActionsClass}>
+        <Button type="button" variant="secondary" className={editorBtnClass} onClick={onBack}>
           Отмена
         </Button>
+        <Button type="button" className={editorBtnClass} onClick={save} disabled={saving}>
+          {saving ? "Сохранение…" : existing ? "Сохранить" : "Добавить"}
+        </Button>
       </div>
-    </Card>
+    </ModalFormBox>
   );
 }
 

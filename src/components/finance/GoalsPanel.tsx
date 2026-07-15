@@ -4,8 +4,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { FormField, HelpHint } from "@/components/ui/FormField";
-import { FormPanelHeader } from "@/components/ui/FormPanelHeader";
 import { Input } from "@/components/ui/input";
+import { Modal, ModalFormBox } from "@/components/ui/Modal";
 import { toast } from "@/components/ui/ToastProvider";
 import { readApiError, parsePositiveNumber } from "@/shared/api-client";
 import { formatMoneyInput } from "@/shared/format-input";
@@ -26,7 +26,12 @@ import {
 import type { Asset, Goal, GoalStrategy, GoalType } from "@/shared/types";
 
 const selectClass =
-  "w-full rounded-lg border border-border bg-card px-3 py-2 text-sm";
+  "w-full rounded-xl border border-transparent bg-brand-light px-3 py-2 text-sm";
+
+const editorActionsClass =
+  "mt-5 flex flex-col-reverse gap-2 sm:mt-6 sm:flex-row-reverse sm:justify-center";
+
+const editorBtnClass = "w-full sm:w-auto sm:min-w-[8rem]";
 
 type EditView = { id?: string } | null;
 
@@ -70,7 +75,6 @@ export function GoalsPanel({
   const [avgSurplus, setAvgSurplus] = useState(0);
   const [editView, setEditView] = useState<EditView>(null);
   const [loading, setLoading] = useState(true);
-  const editorRef = useRef<HTMLDivElement>(null);
   const countRef = useRef(onCountChange);
   countRef.current = onCountChange;
 
@@ -106,12 +110,6 @@ export function GoalsPanel({
   useEffect(() => {
     load();
   }, [load]);
-
-  useEffect(() => {
-    if (editView !== null && editorRef.current) {
-      editorRef.current.scrollIntoView({ behavior: "smooth", block: "nearest" });
-    }
-  }, [editView]);
 
   async function remove(id: string) {
     const res = await fetch(`/api/goals/${id}`, { method: "DELETE" });
@@ -162,7 +160,11 @@ export function GoalsPanel({
       </Card>
 
       {editView !== null && (
-        <div ref={editorRef} className="scroll-mt-4">
+        <Modal
+          open
+          title={existing ? "Редактировать цель" : "Добавить цель"}
+          onClose={() => setEditView(null)}
+        >
           <GoalEditor
             existing={existing}
             assets={assets}
@@ -174,7 +176,7 @@ export function GoalsPanel({
             }}
             onUnauthorized={onUnauthorized}
           />
-        </div>
+        </Modal>
       )}
 
       {loading ? (
@@ -632,12 +634,8 @@ function GoalEditor({
   }
 
   return (
-    <Card className="border-accent/20 bg-accent-light/30 !p-4">
-      <FormPanelHeader
-        title={existing ? "Редактирование цели" : "Новая цель"}
-        onCancel={onBack}
-      />
-      <div className="mt-3 grid gap-3 sm:grid-cols-2">
+    <ModalFormBox>
+      <div className="grid gap-3 sm:grid-cols-2">
         <FormField label="Название" htmlFor="goal-name">
           <Input
             id="goal-name"
@@ -822,14 +820,14 @@ function GoalEditor({
         </div>
       </details>
 
-      <div className="mt-4 flex gap-2">
-        <Button type="button" onClick={save} disabled={saving}>
-          {saving ? "Сохранение…" : "Сохранить"}
-        </Button>
-        <Button type="button" variant="secondary" onClick={onBack}>
+      <div className={editorActionsClass}>
+        <Button type="button" variant="secondary" className={editorBtnClass} onClick={onBack}>
           Отмена
         </Button>
+        <Button type="button" className={editorBtnClass} onClick={save} disabled={saving}>
+          {saving ? "Сохранение…" : existing ? "Сохранить" : "Добавить"}
+        </Button>
       </div>
-    </Card>
+    </ModalFormBox>
   );
 }

@@ -25,7 +25,7 @@ export default function HomePage() {
           <div className="mt-8 sm:mt-10">
             <Link
               href="/register"
-              className="inline-flex w-full justify-center rounded-xl bg-brand px-8 py-3.5 text-sm font-semibold uppercase tracking-wide text-white transition-colors hover:bg-brand-hover sm:w-auto"
+              className="inline-flex w-full justify-center rounded-xl bg-accent px-8 py-3.5 text-sm font-semibold uppercase tracking-wide text-white transition-colors hover:bg-accent-hover sm:w-auto"
             >
               Начать
             </Link>

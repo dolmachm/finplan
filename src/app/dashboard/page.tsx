@@ -17,10 +17,11 @@ import {
 import { HomeDashboard } from "@/components/finance/HomeDashboard";
 import { MacroSettingsCard } from "@/components/finance/MacroSettingsCard";
 import { ChangeHistoryPanel } from "@/components/finance/ChangeHistoryPanel";
-import { PlanWorkspace } from "@/components/plan/PlanWorkspace";
+import { PlanWorkspace, type PlanSection } from "@/components/plan/PlanWorkspace";
 import { ReportEditor } from "@/components/reports/ReportEditor";
 import { FormError } from "@/components/ui/FormError";
 import { HelpHint } from "@/components/ui/FormField";
+import { SubNav } from "@/components/ui/SubNav";
 import { toast } from "@/components/ui/ToastProvider";
 import { FEATURE_HINTS } from "@/content/help";
 import { readApiError, NETWORK_ERROR_MESSAGE } from "@/shared/api-client";
@@ -32,6 +33,27 @@ import type {
   Liability,
 } from "@/shared/types";
 import type { HomeDashboardInput } from "@/modules/dashboard/insights";
+
+type DataSub = "balance" | "cashflow" | "goals";
+type ExportSub = "report" | "csv";
+
+const DATA_SUB_ITEMS = [
+  { id: "balance" as const, label: "Баланс" },
+  { id: "cashflow" as const, label: "Поток" },
+  { id: "goals" as const, label: "Цели" },
+];
+
+const PLAN_SUB_ITEMS = [
+  { id: "overview" as const, label: "Обзор" },
+  { id: "montecarlo" as const, label: "Monte Carlo" },
+  { id: "iplan" as const, label: "Инвест-план" },
+  { id: "scenarios" as const, label: "Сценарии" },
+];
+
+const EXPORT_SUB_ITEMS = [
+  { id: "report" as const, label: "Отчёт PDF" },
+  { id: "csv" as const, label: "CSV" },
+];
 
 interface Projection {
   result: {
@@ -58,6 +80,9 @@ interface Projection {
 export default function DashboardPage() {
   const router = useRouter();
   const [tab, setTab] = useState<DashboardTab>("home");
+  const [dataSub, setDataSub] = useState<DataSub>("balance");
+  const [planSub, setPlanSub] = useState<PlanSection>("overview");
+  const [exportSub, setExportSub] = useState<ExportSub>("report");
   const [dataStatus, setDataStatus] = useState<FinanceDataStatus | null>(null);
   const [goalCount, setGoalCount] = useState(0);
   const [homeInput, setHomeInput] = useState<HomeDashboardInput | null>(null);
@@ -340,57 +365,75 @@ export default function DashboardPage() {
         )}
 
         {tab === "plan" && viewScenarioId && (
-          <PlanWorkspace
-            insightsInput={enrichedHome}
-            projection={projection}
-            projectionLoading={projectionLoading}
-            viewScenarioId={viewScenarioId}
-            onViewScenarioChange={setViewScenarioId}
-            scenarios={scenarios}
-            onActivateScenario={activateScenario}
-            onScenariosRefresh={loadScenarios}
-            simJob={simJob}
-            simBusy={simBusy}
-            simError={simError}
-            onRunSimulation={runSimulation}
-            onUnauthorized={handleUnauthorized}
-          />
+          <div>
+            <SubNav items={PLAN_SUB_ITEMS} value={planSub} onChange={setPlanSub} />
+            <PlanWorkspace
+              section={planSub}
+              insightsInput={enrichedHome}
+              projection={projection}
+              projectionLoading={projectionLoading}
+              viewScenarioId={viewScenarioId}
+              onViewScenarioChange={setViewScenarioId}
+              scenarios={scenarios}
+              onActivateScenario={activateScenario}
+              onScenariosRefresh={loadScenarios}
+              simJob={simJob}
+              simBusy={simBusy}
+              simError={simError}
+              onRunSimulation={runSimulation}
+              onUnauthorized={handleUnauthorized}
+            />
+          </div>
         )}
 
         {tab === "assets" && (
           <div className="space-y-6">
+            <SubNav items={DATA_SUB_ITEMS} value={dataSub} onChange={setDataSub} />
             <CfpProgressCard
               status={dataStatus}
               goalCount={goalCount}
               onGoPlan={() => setTab("plan")}
+              onGoSub={setDataSub}
             />
-            <FinanceDataPanel
-              onQuickAdd={quickAddAsset}
-              onUnauthorized={handleUnauthorized}
-              addingAsset={addingAsset}
-              onStatusChange={setDataStatus}
-            />
-            <div>
-              <p className="text-xs font-medium uppercase tracking-wide text-muted">
-                Шаг 3 · Цели и горизонт
-              </p>
-              <h2 className="mt-1 font-medium">Цели и макропараметры</h2>
-              <HelpHint className="mt-1">{FEATURE_HINTS.goalsStep}</HelpHint>
-            </div>
-            <MacroSettingsCard onUnauthorized={handleUnauthorized} />
-            <GoalsPanel
-              onUnauthorized={handleUnauthorized}
-              onCountChange={setGoalCount}
-            />
-            <ChangeHistoryPanel onUnauthorized={handleUnauthorized} />
+            {(dataSub === "balance" || dataSub === "cashflow") && (
+              <FinanceDataPanel
+                mode={dataSub}
+                onQuickAdd={quickAddAsset}
+                onUnauthorized={handleUnauthorized}
+                addingAsset={addingAsset}
+                onStatusChange={setDataStatus}
+              />
+            )}
+            {dataSub === "goals" && (
+              <div className="space-y-6">
+                <div>
+                  <p className="text-xs font-medium uppercase tracking-wide text-muted">
+                    Шаг 3 · Цели и горизонт
+                  </p>
+                  <h2 className="mt-1 font-medium">Цели и макропараметры</h2>
+                  <HelpHint className="mt-1">{FEATURE_HINTS.goalsStep}</HelpHint>
+                </div>
+                <MacroSettingsCard onUnauthorized={handleUnauthorized} />
+                <GoalsPanel
+                  onUnauthorized={handleUnauthorized}
+                  onCountChange={setGoalCount}
+                />
+                <ChangeHistoryPanel onUnauthorized={handleUnauthorized} />
+              </div>
+            )}
           </div>
         )}
 
         {tab === "export" && (
-          <Card className="space-y-6">
-            <ReportEditor onUnauthorized={handleUnauthorized} />
-            <CsvImport />
-          </Card>
+          <div>
+            <SubNav items={EXPORT_SUB_ITEMS} value={exportSub} onChange={setExportSub} />
+            <Card className="space-y-6">
+              {exportSub === "report" && (
+                <ReportEditor onUnauthorized={handleUnauthorized} />
+              )}
+              {exportSub === "csv" && <CsvImport />}
+            </Card>
+          </div>
         )}
     </DashboardShell>
   );
@@ -400,18 +443,20 @@ function CfpProgressCard({
   status,
   goalCount,
   onGoPlan,
+  onGoSub,
 }: {
   status: FinanceDataStatus | null;
   goalCount: number;
   onGoPlan: () => void;
+  onGoSub: (sub: DataSub) => void;
 }) {
   const step1 = (status?.assetCount ?? 0) + (status?.liabilityCount ?? 0) > 0;
   const step2 = (status?.incomeCount ?? 0) > 0 && (status?.expenseCount ?? 0) > 0;
   const step3 = goalCount > 0;
   const steps = [
-    { done: step1, label: "1. Точка 0" },
-    { done: step2, label: "2. Денежный поток" },
-    { done: step3, label: "3. Цели" },
+    { done: step1, label: "1. Точка 0", sub: "balance" as const },
+    { done: step2, label: "2. Денежный поток", sub: "cashflow" as const },
+    { done: step3, label: "3. Цели", sub: "goals" as const },
   ];
   const next = !step1
     ? "Зафиксируйте активы и/или пассивы"
@@ -422,14 +467,23 @@ function CfpProgressCard({
         : "Данные готовы — откройте «План»";
 
   return (
-    <Card className="flex flex-wrap items-center justify-between gap-4 p-4">
+    <Card className="flex flex-wrap items-center justify-between gap-4">
       <div>
         <p className="text-sm font-medium">Прогресс заполнения (CFP)</p>
         <div className="mt-2 flex flex-wrap gap-3 text-sm">
           {steps.map((s) => (
-            <span key={s.label} className={s.done ? "text-success" : "text-muted"}>
+            <button
+              key={s.label}
+              type="button"
+              onClick={() => onGoSub(s.sub)}
+              className={
+                s.done
+                  ? "text-accent hover:underline"
+                  : "text-muted hover:text-foreground hover:underline"
+              }
+            >
               {s.done ? "✓" : "○"} {s.label}
-            </span>
+            </button>
           ))}
         </div>
         <HelpHint className="mt-2">{next}</HelpHint>
