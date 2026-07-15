@@ -1,5 +1,4 @@
 import { NextResponse } from "next/server";
-import type { InputJsonValue } from "@/shared/db";
 import { requireUserId, isErrorResponse } from "@/shared/session";
 import { loadPlanInputForUser } from "@/modules/plan/plan-data.service";
 import { runDeterministicPlan } from "@/modules/plan/cashflow.engine";
@@ -38,16 +37,6 @@ export async function GET(req: Request) {
     : undefined;
 
   const result = runDeterministicPlan(planInput, modifiers);
-
-  await prisma.planSnapshot.create({
-    data: {
-      userId,
-      scenarioId: selectedScenario?.id,
-      deterministic: result as unknown as InputJsonValue,
-      cashflowMonthly: result.monthly.map((m) => m.cashflow) as unknown as InputJsonValue,
-      netWorthMonthly: result.monthly.map((m) => m.netWorth) as unknown as InputJsonValue,
-    },
-  });
 
   return NextResponse.json({
     result,

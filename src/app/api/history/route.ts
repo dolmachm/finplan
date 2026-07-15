@@ -8,5 +8,7 @@ export async function GET(req: Request) {
   const url = new URL(req.url);
   const limit = Math.min(100, Math.max(1, Number(url.searchParams.get("limit") ?? 40)));
   const items = await listRevisions(userId, limit);
-  return NextResponse.json({ items });
+  return NextResponse.json({
+    items: items.map(({ before: _b, after: _a, ...meta }) => meta),
+  });
 }

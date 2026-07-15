@@ -3,24 +3,18 @@ import type { Asset, Expense, Goal, Income, Liability, MacroSettings } from "@/s
 import { differenceInMonths, startOfMonth } from "date-fns";
 import type { PlanInput } from "./types";
 
-export async function loadPlanInputForUser(userId: string): Promise<PlanInput> {
-  const [macro, assets, liabilities, incomes, expenses, goals] =
-    await Promise.all([
-      prisma.macroSettings.findUnique({ where: { userId } }),
-      prisma.asset.findMany({ where: { userId } }),
-      prisma.liability.findMany({ where: { userId } }),
-      prisma.income.findMany({ where: { userId } }),
-      prisma.expense.findMany({ where: { userId } }),
-      prisma.goal.findMany({ where: { userId }, orderBy: { priority: "asc" } }),
-    ]) as [
-      MacroSettings | null,
-      Asset[],
-      Liability[],
-      Income[],
-      Expense[],
-      Goal[],
-    ];
-
+export function buildPlanInputFromEntities(
+  userId: string,
+  data: {
+    macro: MacroSettings | null;
+    assets: Asset[];
+    liabilities: Liability[];
+    incomes: Income[];
+    expenses: Expense[];
+    goals: Goal[];
+  },
+): PlanInput {
+  const { macro, assets, liabilities, incomes, expenses, goals } = data;
   const horizonYears = macro?.planHorizonYears ?? 30;
   const horizonMonths = horizonYears * 12;
   const now = startOfMonth(new Date());
@@ -88,4 +82,32 @@ export async function loadPlanInputForUser(userId: string): Promise<PlanInput> {
       };
     }),
   };
+}
+
+export async function loadPlanInputForUser(userId: string): Promise<PlanInput> {
+  const [macro, assets, liabilities, incomes, expenses, goals] =
+    await Promise.all([
+      prisma.macroSettings.findUnique({ where: { userId } }),
+      prisma.asset.findMany({ where: { userId } }),
+      prisma.liability.findMany({ where: { userId } }),
+      prisma.income.findMany({ where: { userId } }),
+      prisma.expense.findMany({ where: { userId } }),
+      prisma.goal.findMany({ where: { userId }, orderBy: { priority: "asc" } }),
+    ]) as [
+      MacroSettings | null,
+      Asset[],
+      Liability[],
+      Income[],
+      Expense[],
+      Goal[],
+    ];
+
+  return buildPlanInputFromEntities(userId, {
+    macro,
+    assets,
+    liabilities,
+    incomes,
+    expenses,
+    goals,
+  });
 }

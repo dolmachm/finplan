@@ -1,5 +1,5 @@
 import type { EntityRevision } from "@/shared/types";
-import { newId, now, setJson, getJson, getUserIds, addToUserIndex } from "@/shared/db/helpers";
+import { newId, now, setJson, reviveDates, getUserIds, addToUserIndex } from "@/shared/db/helpers";
 import { redis } from "@/shared/redis";
 
 export async function recordRevision(
@@ -17,6 +17,13 @@ export async function recordRevision(
   return row;
 }
 
+async function loadRevisionsByIds(ids: string[]): Promise<EntityRevision[]> {
+  if (ids.length === 0) return [];
+  const keys = ids.map((id) => `revision:${id}`);
+  const rows = await redis.mget<EntityRevision[]>(...keys);
+  return (rows ?? []).filter(Boolean).map((r) => reviveDates(r!));
+}
+
 export async function listRevisions(
   userId: string,
   limit = 50,
@@ -25,22 +32,12 @@ export async function listRevisions(
     (await redis.lrange(`idx:revision:user:${userId}:chron`, 0, limit - 1)) ??
     [];
   if (ids.length === 0) {
-    // fallback to set index
     const all = await getUserIds("revision", userId);
-    const rows: EntityRevision[] = [];
-    for (const id of all.slice(0, limit)) {
-      const row = await getJson<EntityRevision>(`revision:${id}`);
-      if (row) rows.push(row);
-    }
+    const rows = await loadRevisionsByIds(all.slice(0, limit));
     return rows.sort(
       (a, b) =>
         new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
     );
   }
-  const rows: EntityRevision[] = [];
-  for (const id of ids) {
-    const row = await getJson<EntityRevision>(`revision:${id}`);
-    if (row) rows.push(row);
-  }
-  return rows;
+  return loadRevisionsByIds(ids);
 }

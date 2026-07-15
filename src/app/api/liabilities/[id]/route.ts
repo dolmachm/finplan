@@ -3,7 +3,6 @@ import { parseJsonBody, notFoundResponse } from "@/shared/api-validation";
 import { liabilityPatchSchema } from "@/shared/finance-schemas";
 import { prisma } from "@/shared/db";
 import { requireUserId, isErrorResponse } from "@/shared/session";
-import { assertOwned } from "@/shared/crud";
 import { recordRevision } from "@/shared/revision";
 
 export async function PATCH(
@@ -13,9 +12,6 @@ export async function PATCH(
   const userId = await requireUserId();
   if (isErrorResponse(userId)) return userId;
   const { id } = await params;
-  if (!(await assertOwned("liability", id, userId))) {
-    return notFoundResponse();
-  }
   const current = await prisma.liability.findFirst({ where: { id, userId } });
   if (!current) {
     return notFoundResponse();
@@ -51,21 +47,19 @@ export async function DELETE(
   const userId = await requireUserId();
   if (isErrorResponse(userId)) return userId;
   const { id } = await params;
-  if (!(await assertOwned("liability", id, userId))) {
+  const current = await prisma.liability.findFirst({ where: { id, userId } });
+  if (!current) {
     return notFoundResponse();
   }
-  const current = await prisma.liability.findFirst({ where: { id, userId } });
   await prisma.liability.delete({ where: { id } });
-  if (current) {
-    await recordRevision({
-      userId,
-      entityType: "liability",
-      entityId: id,
-      action: "DELETE",
-      label: `Пассив удалён: ${current.name}`,
-      before: current,
-      after: null,
-    });
-  }
+  await recordRevision({
+    userId,
+    entityType: "liability",
+    entityId: id,
+    action: "DELETE",
+    label: `Пассив удалён: ${current.name}`,
+    before: current,
+    after: null,
+  });
   return NextResponse.json({ ok: true });
 }

@@ -1,16 +1,12 @@
 import { NextResponse } from "next/server";
-import { z } from "zod";
 import { parseJsonBody, notFoundResponse } from "@/shared/api-validation";
-import { goalSchema } from "@/shared/finance-schemas";
+import { goalPatchSchema } from "@/shared/finance-schemas";
 import { prisma } from "@/shared/db";
 import { requireUserId, isErrorResponse } from "@/shared/session";
-import { assertOwned } from "@/shared/crud";
 import { duplicateEntityResponse, isDuplicateGoal } from "@/shared/duplicate-check";
 import { recordRevision } from "@/shared/revision";
 
-const patchSchema = goalSchema
-  .extend({ targetDate: z.string().datetime().optional() })
-  .partial();
+const patchSchema = goalPatchSchema;
 
 export async function PATCH(
   req: Request,
@@ -19,9 +15,6 @@ export async function PATCH(
   const userId = await requireUserId();
   if (isErrorResponse(userId)) return userId;
   const { id } = await params;
-  if (!(await assertOwned("goal", id, userId))) {
-    return notFoundResponse();
-  }
   const current = await prisma.goal.findFirst({ where: { id, userId } });
   if (!current) {
     return notFoundResponse();
@@ -79,21 +72,19 @@ export async function DELETE(
   const userId = await requireUserId();
   if (isErrorResponse(userId)) return userId;
   const { id } = await params;
-  if (!(await assertOwned("goal", id, userId))) {
+  const current = await prisma.goal.findFirst({ where: { id, userId } });
+  if (!current) {
     return notFoundResponse();
   }
-  const current = await prisma.goal.findFirst({ where: { id, userId } });
   await prisma.goal.delete({ where: { id } });
-  if (current) {
-    await recordRevision({
-      userId,
-      entityType: "goal",
-      entityId: id,
-      action: "DELETE",
-      label: `Цель удалена: ${current.name}`,
-      before: current,
-      after: null,
-    });
-  }
+  await recordRevision({
+    userId,
+    entityType: "goal",
+    entityId: id,
+    action: "DELETE",
+    label: `Цель удалена: ${current.name}`,
+    before: current,
+    after: null,
+  });
   return NextResponse.json({ ok: true });
 }

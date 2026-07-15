@@ -18,6 +18,7 @@ import { HomeDashboard } from "@/components/finance/HomeDashboard";
 import { MacroSettingsCard } from "@/components/finance/MacroSettingsCard";
 import { ChangeHistoryPanel } from "@/components/finance/ChangeHistoryPanel";
 import { PlanWorkspace } from "@/components/plan/PlanWorkspace";
+import { ReportEditor } from "@/components/reports/ReportEditor";
 import { FormError } from "@/components/ui/FormError";
 import { HelpHint } from "@/components/ui/FormField";
 import { toast } from "@/components/ui/ToastProvider";
@@ -383,16 +384,7 @@ export default function DashboardPage() {
 
         {tab === "export" && (
           <Card className="space-y-6">
-            <div>
-              <h2 className="font-medium">PDF-отчёт</h2>
-              <HelpHint className="mt-1">{FEATURE_HINTS.pdfExport}</HelpHint>
-              <a
-                href="/api/export/pdf"
-                className="mt-3 inline-block rounded-lg bg-brand px-4 py-2 text-sm text-white hover:opacity-90"
-              >
-                Скачать PDF
-              </a>
-            </div>
+            <ReportEditor onUnauthorized={handleUnauthorized} />
             <CsvImport />
           </Card>
         )}

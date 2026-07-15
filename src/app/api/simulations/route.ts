@@ -12,7 +12,6 @@ export async function GET() {
     where: { userId },
     orderBy: { createdAt: "desc" },
     take: 20,
-    include: { result: true },
   });
   return NextResponse.json(jobs);
 }

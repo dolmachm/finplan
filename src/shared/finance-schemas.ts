@@ -60,7 +60,7 @@ export const goalStageSchema = z.object({
   targetDate: z.string().datetime(),
 });
 
-export const goalSchema = z.object({
+export const goalBaseSchema = z.object({
   name: z.string().min(1),
   goalType: z
     .enum([
@@ -84,22 +84,44 @@ export const goalSchema = z.object({
   allowPartialFunding: z.boolean().default(true),
   strategy: z.enum(["SYSTEMATIC", "LUMP_SUM", "BALANCED"]).default("SYSTEMATIC"),
   linkedAssetId: z.string().nullable().optional(),
-}).superRefine((data, ctx) => {
-  if (data.minAmount != null && data.minAmount > data.targetAmountNominal) {
+});
+
+function refineGoalAmounts(
+  data: {
+    targetAmountNominal?: number;
+    minAmount?: number | null;
+    maxAmount?: number | null;
+  },
+  ctx: z.RefinementCtx,
+) {
+  if (
+    data.minAmount != null &&
+    data.targetAmountNominal != null &&
+    data.minAmount > data.targetAmountNominal
+  ) {
     ctx.addIssue({
       code: "custom",
       message: "Минимум не может быть больше желаемой суммы",
       path: ["minAmount"],
     });
   }
-  if (data.maxAmount != null && data.maxAmount < data.targetAmountNominal) {
+  if (
+    data.maxAmount != null &&
+    data.targetAmountNominal != null &&
+    data.maxAmount < data.targetAmountNominal
+  ) {
     ctx.addIssue({
       code: "custom",
       message: "Максимум не может быть меньше желаемой суммы",
       path: ["maxAmount"],
     });
   }
-});
+}
+
+export const goalSchema = goalBaseSchema.superRefine(refineGoalAmounts);
+
+/** Partial update — without refinements on the base object (Zod 4) */
+export const goalPatchSchema = goalBaseSchema.partial().superRefine(refineGoalAmounts);
 
 export const liabilityTypeEnum = z.enum([
   "MORTGAGE",

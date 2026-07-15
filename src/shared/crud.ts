@@ -1,20 +1,22 @@
-import { prisma } from "@/shared/db";
+import { getJson } from "@/shared/db/helpers";
+
+const ENTITY_KEY: Record<
+  "asset" | "liability" | "income" | "expense" | "goal" | "scenario",
+  string
+> = {
+  asset: "asset",
+  liability: "liability",
+  income: "income",
+  expense: "expense",
+  goal: "goal",
+  scenario: "scenario",
+};
 
 export async function assertOwned(
   model: "asset" | "liability" | "income" | "expense" | "goal" | "scenario",
   id: string,
   userId: string,
 ): Promise<boolean> {
-  const map = {
-    asset: prisma.asset,
-    liability: prisma.liability,
-    income: prisma.income,
-    expense: prisma.expense,
-    goal: prisma.goal,
-    scenario: prisma.scenario,
-  } as const;
-  const row = await (map[model] as { findFirst: (args: unknown) => Promise<{ userId: string } | null> }).findFirst({
-    where: { id, userId },
-  });
-  return !!row;
+  const row = await getJson<{ userId: string }>(`${ENTITY_KEY[model]}:${id}`);
+  return row?.userId === userId;
 }

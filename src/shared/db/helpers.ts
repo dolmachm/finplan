@@ -116,9 +116,14 @@ export async function countByUser<T extends { id: string; userId: string }>(
   userId: string,
   where?: WhereFilter,
 ): Promise<number> {
+  const extraKeys = where
+    ? Object.keys(where).filter((k) => k !== "userId")
+    : [];
+  if (extraKeys.length === 0) {
+    return (await redis.scard(`idx:${entity}:user:${userId}`)) ?? 0;
+  }
   const rows = await getManyByUser<T>(entity, userId);
-  if (!where) return rows.length;
-  return rows.filter((r) => matchesWhere(r, where)).length;
+  return rows.filter((r) => matchesWhere(r, where!)).length;
 }
 
 export async function findFirstByUser<T extends { id: string; userId: string }>(
@@ -126,6 +131,11 @@ export async function findFirstByUser<T extends { id: string; userId: string }>(
   where: WhereFilter,
   opts?: { orderBy?: Record<string, "asc" | "desc"> },
 ): Promise<T | null> {
+  if (typeof where.id === "string") {
+    const row = await getJson<T>(`${entity}:${where.id}`);
+    if (!row || !matchesWhere(row, where)) return null;
+    return row;
+  }
   const userId = where.userId as string;
   let rows = await getManyByUser<T>(entity, userId);
   rows = rows.filter((r) => matchesWhere(r, where));
