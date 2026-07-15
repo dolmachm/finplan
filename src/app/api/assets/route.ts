@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { parseJsonBody } from "@/shared/api-validation";
+import { syncAssetFromHoldings } from "@/modules/finance/portfolio-math";
 import { resolveAssetClass } from "@/shared/finance-catalog";
 import { assetSchema } from "@/shared/finance-schemas";
 import { prisma } from "@/shared/db";
@@ -24,9 +25,13 @@ export async function POST(req: Request) {
   if (isDuplicateAsset(existing, data)) {
     return duplicateEntityResponse("Актив");
   }
+  const synced = syncAssetFromHoldings({
+    ...data,
+    portfolioHoldings: data.portfolioHoldings,
+  });
   const asset = await prisma.asset.create({
     data: {
-      ...data,
+      ...synced,
       assetClass: resolveAssetClass(data.type, assetClass) ?? "PERSONAL",
       userId,
     },

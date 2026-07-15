@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { parseJsonBody, notFoundResponse } from "@/shared/api-validation";
+import { syncAssetFromHoldings } from "@/modules/finance/portfolio-math";
 import { resolveAssetClass } from "@/shared/finance-catalog";
 import { assetSchema } from "@/shared/finance-schemas";
 import { prisma } from "@/shared/db";
@@ -32,9 +33,35 @@ export async function PATCH(
     return duplicateEntityResponse("Актив");
   }
   const resolvedClass = resolveAssetClass(data.type, assetClass);
+  const holdings =
+    data.portfolioHoldings !== undefined
+      ? data.portfolioHoldings
+      : current.portfolioHoldings;
+  const rolled = syncAssetFromHoldings({
+    currentValue: data.currentValue ?? current.currentValue,
+    expectedReturnPct: data.expectedReturnPct ?? current.expectedReturnPct,
+    volatilityPct: data.volatilityPct ?? current.volatilityPct,
+    dividendIncomeMonthly:
+      data.dividendIncomeMonthly ?? current.dividendIncomeMonthly,
+    portfolioHoldings: holdings,
+  });
   const asset = await prisma.asset.update({
     where: { id },
-    data: { ...data, ...(resolvedClass ? { assetClass: resolvedClass } : {}) },
+    data: {
+      ...data,
+      ...(resolvedClass ? { assetClass: resolvedClass } : {}),
+      ...(holdings && holdings.length > 0
+        ? {
+            currentValue: rolled.currentValue,
+            expectedReturnPct: rolled.expectedReturnPct,
+            volatilityPct: rolled.volatilityPct,
+            dividendIncomeMonthly: rolled.dividendIncomeMonthly,
+            portfolioHoldings: holdings,
+          }
+        : data.portfolioHoldings !== undefined
+          ? { portfolioHoldings: data.portfolioHoldings }
+          : {}),
+    },
   });
   void recordRevision({
     userId,

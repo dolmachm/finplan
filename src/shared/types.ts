@@ -9,6 +9,34 @@ export type LiabilityType =
 export type IncomeSource = "SALARY" | "FREELANCE" | "PASSIVE" | "BUSINESS" | "OTHER";
 export type Frequency = "MONTHLY" | "QUARTERLY" | "SEMI_ANNUAL" | "YEARLY" | "ONE_TIME";
 export type AssetClass = "PERSONAL" | "INVESTMENT";
+
+/** CFP investment sleeves (asset allocation classes) */
+export type PortfolioSleeve =
+  | "CASH_EQUIVALENT"
+  | "FIXED_INCOME"
+  | "EQUITY"
+  | "REAL_ESTATE"
+  | "ALTERNATIVE"
+  | "COMMODITY"
+  | "OTHER";
+
+/** Position inside an investment account (Asset) */
+export type PortfolioHolding = {
+  id: string;
+  name: string;
+  sleeve: PortfolioSleeve;
+  currentValue: number;
+  /** Capital growth expectation, % p.a. */
+  expectedReturnPct: number;
+  /** Current income / distributions, % p.a. of value */
+  dividendYieldPct: number;
+  /** Expected growth of payouts, % p.a. */
+  growthRatePct: number;
+  volatilityPct: number;
+  /** Target portfolio weight, %; null = unconstrained */
+  targetWeightPct: number | null;
+  notes: string | null;
+};
 export type GoalType =
   | "RETIREMENT"
   | "EDUCATION"
@@ -73,6 +101,8 @@ export type Asset = {
   taxEffectPct: number;
   isRealReturn: boolean;
   notes: string | null;
+  /** CFP sleeve breakdown; roll-up syncs value/return/dividends on parent */
+  portfolioHoldings?: PortfolioHolding[];
   createdAt: Date;
   updatedAt: Date;
 };

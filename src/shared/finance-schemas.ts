@@ -18,6 +18,29 @@ export const assetTypeEnum = z.enum([
   "OTHER",
 ]);
 
+export const portfolioSleeveEnum = z.enum([
+  "CASH_EQUIVALENT",
+  "FIXED_INCOME",
+  "EQUITY",
+  "REAL_ESTATE",
+  "ALTERNATIVE",
+  "COMMODITY",
+  "OTHER",
+]);
+
+export const portfolioHoldingSchema = z.object({
+  id: z.string().min(1),
+  name: z.string().min(1).max(120),
+  sleeve: portfolioSleeveEnum,
+  currentValue: z.number().nonnegative(),
+  expectedReturnPct: z.number().default(0),
+  dividendYieldPct: z.number().default(0),
+  growthRatePct: z.number().default(0),
+  volatilityPct: z.number().default(0),
+  targetWeightPct: z.number().min(0).max(100).nullable().default(null),
+  notes: z.string().max(500).nullable().default(null),
+});
+
 export const assetSchema = z.object({
   name: z.string().min(1),
   type: assetTypeEnum,
@@ -30,6 +53,7 @@ export const assetSchema = z.object({
   maintenanceCostMonthly: z.number().default(0),
   dividendIncomeMonthly: z.number().default(0),
   taxEffectPct: z.number().default(0),
+  portfolioHoldings: z.array(portfolioHoldingSchema).max(40).optional(),
 });
 
 export const incomeSchema = z.object({

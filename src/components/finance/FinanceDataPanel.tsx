@@ -36,6 +36,13 @@ import { envelopeStatuses, budgetExpenseFloor } from "@/modules/budget/envelopes
 import { EnvelopeBars } from "@/components/finance/EnvelopeOverview";
 import { LoanCalculator } from "@/components/finance/LoanCalculator";
 import { DebtPayoffStrategies } from "@/components/finance/DebtPayoffStrategies";
+import {
+  PortfolioHoldingsEditor,
+  draftsToHoldings,
+  emptyDraft,
+  holdingsToDrafts,
+} from "@/components/finance/PortfolioHoldingsEditor";
+import { computePortfolioMetrics } from "@/modules/finance/portfolio-math";
 import { monthlyEquivalent } from "@/modules/plan/frequency";
 import type { PlanFrequency } from "@/modules/plan/frequency";
 
@@ -575,7 +582,16 @@ function AssetEditor({
       ? formatMoneyInput(String(existing.maintenanceCostMonthly))
       : "",
   );
+  const [holdingDrafts, setHoldingDrafts] = useState(() =>
+    holdingsToDrafts(existing?.portfolioHoldings),
+  );
   const [saving, setSaving] = useState(false);
+
+  const holdings = draftsToHoldings(holdingDrafts);
+  const hasHoldings = assetClass === "INVESTMENT" && holdings.length > 0;
+  const portfolioMetrics = hasHoldings
+    ? computePortfolioMetrics(holdings)
+    : null;
 
   function onTypeChange(next: AssetType) {
     setType(next);
@@ -583,8 +599,34 @@ function AssetEditor({
     if (opt) setAssetClass(opt.class);
   }
 
+  function onHoldingsChange(
+    next: ReturnType<typeof holdingsToDrafts>,
+  ) {
+    setHoldingDrafts(next);
+    const nextHoldings = draftsToHoldings(next);
+    if (nextHoldings.length === 0) return;
+    const m = computePortfolioMetrics(nextHoldings);
+    setCurrentValue(formatMoneyInput(String(Math.round(m.totalValue))));
+    setExpectedReturnPct(String(m.expectedReturnPct.toFixed(2)));
+    setVolatilityPct(String(m.volatilityPct.toFixed(2)));
+    setDividendIncomeMonthly(
+      m.dividendIncomeMonthly > 0
+        ? formatMoneyInput(String(Math.round(m.dividendIncomeMonthly)))
+        : "",
+    );
+  }
+
   async function save() {
-    const value = parsePositiveNumber(currentValue, "Стоимость");
+    const portfolioHoldings =
+      assetClass === "INVESTMENT" ? draftsToHoldings(holdingDrafts) : [];
+    const useRollup = portfolioHoldings.length > 0;
+    const rollup = useRollup
+      ? computePortfolioMetrics(portfolioHoldings)
+      : null;
+
+    const value = useRollup
+      ? { ok: true as const, value: rollup!.totalValue }
+      : parsePositiveNumber(currentValue, "Стоимость");
     if (!name.trim()) {
       toast.error("Укажите название");
       return;
@@ -593,9 +635,11 @@ function AssetEditor({
       toast.error(value.message);
       return;
     }
-    const rent = dividendIncomeMonthly
-      ? parsePositiveNumber(dividendIncomeMonthly, "Доход")
-      : { ok: true as const, value: 0 };
+    const rent = useRollup
+      ? { ok: true as const, value: rollup!.dividendIncomeMonthly }
+      : dividendIncomeMonthly
+        ? parsePositiveNumber(dividendIncomeMonthly, "Доход")
+        : { ok: true as const, value: 0 };
     const maint = maintenanceCostMonthly
       ? parsePositiveNumber(maintenanceCostMonthly, "Расход на содержание")
       : { ok: true as const, value: 0 };
@@ -615,10 +659,16 @@ function AssetEditor({
         type,
         assetClass,
         currentValue: value.value,
-        expectedReturnPct: Number(expectedReturnPct) || 0,
-        volatilityPct: Number(volatilityPct) || 0,
+        expectedReturnPct: useRollup
+          ? rollup!.expectedReturnPct
+          : Number(expectedReturnPct) || 0,
+        volatilityPct: useRollup
+          ? rollup!.volatilityPct
+          : Number(volatilityPct) || 0,
         dividendIncomeMonthly: rent.value,
         maintenanceCostMonthly: maint.value,
+        portfolioHoldings:
+          assetClass === "INVESTMENT" ? portfolioHoldings : [],
       };
       const res = await fetch(
         existing ? `/api/assets/${existing.id}` : "/api/assets",
@@ -667,23 +717,96 @@ function AssetEditor({
             </optgroup>
           </select>
         </FormField>
-        <FormField label="Текущая стоимость, ₽" htmlFor="asset-value">
-          <Input id="asset-value" inputMode="numeric" value={currentValue} onChange={(e) => setCurrentValue(formatMoneyInput(e.target.value))} placeholder="1 000 000" />
+        <FormField
+          label="Текущая стоимость, ₽"
+          htmlFor="asset-value"
+          hint={
+            hasHoldings
+              ? "Считается как сумма позиций портфеля"
+              : undefined
+          }
+        >
+          <Input
+            id="asset-value"
+            inputMode="numeric"
+            value={
+              hasHoldings && portfolioMetrics
+                ? formatMoneyInput(String(Math.round(portfolioMetrics.totalValue)))
+                : currentValue
+            }
+            onChange={(e) => setCurrentValue(formatMoneyInput(e.target.value))}
+            placeholder="1 000 000"
+            disabled={hasHoldings}
+          />
         </FormField>
       </div>
+      {assetClass === "INVESTMENT" && holdingDrafts.length > 0 && (
+        <PortfolioHoldingsEditor
+          drafts={holdingDrafts}
+          onChange={onHoldingsChange}
+        />
+      )}
+      {assetClass === "INVESTMENT" && holdingDrafts.length === 0 && (
+        <div className="mt-3">
+          <Button
+            type="button"
+            variant="secondary"
+            onClick={() => onHoldingsChange([emptyDraft()])}
+          >
+            + Разбить на классы активов
+          </Button>
+        </div>
+      )}
       <details className="mt-4">
         <summary className="cursor-pointer text-sm font-medium text-muted hover:text-foreground">
           Ещё настройки
         </summary>
         <div className="mt-4 grid gap-4 sm:grid-cols-2">
           <FormField label="Доходность, % годовых" htmlFor="asset-return" hint={FIELD_HINTS.expectedReturn}>
-            <Input id="asset-return" inputMode="decimal" value={expectedReturnPct} onChange={(e) => setExpectedReturnPct(e.target.value)} placeholder="7" />
+            <Input
+              id="asset-return"
+              inputMode="decimal"
+              value={
+                hasHoldings && portfolioMetrics
+                  ? portfolioMetrics.expectedReturnPct.toFixed(2)
+                  : expectedReturnPct
+              }
+              onChange={(e) => setExpectedReturnPct(e.target.value)}
+              placeholder="7"
+              disabled={hasHoldings}
+            />
           </FormField>
           <FormField label="Риск (волатильность), %" htmlFor="asset-vol" hint={FIELD_HINTS.volatility}>
-            <Input id="asset-vol" inputMode="decimal" value={volatilityPct} onChange={(e) => setVolatilityPct(e.target.value)} placeholder="12" />
+            <Input
+              id="asset-vol"
+              inputMode="decimal"
+              value={
+                hasHoldings && portfolioMetrics
+                  ? portfolioMetrics.volatilityPct.toFixed(2)
+                  : volatilityPct
+              }
+              onChange={(e) => setVolatilityPct(e.target.value)}
+              placeholder="12"
+              disabled={hasHoldings}
+            />
           </FormField>
           <FormField label="Доход в месяц, ₽" htmlFor="asset-rent" hint={FIELD_HINTS.dividendRent}>
-            <Input id="asset-rent" inputMode="numeric" value={dividendIncomeMonthly} onChange={(e) => setDividendIncomeMonthly(formatMoneyInput(e.target.value))} placeholder="30 000" />
+            <Input
+              id="asset-rent"
+              inputMode="numeric"
+              value={
+                hasHoldings && portfolioMetrics
+                  ? portfolioMetrics.dividendIncomeMonthly > 0
+                    ? formatMoneyInput(
+                        String(Math.round(portfolioMetrics.dividendIncomeMonthly)),
+                      )
+                    : ""
+                  : dividendIncomeMonthly
+              }
+              onChange={(e) => setDividendIncomeMonthly(formatMoneyInput(e.target.value))}
+              placeholder="30 000"
+              disabled={hasHoldings}
+            />
           </FormField>
           <FormField label="Содержание в месяц, ₽" htmlFor="asset-maint" hint={FIELD_HINTS.maintenance}>
             <Input id="asset-maint" inputMode="numeric" value={maintenanceCostMonthly} onChange={(e) => setMaintenanceCostMonthly(formatMoneyInput(e.target.value))} placeholder="5 000" />

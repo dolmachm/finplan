@@ -1,4 +1,4 @@
-import type { AssetType, LiabilityType } from "@/shared/types";
+import type { AssetType, LiabilityType, PortfolioSleeve } from "@/shared/types";
 import { FREQUENCY_VALUES } from "@/modules/plan/frequency";
 
 export const FREQUENCY_LABELS: Record<string, string> = {
@@ -18,6 +18,24 @@ export const ASSET_CLASS_LABELS = {
   PERSONAL: "Личный",
   INVESTMENT: "Инвестиционный",
 } as const;
+
+/** CFP portfolio sleeves (allocation classes inside an investment account) */
+export const PORTFOLIO_SLEEVE_OPTIONS: Array<{
+  value: PortfolioSleeve;
+  label: string;
+}> = [
+  { value: "CASH_EQUIVALENT", label: "Денежные средства / эквиваленты" },
+  { value: "FIXED_INCOME", label: "Облигации / фикс. доход" },
+  { value: "EQUITY", label: "Акции / долевые" },
+  { value: "REAL_ESTATE", label: "Недвижимость" },
+  { value: "ALTERNATIVE", label: "Альтернативные" },
+  { value: "COMMODITY", label: "Сырьё / товары" },
+  { value: "OTHER", label: "Прочее" },
+];
+
+export function portfolioSleeveLabel(sleeve: string): string {
+  return PORTFOLIO_SLEEVE_OPTIONS.find((o) => o.value === sleeve)?.label ?? sleeve;
+}
 
 export const ASSET_TYPE_OPTIONS: Array<{
   value: AssetType;
