@@ -34,6 +34,8 @@ import { formatMoneyInput } from "@/shared/format-input";
 import { formatRub } from "@/shared/format";
 import { envelopeStatuses, budgetExpenseFloor } from "@/modules/budget/envelopes";
 import { EnvelopeBars } from "@/components/finance/EnvelopeOverview";
+import { LoanCalculator } from "@/components/finance/LoanCalculator";
+import { DebtPayoffStrategies } from "@/components/finance/DebtPayoffStrategies";
 import { monthlyEquivalent } from "@/modules/plan/frequency";
 import type { PlanFrequency } from "@/modules/plan/frequency";
 
@@ -281,6 +283,8 @@ export function FinanceDataPanel({
               onEdit={(id) => setEditView({ kind: "liability", id })}
               onDelete={(id) => remove("liability", id)}
             />
+            <LoanCalculator />
+            <DebtPayoffStrategies liabilities={liabilities} />
           </>
         )}
       </div>
