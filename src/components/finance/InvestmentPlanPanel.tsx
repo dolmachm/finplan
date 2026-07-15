@@ -17,6 +17,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { FormField, HelpHint } from "@/components/ui/FormField";
 import { Input } from "@/components/ui/input";
+import { formControlClass } from "@/components/ui/form-controls";
 import { toast } from "@/components/ui/ToastProvider";
 import { FEATURE_HINTS, FIELD_HINTS } from "@/content/help";
 import { readApiError, parsePositiveNumber } from "@/shared/api-client";
@@ -414,8 +415,8 @@ export function InvestmentPlanPanel({
         : "year";
 
   const fieldCls = compact
-    ? "w-full rounded-lg border border-border bg-card px-2 py-1.5 text-xs"
-    : "w-full rounded-lg border border-border bg-card px-3 py-2.5 text-sm";
+    ? `${formControlClass} !px-2 !py-1.5 !text-xs`
+    : formControlClass;
 
   return (
     <div className={compact ? "space-y-3" : "space-y-8"}>

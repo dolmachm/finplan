@@ -1,6 +1,11 @@
 "use client";
 
 import { useEffect, type ReactNode } from "react";
+import { Button } from "@/components/ui/button";
+import {
+  modalActionBtnClass,
+  modalActionsClass,
+} from "@/components/ui/form-controls";
 
 export function Modal({
   open,
@@ -34,7 +39,7 @@ export function Modal({
       <button
         type="button"
         aria-label="Закрыть"
-        className="absolute inset-0 bg-black/40"
+        className="absolute inset-0 bg-black/50"
         onClick={onClose}
       />
       <div
@@ -43,7 +48,7 @@ export function Modal({
         aria-labelledby="modal-title"
         className="relative z-10 flex max-h-[90dvh] w-full max-w-2xl flex-col overflow-hidden rounded-2xl bg-card shadow-[var(--shadow-card)]"
       >
-        <div className="relative shrink-0 border-b border-border px-4 py-3.5 sm:px-6 sm:py-4">
+        <div className="relative shrink-0 px-4 py-3.5 sm:px-6 sm:py-4">
           <h2
             id="modal-title"
             className="pr-10 text-center text-base font-semibold tracking-tight text-foreground sm:text-lg"
@@ -59,7 +64,7 @@ export function Modal({
             ×
           </button>
         </div>
-        <div className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto px-4 py-4 pb-[max(1rem,env(safe-area-inset-bottom))] sm:px-6 sm:py-5">
+        <div className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-1 sm:px-6 sm:pb-6">
           {children}
         </div>
       </div>
@@ -67,11 +72,44 @@ export function Modal({
   );
 }
 
-/** Inner bordered form shell for modal editors */
+/** Inner bordered form shell — buttons go in ModalFormActions below */
 export function ModalFormBox({ children }: { children: ReactNode }) {
   return (
-    <div className="rounded-xl border border-border bg-background/80 p-3 sm:p-5 [&_input]:border-transparent [&_input]:bg-brand-light [&_select]:border-transparent [&_select]:bg-brand-light">
-      {children}
+    <div className="rounded-xl border border-border bg-card p-3 sm:p-5">{children}</div>
+  );
+}
+
+export function ModalFormActions({
+  onCancel,
+  onSubmit,
+  submitLabel,
+  submitting = false,
+  submittingLabel = "Сохранение…",
+}: {
+  onCancel: () => void;
+  onSubmit: () => void;
+  submitLabel: string;
+  submitting?: boolean;
+  submittingLabel?: string;
+}) {
+  return (
+    <div className={modalActionsClass}>
+      <Button
+        type="button"
+        variant="outline"
+        className={modalActionBtnClass}
+        onClick={onCancel}
+      >
+        Отмена
+      </Button>
+      <Button
+        type="button"
+        className={modalActionBtnClass}
+        onClick={onSubmit}
+        disabled={submitting}
+      >
+        {submitting ? submittingLabel : submitLabel}
+      </Button>
     </div>
   );
 }

@@ -5,7 +5,8 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { FormField, HelpHint } from "@/components/ui/FormField";
 import { Input } from "@/components/ui/input";
-import { Modal, ModalFormBox } from "@/components/ui/Modal";
+import { Modal, ModalFormBox, ModalFormActions } from "@/components/ui/Modal";
+import { selectClass } from "@/components/ui/form-controls";
 import { toast } from "@/components/ui/ToastProvider";
 import { FEATURE_HINTS, FIELD_HINTS } from "@/content/help";
 import {
@@ -45,14 +46,6 @@ import {
 import { computePortfolioMetrics } from "@/modules/finance/portfolio-math";
 import { monthlyEquivalent } from "@/modules/plan/frequency";
 import type { PlanFrequency } from "@/modules/plan/frequency";
-
-const selectClass =
-  "w-full rounded-xl border border-transparent bg-brand-light px-4 py-2.5 text-sm";
-
-const editorActionsClass =
-  "mt-5 flex flex-col-reverse gap-2 sm:mt-6 sm:flex-row-reverse sm:justify-center";
-
-const editorBtnClass = "w-full sm:w-auto sm:min-w-[8rem]";
 
 type EditView =
   | { kind: "asset" | "income" | "expense" | "liability"; id?: string }
@@ -701,6 +694,7 @@ function AssetEditor({
   }
 
   return (
+    <>
     <ModalFormBox>
       <div className="grid gap-3 sm:grid-cols-2">
         <FormField label="Название" htmlFor="asset-name">
@@ -816,15 +810,14 @@ function AssetEditor({
           </FormField>
         </div>
       </details>
-      <div className={editorActionsClass}>
-        <Button type="button" variant="secondary" className={editorBtnClass} onClick={onBack}>
-          Отмена
-        </Button>
-        <Button type="button" className={editorBtnClass} onClick={save} disabled={saving}>
-          {saving ? "Сохранение…" : existing ? "Сохранить" : "Добавить"}
-        </Button>
-      </div>
     </ModalFormBox>
+    <ModalFormActions
+      onCancel={onBack}
+      onSubmit={save}
+      submitting={saving}
+      submitLabel={existing ? "Сохранить" : "Добавить"}
+    />
+    </>
   );
 }
 
@@ -893,6 +886,7 @@ function IncomeEditor({
   }
 
   return (
+    <>
     <ModalFormBox>
       <div className="grid gap-3 sm:grid-cols-2">
         <FormField label="Название" htmlFor="income-name">
@@ -932,15 +926,14 @@ function IncomeEditor({
           </FormField>
         </div>
       </details>
-      <div className={editorActionsClass}>
-        <Button type="button" variant="secondary" className={editorBtnClass} onClick={onBack}>
-          Отмена
-        </Button>
-        <Button type="button" className={editorBtnClass} onClick={save} disabled={saving}>
-          {saving ? "Сохранение…" : existing ? "Сохранить" : "Добавить"}
-        </Button>
-      </div>
     </ModalFormBox>
+    <ModalFormActions
+      onCancel={onBack}
+      onSubmit={save}
+      submitting={saving}
+      submitLabel={existing ? "Сохранить" : "Добавить"}
+    />
+    </>
   );
 }
 
@@ -1016,6 +1009,7 @@ function ExpenseEditor({
   }
 
   return (
+    <>
     <ModalFormBox>
       <div className="grid gap-3 sm:grid-cols-2">
         <FormField label="Название" htmlFor="expense-name">
@@ -1063,15 +1057,14 @@ function ExpenseEditor({
           </FormField>
         </div>
       </details>
-      <div className={editorActionsClass}>
-        <Button type="button" variant="secondary" className={editorBtnClass} onClick={onBack}>
-          Отмена
-        </Button>
-        <Button type="button" className={editorBtnClass} onClick={save} disabled={saving}>
-          {saving ? "Сохранение…" : existing ? "Сохранить" : "Добавить"}
-        </Button>
-      </div>
     </ModalFormBox>
+    <ModalFormActions
+      onCancel={onBack}
+      onSubmit={save}
+      submitting={saving}
+      submitLabel={existing ? "Сохранить" : "Добавить"}
+    />
+    </>
   );
 }
 
@@ -1148,6 +1141,7 @@ function LiabilityEditor({
   }
 
   return (
+    <>
     <ModalFormBox>
       <div className="grid gap-3 sm:grid-cols-2">
         <FormField label="Название" htmlFor="liability-name">
@@ -1200,15 +1194,14 @@ function LiabilityEditor({
           />
         </FormField>
       </div>
-      <div className={editorActionsClass}>
-        <Button type="button" variant="secondary" className={editorBtnClass} onClick={onBack}>
-          Отмена
-        </Button>
-        <Button type="button" className={editorBtnClass} onClick={save} disabled={saving}>
-          {saving ? "Сохранение…" : existing ? "Сохранить" : "Добавить"}
-        </Button>
-      </div>
     </ModalFormBox>
+    <ModalFormActions
+      onCancel={onBack}
+      onSubmit={save}
+      submitting={saving}
+      submitLabel={existing ? "Сохранить" : "Добавить"}
+    />
+    </>
   );
 }
 
@@ -1228,6 +1221,7 @@ function BudgetEnvelopesPanel({
   const statuses = envelopeStatuses(expenses, categories);
   const [limitDrafts, setLimitDrafts] = useState<Record<string, string>>({});
   const [newName, setNewName] = useState("");
+  const [catOpen, setCatOpen] = useState(false);
   const [busyId, setBusyId] = useState<string | null>(null);
 
   const incomeMonthly = incomes.reduce(
@@ -1311,6 +1305,7 @@ function BudgetEnvelopesPanel({
         return;
       }
       setNewName("");
+      setCatOpen(false);
       toast.success("Категория добавлена");
       await onChanged();
     } catch {
@@ -1471,24 +1466,42 @@ function BudgetEnvelopesPanel({
         </ul>
       )}
 
-      <div className="mt-4 flex flex-wrap items-end gap-2 border-t border-border pt-4">
-        <FormField label="Новая категория" htmlFor="new-cat" className="min-w-[12rem] flex-1">
-          <Input
-            id="new-cat"
-            value={newName}
-            onChange={(e) => setNewName(e.target.value)}
-            placeholder="Например, Дети"
-          />
-        </FormField>
+      <div className="mt-4 border-t border-border pt-4">
         <Button
           type="button"
           variant="secondary"
-          disabled={busyId === "__new__"}
-          onClick={addCategory}
+          onClick={() => {
+            setNewName("");
+            setCatOpen(true);
+          }}
         >
           + Категория
         </Button>
       </div>
+
+      <Modal
+        open={catOpen}
+        title="Добавить категорию"
+        onClose={() => setCatOpen(false)}
+      >
+        <ModalFormBox>
+          <FormField label="Название" htmlFor="new-cat">
+            <Input
+              id="new-cat"
+              value={newName}
+              onChange={(e) => setNewName(e.target.value)}
+              placeholder="Например, Дети"
+            />
+          </FormField>
+        </ModalFormBox>
+        <ModalFormActions
+          onCancel={() => setCatOpen(false)}
+          onSubmit={addCategory}
+          submitting={busyId === "__new__"}
+          submitLabel="Добавить"
+          submittingLabel="…"
+        />
+      </Modal>
     </Card>
   );
 }

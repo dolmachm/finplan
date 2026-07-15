@@ -9,6 +9,7 @@ import { Card } from "@/components/ui/card";
 import { FormError } from "@/components/ui/FormError";
 import { HelpHint } from "@/components/ui/FormField";
 import { PlanInsightsStrip } from "@/components/plan/PlanInsightsStrip";
+import { selectClass } from "@/components/ui/form-controls";
 import { FEATURE_HINTS } from "@/content/help";
 import { formatRub } from "@/shared/format";
 import type { HomeDashboardInput } from "@/modules/dashboard/insights";
@@ -93,7 +94,7 @@ export function PlanWorkspace({
                 value={viewScenarioId}
                 onChange={(e) => onViewScenarioChange(e.target.value)}
                 disabled={projectionLoading}
-                className="w-full rounded-lg border border-border bg-card px-2 py-1.5 text-xs sm:px-3 sm:py-2 sm:text-sm"
+                className={selectClass}
               >
                 <option value="base">Базовый (без правил)</option>
                 {scenarios.map((s) => (

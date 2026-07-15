@@ -28,10 +28,13 @@ export function FormField({
 }) {
   return (
     <div className={className}>
-      <label htmlFor={htmlFor} className="text-sm font-medium text-foreground">
+      <label
+        htmlFor={htmlFor}
+        className="text-xs font-medium text-muted"
+      >
         {label}
       </label>
-      {hint && <p className="mt-0.5 text-xs text-muted">{hint}</p>}
+      {hint && <p className="mt-0.5 text-[11px] text-muted/80">{hint}</p>}
       <div className="mt-1.5">{children}</div>
       <FieldError message={error} />
     </div>

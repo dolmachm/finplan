@@ -5,7 +5,8 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { FormField, HelpHint } from "@/components/ui/FormField";
 import { Input } from "@/components/ui/input";
-import { Modal, ModalFormBox } from "@/components/ui/Modal";
+import { Modal, ModalFormBox, ModalFormActions } from "@/components/ui/Modal";
+import { selectClass } from "@/components/ui/form-controls";
 import { toast } from "@/components/ui/ToastProvider";
 import { readApiError, parsePositiveNumber } from "@/shared/api-client";
 import { formatMoneyInput } from "@/shared/format-input";
@@ -24,14 +25,6 @@ import {
   type GoalPathSettings,
 } from "@/modules/plan/goal-paths";
 import type { Asset, Goal, GoalStrategy, GoalType } from "@/shared/types";
-
-const selectClass =
-  "w-full rounded-xl border border-transparent bg-brand-light px-3 py-2 text-sm";
-
-const editorActionsClass =
-  "mt-5 flex flex-col-reverse gap-2 sm:mt-6 sm:flex-row-reverse sm:justify-center";
-
-const editorBtnClass = "w-full sm:w-auto sm:min-w-[8rem]";
 
 type EditView = { id?: string } | null;
 
@@ -634,6 +627,7 @@ function GoalEditor({
   }
 
   return (
+    <>
     <ModalFormBox>
       <div className="grid gap-3 sm:grid-cols-2">
         <FormField label="Название" htmlFor="goal-name">
@@ -819,15 +813,13 @@ function GoalEditor({
           </FormField>
         </div>
       </details>
-
-      <div className={editorActionsClass}>
-        <Button type="button" variant="secondary" className={editorBtnClass} onClick={onBack}>
-          Отмена
-        </Button>
-        <Button type="button" className={editorBtnClass} onClick={save} disabled={saving}>
-          {saving ? "Сохранение…" : existing ? "Сохранить" : "Добавить"}
-        </Button>
-      </div>
     </ModalFormBox>
+    <ModalFormActions
+      onCancel={onBack}
+      onSubmit={save}
+      submitting={saving}
+      submitLabel={existing ? "Сохранить" : "Добавить"}
+    />
+    </>
   );
 }

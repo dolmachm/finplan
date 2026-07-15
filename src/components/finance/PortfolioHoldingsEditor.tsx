@@ -16,9 +16,7 @@ import { formatMoneyInput } from "@/shared/format-input";
 import { formatRub } from "@/shared/format";
 import type { PortfolioHolding, PortfolioSleeve } from "@/shared/types";
 import { RebalanceCalculator } from "@/components/finance/RebalanceCalculator";
-
-const selectClass =
-  "w-full rounded-lg border border-border bg-card px-3 py-2 text-sm";
+import { selectClass } from "@/components/ui/form-controls";
 
 type DraftHolding = {
   id: string;
