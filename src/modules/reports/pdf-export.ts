@@ -1,6 +1,7 @@
 import { jsPDF } from "jspdf";
 import { formatRub } from "@/shared/format";
 import type { PdfNamedAmount, PdfReportData } from "./build-report-data";
+import { applyReportFont, REPORT_FONT } from "./pdf-fonts";
 import {
   isBlockEnabled,
   isItemEnabled,
@@ -39,9 +40,9 @@ function addFooter(ctx: DocCtx) {
 function sectionTitle(ctx: DocCtx, title: string) {
   ensureSpace(ctx, 14);
   ctx.doc.setFontSize(13);
-  ctx.doc.setFont("helvetica", "bold");
+  ctx.doc.setFont(REPORT_FONT, "bold");
   ctx.doc.text(title, MARGIN, ctx.y);
-  ctx.doc.setFont("helvetica", "normal");
+  ctx.doc.setFont(REPORT_FONT, "normal");
   ctx.y += 8;
 }
 
@@ -140,11 +141,11 @@ function writeCover(ctx: DocCtx, data: PdfReportData) {
   if (isItemEnabled(config, "cover", "cover_title")) {
     ensureSpace(ctx, 16);
     ctx.doc.setFontSize(18);
-    ctx.doc.setFont("helvetica", "bold");
+    ctx.doc.setFont(REPORT_FONT, "bold");
     const title = config.texts.title || "FinPlan — финансовый план (CFP)";
     const lines: string[] = ctx.doc.splitTextToSize(title, CONTENT_W);
     ctx.doc.text(lines, MARGIN, ctx.y);
-    ctx.doc.setFont("helvetica", "normal");
+    ctx.doc.setFont(REPORT_FONT, "normal");
     ctx.y += lines.length * 8 + 4;
   }
 
@@ -212,28 +213,28 @@ function writeBalance(ctx: DocCtx, data: PdfReportData) {
   sectionTitle(ctx, "Точка 0 — баланс");
   if (isItemEnabled(config, "balance", "bal_assets")) {
     ctx.doc.setFontSize(10);
-    ctx.doc.setFont("helvetica", "bold");
+    ctx.doc.setFont(REPORT_FONT, "bold");
     ensureSpace(ctx, 6);
     ctx.doc.text(
       `Активы (${formatRub(data.metrics.assetsTotal)})`,
       MARGIN,
       ctx.y,
     );
-    ctx.doc.setFont("helvetica", "normal");
+    ctx.doc.setFont(REPORT_FONT, "normal");
     ctx.y += 6;
     drawNamedList(ctx, data.assets, "Активы не указаны");
     ctx.y += 3;
   }
   if (isItemEnabled(config, "balance", "bal_liabilities")) {
     ctx.doc.setFontSize(10);
-    ctx.doc.setFont("helvetica", "bold");
+    ctx.doc.setFont(REPORT_FONT, "bold");
     ensureSpace(ctx, 6);
     ctx.doc.text(
       `Обязательства (${formatRub(data.metrics.liabilitiesTotal)})`,
       MARGIN,
       ctx.y,
     );
-    ctx.doc.setFont("helvetica", "normal");
+    ctx.doc.setFont(REPORT_FONT, "normal");
     ctx.y += 6;
     drawNamedList(ctx, data.liabilities, "Обязательства не указаны");
     ctx.y += 3;
@@ -277,9 +278,9 @@ function writeGoals(ctx: DocCtx, data: PdfReportData) {
   for (const g of data.goals) {
     ensureSpace(ctx, 16);
     ctx.doc.setFontSize(10);
-    ctx.doc.setFont("helvetica", "bold");
+    ctx.doc.setFont(REPORT_FONT, "bold");
     ctx.doc.text(g.name, MARGIN, ctx.y);
-    ctx.doc.setFont("helvetica", "normal");
+    ctx.doc.setFont(REPORT_FONT, "normal");
     ctx.y += 5;
     ctx.doc.setFontSize(9);
     ctx.doc.text(`Целевая сумма: ${formatRub(g.target)}`, MARGIN + 2, ctx.y);
@@ -394,9 +395,9 @@ function writeInsightBlock(
   for (const row of rows) {
     ensureSpace(ctx, 12);
     ctx.doc.setFontSize(10);
-    ctx.doc.setFont("helvetica", "bold");
+    ctx.doc.setFont(REPORT_FONT, "bold");
     ctx.doc.text(`• ${row.title}`, MARGIN, ctx.y);
-    ctx.doc.setFont("helvetica", "normal");
+    ctx.doc.setFont(REPORT_FONT, "normal");
     ctx.y += 5;
     bodyText(ctx, row.body, 9);
     ctx.y += 2;
@@ -406,6 +407,7 @@ function writeInsightBlock(
 
 export function generatePlanPdf(data: PdfReportData): Uint8Array {
   const doc = new jsPDF();
+  applyReportFont(doc);
   const ctx: DocCtx = { doc, y: 20, page: 1 };
 
   writeCover(ctx, data);
