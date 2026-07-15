@@ -7,6 +7,7 @@ import type {
   ScenarioModifiers,
 } from "./types";
 import { amountForMonth } from "./frequency";
+import { analyzeGoalFunding } from "./goal-funding";
 
 type TrackedAsset = PlanInput["assets"][number] & { sold: boolean };
 
@@ -163,31 +164,18 @@ export function runDeterministicPlan(
     });
   }
 
-  const goalFunding = plan.goals.map((g) => {
-    const monthsToGoal = Math.max(1, g.targetMonthIndex);
-    const inflationAdjustedTarget =
-      g.targetAmountNominal *
-      Math.pow(1 + plan.baseInflationPct / 100, monthsToGoal / 12);
-    const projectedBalanceAtTarget =
-      monthly[Math.min(g.targetMonthIndex, monthly.length - 1)]?.netWorth ?? 0;
-    const gap = Math.max(0, inflationAdjustedTarget - projectedBalanceAtTarget);
-    return {
-      goalId: g.id,
-      requiredMonthlySaving: gap / monthsToGoal,
-      projectedBalanceAtTarget,
-      inflationAdjustedTarget,
-    };
-  });
-
   const n = monthly.length || 1;
+  const avgMonthlySurplus = surplusSum / n;
+  const goalFunding = analyzeGoalFunding(plan, monthly, avgMonthlySurplus);
+
   return {
     monthly,
     goalFunding,
     summary: {
       finalNetWorth: monthly[monthly.length - 1]?.netWorth ?? 0,
-      avgMonthlySurplus: surplusSum / n,
+      avgMonthlySurplus,
       recommendedMonthlySaving: goalFunding.reduce(
-        (s, g) => s + g.requiredMonthlySaving,
+        (s, g) => s + g.requiredMonthlyDesired,
         0,
       ),
     },

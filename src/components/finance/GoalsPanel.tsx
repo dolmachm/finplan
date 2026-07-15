@@ -15,15 +15,40 @@ import {
   formatGoalDate,
   GOAL_STRATEGY_OPTIONS,
   GOAL_TYPE_OPTIONS,
-  goalStrategyLabel,
   goalTypeLabel,
 } from "@/shared/goals-catalog";
+import type { GoalFundingResult } from "@/modules/plan/types";
 import type { Asset, Goal, GoalStrategy, GoalType } from "@/shared/types";
 
 const selectClass =
-  "w-full rounded-lg border border-border bg-card px-4 py-2.5 text-sm";
+  "w-full rounded-lg border border-border bg-card px-3 py-2 text-sm";
 
 type EditView = { id?: string } | null;
+
+type StageDraft = {
+  id: string;
+  label: string;
+  amount: string;
+  years: string;
+};
+
+const ACHIEVE_LABEL: Record<GoalFundingResult["achievability"], string> = {
+  max: "Максимум достижим",
+  desired: "Желаемая достижима",
+  min: "Только минимум",
+  none: "Недостижима при текущем плане",
+};
+
+const ACHIEVE_CLASS: Record<GoalFundingResult["achievability"], string> = {
+  max: "text-emerald-700",
+  desired: "text-emerald-700",
+  min: "text-amber-700",
+  none: "text-red-600",
+};
+
+function newStageId() {
+  return `st_${Math.random().toString(36).slice(2, 10)}`;
+}
 
 export function GoalsPanel({
   onSaved,
@@ -36,6 +61,7 @@ export function GoalsPanel({
 }) {
   const [goals, setGoals] = useState<Goal[]>([]);
   const [assets, setAssets] = useState<Asset[]>([]);
+  const [funding, setFunding] = useState<Record<string, GoalFundingResult>>({});
   const [editView, setEditView] = useState<EditView>(null);
   const [loading, setLoading] = useState(true);
   const editorRef = useRef<HTMLDivElement>(null);
@@ -45,9 +71,10 @@ export function GoalsPanel({
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const [gRes, aRes] = await Promise.all([
+      const [gRes, aRes, pRes] = await Promise.all([
         fetch("/api/goals"),
         fetch("/api/assets"),
+        fetch("/api/plan/projection?scenarioId=base", { cache: "no-store" }),
       ]);
       if (onUnauthorized(gRes) || onUnauthorized(aRes)) return;
       if (gRes.ok) {
@@ -56,6 +83,14 @@ export function GoalsPanel({
         countRef.current?.(next.length);
       }
       if (aRes.ok) setAssets(await aRes.json());
+      if (pRes.ok) {
+        const data = await pRes.json();
+        const map: Record<string, GoalFundingResult> = {};
+        for (const f of (data.result?.goalFunding ?? []) as GoalFundingResult[]) {
+          map[f.goalId] = f;
+        }
+        setFunding(map);
+      }
     } finally {
       setLoading(false);
     }
@@ -87,12 +122,13 @@ export function GoalsPanel({
 
   return (
     <div className="space-y-4">
-      <Card>
+      <Card className="!p-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <h3 className="font-medium">Финансовые цели</h3>
             <HelpHint className="mt-1">
-              {FEATURE_HINTS.goalsStep} Приоритет 1 — самая важная цель, если денег может не хватить на все сразу.
+              {FEATURE_HINTS.goalsStep} Приоритет 1 финансируется первым; взносы и
+              достижимость считаются с учётом профицита и других целей.
             </HelpHint>
           </div>
           <Button type="button" variant="secondary" onClick={() => setEditView({})}>
@@ -117,85 +153,143 @@ export function GoalsPanel({
         </div>
       )}
 
-      <Card>
-        {loading ? (
-          <p className="text-sm text-muted">Загрузка…</p>
-        ) : goals.length === 0 ? (
+      {loading ? (
+        <p className="text-sm text-muted">Загрузка…</p>
+      ) : goals.length === 0 ? (
+        <Card className="!p-4">
           <p className="text-sm text-muted">Нет целей — добавьте первую</p>
-        ) : (
+        </Card>
+      ) : (
+        <div className="grid gap-3 md:grid-cols-2">
+          {goals.map((g) => (
+            <GoalCard
+              key={g.id}
+              goal={g}
+              funding={funding[g.id]}
+              onEdit={() => setEditView({ id: g.id })}
+              onDelete={() => remove(g.id)}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function GoalCard({
+  goal,
+  funding,
+  onEdit,
+  onDelete,
+}: {
+  goal: Goal;
+  funding?: GoalFundingResult;
+  onEdit: () => void;
+  onDelete: () => void;
+}) {
+  const stages = goal.stages ?? [];
+  const achieve = funding?.achievability;
+
+  return (
+    <Card className="!p-4 space-y-3">
+      <div className="flex items-start justify-between gap-2">
+        <div>
+          <p className="text-xs text-muted">
+            Приоритет {goal.priority} · {goalTypeLabel(goal.goalType ?? "OTHER")}
+          </p>
+          <h4 className="font-medium">{goal.name}</h4>
+        </div>
+        {achieve && (
+          <span className={`text-xs font-medium ${ACHIEVE_CLASS[achieve]}`}>
+            {ACHIEVE_LABEL[achieve]}
+          </span>
+        )}
+      </div>
+
+      <dl className="grid grid-cols-2 gap-x-3 gap-y-1.5 text-sm">
+        <div>
+          <dt className="text-[11px] text-muted">Желаемая</dt>
+          <dd className="font-medium">{formatRub(goal.targetAmountNominal)}</dd>
+        </div>
+        <div>
+          <dt className="text-[11px] text-muted">Срок</dt>
+          <dd>{formatGoalDate(goal.targetDate)}</dd>
+        </div>
+        {(goal.minAmount != null || goal.maxAmount != null) && (
           <>
-            <div className="space-y-3 md:hidden">
-              {goals.map((g) => (
-                <div
-                  key={g.id}
-                  className="rounded-xl border border-border bg-background p-3"
-                >
-                  <p className="font-medium text-foreground">{g.name}</p>
-                  <dl className="mt-2 space-y-1 text-sm">
-                    <div className="flex justify-between gap-3">
-                      <dt className="text-muted">Тип</dt>
-                      <dd>{goalTypeLabel(g.goalType ?? "OTHER")}</dd>
-                    </div>
-                    <div className="flex justify-between gap-3">
-                      <dt className="text-muted">Сумма</dt>
-                      <dd>{formatRub(g.targetAmountNominal)}</dd>
-                    </div>
-                    <div className="flex justify-between gap-3">
-                      <dt className="text-muted">Срок</dt>
-                      <dd>{formatGoalDate(g.targetDate)}</dd>
-                    </div>
-                  </dl>
-                  <div className="mt-3 flex gap-2 border-t border-border pt-3">
-                    <Button type="button" variant="secondary" className="flex-1" onClick={() => setEditView({ id: g.id })}>
-                      Изменить
-                    </Button>
-                    <Button type="button" variant="ghost" className="flex-1" onClick={() => remove(g.id)}>
-                      Удалить
-                    </Button>
-                  </div>
-                </div>
-              ))}
+            <div>
+              <dt className="text-[11px] text-muted">Минимум</dt>
+              <dd>{goal.minAmount != null ? formatRub(goal.minAmount) : "—"}</dd>
             </div>
-            <div className="hidden overflow-x-auto md:block">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-border text-left text-muted">
-                    {["Приор.", "Название", "Тип", "Сумма", "Срок", "Стратегия", "Частично", ""].map(
-                      (h) => (
-                        <th key={h} className="px-3 py-2 font-medium">
-                          {h}
-                        </th>
-                      ),
-                    )}
-                  </tr>
-                </thead>
-                <tbody>
-                  {goals.map((g) => (
-                    <tr key={g.id} className="border-b border-border last:border-0">
-                      <td className="px-3 py-2">{g.priority}</td>
-                      <td className="px-3 py-2">{g.name}</td>
-                      <td className="px-3 py-2">{goalTypeLabel(g.goalType ?? "OTHER")}</td>
-                      <td className="px-3 py-2">{formatRub(g.targetAmountNominal)}</td>
-                      <td className="px-3 py-2">{formatGoalDate(g.targetDate)}</td>
-                      <td className="px-3 py-2">{goalStrategyLabel(g.strategy ?? "SYSTEMATIC")}</td>
-                      <td className="px-3 py-2">{g.allowPartialFunding ? "Да" : "Нет"}</td>
-                      <td className="px-3 py-2 text-right whitespace-nowrap">
-                        <Button type="button" variant="ghost" onClick={() => setEditView({ id: g.id })}>
-                          Изменить
-                        </Button>
-                        <Button type="button" variant="ghost" onClick={() => remove(g.id)}>
-                          Удалить
-                        </Button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+            <div>
+              <dt className="text-[11px] text-muted">Максимум</dt>
+              <dd>{goal.maxAmount != null ? formatRub(goal.maxAmount) : "—"}</dd>
             </div>
           </>
         )}
-      </Card>
-    </div>
+        {funding && (
+          <>
+            <div>
+              <dt className="text-[11px] text-muted">Взнос / мес (нужно)</dt>
+              <dd className="font-medium">
+                {formatRub(funding.requiredMonthlyDesired)}
+              </dd>
+            </div>
+            <div>
+              <dt className="text-[11px] text-muted">Из профицита плана</dt>
+              <dd>{formatRub(funding.allocatedMonthlySaving)}</dd>
+            </div>
+            <div>
+              <dt className="text-[11px] text-muted">Цель с инфляцией</dt>
+              <dd>{formatRub(funding.inflationAdjustedDesired)}</dd>
+            </div>
+            <div>
+              <dt className="text-[11px] text-muted">Доступно к сроку*</dt>
+              <dd>{formatRub(funding.availableAtTarget)}</dd>
+            </div>
+          </>
+        )}
+      </dl>
+
+      {stages.length > 0 && (
+        <div>
+          <p className="text-[11px] font-medium uppercase tracking-wide text-muted">
+            Этапы ({stages.length})
+          </p>
+          <ul className="mt-1 space-y-0.5 text-xs">
+            {stages.map((s) => (
+              <li key={s.id} className="flex justify-between gap-2">
+                <span className="truncate text-muted">
+                  {s.label} · {formatGoalDate(s.targetDate)}
+                </span>
+                <span>{formatRub(s.amount)}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {funding && funding.requiredMonthlyDesired > funding.allocatedMonthlySaving + 1 && (
+        <p className="text-xs text-amber-700">
+          Не хватает ≈{" "}
+          {formatRub(funding.requiredMonthlyDesired - funding.allocatedMonthlySaving)}
+          /мес при текущем приоритете и прочих целях.
+        </p>
+      )}
+
+      <p className="text-[10px] text-muted">
+        * после резерва под цели с более высоким приоритетом
+      </p>
+
+      <div className="flex gap-2 border-t border-border pt-3">
+        <Button type="button" variant="secondary" className="flex-1" onClick={onEdit}>
+          Изменить
+        </Button>
+        <Button type="button" variant="ghost" className="flex-1" onClick={onDelete}>
+          Удалить
+        </Button>
+      </div>
+    </Card>
   );
 }
 
@@ -219,8 +313,14 @@ function GoalEditor({
 
   const [name, setName] = useState(existing?.name ?? "");
   const [goalType, setGoalType] = useState<GoalType>(existing?.goalType ?? "HOME");
-  const [amount, setAmount] = useState(
+  const [desired, setDesired] = useState(
     existing ? formatMoneyInput(String(existing.targetAmountNominal)) : "",
+  );
+  const [minAmount, setMinAmount] = useState(
+    existing?.minAmount != null ? formatMoneyInput(String(existing.minAmount)) : "",
+  );
+  const [maxAmount, setMaxAmount] = useState(
+    existing?.maxAmount != null ? formatMoneyInput(String(existing.maxAmount)) : "",
   );
   const [years, setYears] = useState(defaultYears);
   const [priority, setPriority] = useState(String(existing?.priority ?? 1));
@@ -231,18 +331,61 @@ function GoalEditor({
     existing?.strategy ?? "SYSTEMATIC",
   );
   const [linkedAssetId, setLinkedAssetId] = useState(existing?.linkedAssetId ?? "");
+  const [stages, setStages] = useState<StageDraft[]>(() => {
+    const list = existing?.stages ?? [];
+    if (!list.length) return [];
+    const nowY = new Date().getFullYear();
+    return list.map((s) => ({
+      id: s.id,
+      label: s.label,
+      amount: formatMoneyInput(String(s.amount)),
+      years: String(Math.max(1, new Date(s.targetDate).getFullYear() - nowY)),
+    }));
+  });
   const [saving, setSaving] = useState(false);
+
+  function updateStage(id: string, patch: Partial<StageDraft>) {
+    setStages((prev) => prev.map((s) => (s.id === id ? { ...s, ...patch } : s)));
+  }
 
   async function save() {
     if (!name.trim()) {
       toast.error("Укажите название цели");
       return;
     }
-    const amountNum = parsePositiveNumber(amount, "Целевая сумма");
-    if (!amountNum.ok || amountNum.value === 0) {
-      toast.error(amountNum.ok ? "Сумма должна быть больше нуля" : amountNum.message);
+    const desiredNum = parsePositiveNumber(desired, "Желаемая сумма");
+    if (!desiredNum.ok || desiredNum.value === 0) {
+      toast.error(desiredNum.ok ? "Сумма должна быть больше нуля" : desiredNum.message);
       return;
     }
+
+    let minVal: number | null = null;
+    if (minAmount.trim()) {
+      const m = parsePositiveNumber(minAmount, "Минимум");
+      if (!m.ok || m.value === 0) {
+        toast.error(m.ok ? "Минимум должен быть > 0" : m.message);
+        return;
+      }
+      minVal = m.value;
+    }
+    let maxVal: number | null = null;
+    if (maxAmount.trim()) {
+      const m = parsePositiveNumber(maxAmount, "Максимум");
+      if (!m.ok || m.value === 0) {
+        toast.error(m.ok ? "Максимум должен быть > 0" : m.message);
+        return;
+      }
+      maxVal = m.value;
+    }
+    if (minVal != null && minVal > desiredNum.value) {
+      toast.error("Минимум не может быть больше желаемой суммы");
+      return;
+    }
+    if (maxVal != null && maxVal < desiredNum.value) {
+      toast.error("Максимум не может быть меньше желаемой суммы");
+      return;
+    }
+
     const yearsNum = parsePositiveNumber(years, "Срок");
     if (!yearsNum.ok || yearsNum.value === 0) {
       toast.error("Укажите срок в годах");
@@ -254,16 +397,57 @@ function GoalEditor({
       return;
     }
 
+    const parsedStages: Array<{
+      id: string;
+      label: string;
+      amount: number;
+      targetDate: string;
+    }> = [];
+    for (const st of stages) {
+      if (!st.label.trim()) {
+        toast.error("У каждого этапа должно быть название");
+        return;
+      }
+      const amt = parsePositiveNumber(st.amount, `Этап «${st.label}»`);
+      if (!amt.ok || amt.value === 0) {
+        toast.error(amt.ok ? "Сумма этапа > 0" : amt.message);
+        return;
+      }
+      const y = parsePositiveNumber(st.years, `Срок этапа «${st.label}»`);
+      if (!y.ok || y.value === 0) {
+        toast.error("Укажите срок этапа в годах");
+        return;
+      }
+      const d = new Date();
+      d.setFullYear(d.getFullYear() + y.value);
+      parsedStages.push({
+        id: st.id,
+        label: st.label.trim(),
+        amount: amt.value,
+        targetDate: d.toISOString(),
+      });
+    }
+
     const targetDate = new Date();
-    targetDate.setFullYear(targetDate.getFullYear() + yearsNum.value);
+    if (parsedStages.length > 0) {
+      const last = parsedStages.reduce((a, b) =>
+        a.targetDate > b.targetDate ? a : b,
+      );
+      targetDate.setTime(new Date(last.targetDate).getTime());
+    } else {
+      targetDate.setFullYear(targetDate.getFullYear() + yearsNum.value);
+    }
 
     setSaving(true);
     try {
       const body = {
         name: name.trim(),
         goalType,
-        targetAmountNominal: amountNum.value,
+        targetAmountNominal: desiredNum.value,
         targetDate: targetDate.toISOString(),
+        minAmount: minVal,
+        maxAmount: maxVal,
+        stages: parsedStages,
         priority: priorityNum,
         allowPartialFunding,
         strategy,
@@ -293,12 +477,12 @@ function GoalEditor({
   }
 
   return (
-    <Card className="border-accent/20 bg-accent-light/30">
+    <Card className="border-accent/20 bg-accent-light/30 !p-4">
       <FormPanelHeader
         title={existing ? "Редактирование цели" : "Новая цель"}
         onCancel={onBack}
       />
-      <div className="mt-4 grid gap-4 sm:grid-cols-2">
+      <div className="mt-3 grid gap-3 sm:grid-cols-2">
         <FormField label="Название" htmlFor="goal-name">
           <Input
             id="goal-name"
@@ -307,7 +491,7 @@ function GoalEditor({
             placeholder="Квартира / Пенсия"
           />
         </FormField>
-        <FormField label="Тип цели" htmlFor="goal-type" hint="Для чего копите: жильё, подушка, учёба и т.д.">
+        <FormField label="Тип цели" htmlFor="goal-type">
           <select
             id="goal-type"
             className={selectClass}
@@ -321,12 +505,12 @@ function GoalEditor({
             ))}
           </select>
         </FormField>
-        <FormField label="Целевая сумма, ₽" htmlFor="goal-amount" hint={FIELD_HINTS.goalAmount}>
+        <FormField label="Желаемая сумма, ₽" htmlFor="goal-desired" hint={FIELD_HINTS.goalAmount}>
           <Input
-            id="goal-amount"
+            id="goal-desired"
             inputMode="numeric"
-            value={amount}
-            onChange={(e) => setAmount(formatMoneyInput(e.target.value))}
+            value={desired}
+            onChange={(e) => setDesired(formatMoneyInput(e.target.value))}
             placeholder="6 000 000"
           />
         </FormField>
@@ -337,49 +521,135 @@ function GoalEditor({
             value={years}
             onChange={(e) => setYears(e.target.value.replace(/\D/g, "").slice(0, 2))}
             placeholder="7"
+            disabled={stages.length > 0}
           />
         </FormField>
+        <FormField label="Минимум, ₽" htmlFor="goal-min" hint="Нижняя планка: «хоть столько»">
+          <Input
+            id="goal-min"
+            inputMode="numeric"
+            value={minAmount}
+            onChange={(e) => setMinAmount(formatMoneyInput(e.target.value))}
+            placeholder="необязательно"
+          />
+        </FormField>
+        <FormField label="Максимум, ₽" htmlFor="goal-max" hint="Верхняя планка накоплений">
+          <Input
+            id="goal-max"
+            inputMode="numeric"
+            value={maxAmount}
+            onChange={(e) => setMaxAmount(formatMoneyInput(e.target.value))}
+            placeholder="необязательно"
+          />
+        </FormField>
+        <FormField label="Приоритет" htmlFor="goal-priority" hint={FIELD_HINTS.goalPriority}>
+          <Input
+            id="goal-priority"
+            inputMode="numeric"
+            value={priority}
+            onChange={(e) => setPriority(e.target.value.replace(/\D/g, "").slice(0, 2))}
+            placeholder="1"
+          />
+        </FormField>
+        <FormField label="Стратегия" htmlFor="goal-strategy" hint={FIELD_HINTS.goalStrategy}>
+          <select
+            id="goal-strategy"
+            className={selectClass}
+            value={strategy}
+            onChange={(e) => setStrategy(e.target.value as GoalStrategy)}
+          >
+            {GOAL_STRATEGY_OPTIONS.map((o) => (
+              <option key={o.value} value={o.value}>
+                {o.label}
+              </option>
+            ))}
+          </select>
+        </FormField>
       </div>
-      <details className="mt-4">
-        <summary className="cursor-pointer text-sm font-medium text-muted hover:text-foreground">
+
+      <div className="mt-4 space-y-2">
+        <div className="flex items-center justify-between gap-2">
+          <p className="text-sm font-medium">Этапы выплат</p>
+          <Button
+            type="button"
+            variant="secondary"
+            className="text-xs"
+            disabled={stages.length >= 12}
+            onClick={() =>
+              setStages((prev) => [
+                ...prev,
+                {
+                  id: newStageId(),
+                  label: `Этап ${prev.length + 1}`,
+                  amount: "",
+                  years: years || "5",
+                },
+              ])
+            }
+          >
+            + Этап
+          </Button>
+        </div>
+        <HelpHint>
+          Несколько сумм в разные годы (например, взносы за обучение). Без этапов —
+          одна выплата к сроку выше.
+        </HelpHint>
+        {stages.map((st) => (
+          <div
+            key={st.id}
+            className="grid gap-2 rounded-lg border border-border bg-card p-2 sm:grid-cols-[1fr_1fr_5rem_auto]"
+          >
+            <Input
+              value={st.label}
+              onChange={(e) => updateStage(st.id, { label: e.target.value })}
+              placeholder="Название этапа"
+            />
+            <Input
+              inputMode="numeric"
+              value={st.amount}
+              onChange={(e) =>
+                updateStage(st.id, { amount: formatMoneyInput(e.target.value) })
+              }
+              placeholder="Сумма"
+            />
+            <Input
+              inputMode="numeric"
+              value={st.years}
+              onChange={(e) =>
+                updateStage(st.id, {
+                  years: e.target.value.replace(/\D/g, "").slice(0, 2),
+                })
+              }
+              placeholder="Лет"
+            />
+            <Button
+              type="button"
+              variant="ghost"
+              onClick={() => setStages((prev) => prev.filter((x) => x.id !== st.id))}
+            >
+              ×
+            </Button>
+          </div>
+        ))}
+      </div>
+
+      <details className="mt-3">
+        <summary className="cursor-pointer text-sm text-muted hover:text-foreground">
           Ещё настройки
         </summary>
-        <div className="mt-4 grid gap-4 sm:grid-cols-2">
-          <FormField label="Приоритет" htmlFor="goal-priority" hint={FIELD_HINTS.goalPriority}>
-            <Input
-              id="goal-priority"
-              inputMode="numeric"
-              value={priority}
-              onChange={(e) => setPriority(e.target.value.replace(/\D/g, "").slice(0, 2))}
-              placeholder="1"
-            />
-          </FormField>
-          <FormField label="Стратегия накопления" htmlFor="goal-strategy" hint={FIELD_HINTS.goalStrategy}>
-            <select
-              id="goal-strategy"
-              className={selectClass}
-              value={strategy}
-              onChange={(e) => setStrategy(e.target.value as GoalStrategy)}
-            >
-              {GOAL_STRATEGY_OPTIONS.map((o) => (
-                <option key={o.value} value={o.value}>
-                  {o.label}
-                </option>
-              ))}
-            </select>
-          </FormField>
-          <FormField label="Частичное финансирование" htmlFor="goal-partial" hint="Разрешить копить не всю сумму сразу, если денег не хватает">
+        <div className="mt-3 grid gap-3 sm:grid-cols-2">
+          <FormField label="Частичное финансирование" htmlFor="goal-partial">
             <select
               id="goal-partial"
               className={selectClass}
               value={allowPartialFunding ? "1" : "0"}
               onChange={(e) => setAllowPartialFunding(e.target.value === "1")}
             >
-              <option value="1">Да, можно неполную сумму</option>
+              <option value="1">Да</option>
               <option value="0">Нет — только полная сумма</option>
             </select>
           </FormField>
-          <FormField label="Привязанный актив" htmlFor="goal-asset" hint="С какого счёта планируете брать деньги (необязательно)">
+          <FormField label="Привязанный актив" htmlFor="goal-asset">
             <select
               id="goal-asset"
               className={selectClass}
@@ -396,7 +666,8 @@ function GoalEditor({
           </FormField>
         </div>
       </details>
-      <div className="mt-6 flex gap-2">
+
+      <div className="mt-4 flex gap-2">
         <Button type="button" onClick={save} disabled={saving}>
           {saving ? "Сохранение…" : "Сохранить"}
         </Button>

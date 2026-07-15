@@ -100,7 +100,13 @@ export function runMonteCarlo(
       const inflatedTarget =
         g.targetAmountNominal *
         Math.pow(1 + baseInput.baseInflationPct / 100, g.targetMonthIndex / 12);
-      const threshold = g.allowPartialFunding ? 0.8 : 1;
+      const minShare =
+        g.minAmount != null && g.targetAmountNominal > 0
+          ? g.minAmount / g.targetAmountNominal
+          : g.allowPartialFunding
+            ? 0.8
+            : 1;
+      const threshold = Math.min(1, Math.max(0.5, minShare));
       goalHits[g.id].push(atGoal >= inflatedTarget * threshold ? 1 : 0);
     }
 

@@ -53,6 +53,13 @@ export const expenseSchema = z.object({
   growthRatePct: z.number().default(0),
 });
 
+export const goalStageSchema = z.object({
+  id: z.string().min(1),
+  label: z.string().min(1).max(80),
+  amount: z.number().positive(),
+  targetDate: z.string().datetime(),
+});
+
 export const goalSchema = z.object({
   name: z.string().min(1),
   goalType: z
@@ -69,11 +76,29 @@ export const goalSchema = z.object({
     .default("OTHER"),
   targetAmountNominal: z.number().positive(),
   targetDate: z.string().datetime(),
+  minAmount: z.number().positive().nullable().optional(),
+  maxAmount: z.number().positive().nullable().optional(),
+  stages: z.array(goalStageSchema).max(12).optional().default([]),
   currency: z.string().default("RUB"),
   priority: z.number().int().min(1).max(99).default(1),
   allowPartialFunding: z.boolean().default(true),
   strategy: z.enum(["SYSTEMATIC", "LUMP_SUM", "BALANCED"]).default("SYSTEMATIC"),
   linkedAssetId: z.string().nullable().optional(),
+}).superRefine((data, ctx) => {
+  if (data.minAmount != null && data.minAmount > data.targetAmountNominal) {
+    ctx.addIssue({
+      code: "custom",
+      message: "Минимум не может быть больше желаемой суммы",
+      path: ["minAmount"],
+    });
+  }
+  if (data.maxAmount != null && data.maxAmount < data.targetAmountNominal) {
+    ctx.addIssue({
+      code: "custom",
+      message: "Максимум не может быть меньше желаемой суммы",
+      path: ["maxAmount"],
+    });
+  }
 });
 
 export const liabilityTypeEnum = z.enum([

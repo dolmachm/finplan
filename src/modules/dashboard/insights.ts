@@ -12,7 +12,7 @@ import { formatRub } from "@/shared/format";
 const LIQUID_TYPES = new Set(["CASH", "BANK_ACCOUNT", "DEPOSIT"]);
 
 export type InsightSeverity = "critical" | "warning" | "positive" | "info";
-export type DashboardCta = "assets" | "plan" | "iplan" | "scenarios" | "export";
+export type DashboardCta = "assets" | "plan" | "export";
 
 export type DashboardInsight = {
   id: string;
@@ -311,7 +311,7 @@ export function buildInsights(
         severity: "positive",
         title: "Направьте избыток в план",
         body: "Используйте профицит для взносов по целям и инвест-плана.",
-        ctaTab: "iplan",
+        ctaTab: "plan",
         ctaLabel: "Инвест-план",
       });
     } else {
@@ -382,7 +382,7 @@ export function buildInsights(
         severity: "positive",
         title: "Низкая долговая нагрузка",
         body: "Можно сместить фокус на инвестиции и долгосрочные цели.",
-        ctaTab: "iplan",
+        ctaTab: "plan",
       });
     }
     if (m.dividendMonthly < m.debtServiceMonthly && m.investTotal > 0) {
@@ -454,7 +454,7 @@ export function buildInsights(
         severity: "warning",
         title: "Избыток «спящей» ликвидности",
         body: `Больше 12 мес. расходов на счетах (≈ ${m.cushionMonths.toFixed(0)}). Часть можно направить в инвестиции.`,
-        ctaTab: "iplan",
+        ctaTab: "plan",
       });
       push(recs, {
         id: "rec-idle-invest",
@@ -462,7 +462,7 @@ export function buildInsights(
         severity: "info",
         title: "Оптимизируйте избыток ликвидности",
         body: "Оставьте 3–6 месяцев резерва, остальное — в цели и портфель.",
-        ctaTab: "iplan",
+        ctaTab: "plan",
         ctaLabel: "Инвест-план",
       });
     }
@@ -485,7 +485,7 @@ export function buildInsights(
         severity: "warning",
         title: "Слишком много ликвидности (>60%)",
         body: "Снизьте долю кэша до 20–50% и направьте избыток в инвестиции.",
-        ctaTab: "iplan",
+        ctaTab: "plan",
       });
     }
   }
@@ -499,7 +499,7 @@ export function buildInsights(
         severity: "warning",
         title: "Портфель слишком консервативный",
         body: `Доходность ≈ ${m.weightedReturnPct.toFixed(1)}% при риске ≈ ${m.weightedVolPct.toFixed(1)}%.`,
-        ctaTab: "iplan",
+        ctaTab: "plan",
       });
     }
     if (m.weightedVolPct > 10 && m.weightedReturnPct < 12) {
@@ -509,7 +509,7 @@ export function buildInsights(
         severity: "warning",
         title: "Риск высокий при умеренной доходности",
         body: `Волатильность ≈ ${m.weightedVolPct.toFixed(1)}% при доходности ≈ ${m.weightedReturnPct.toFixed(1)}%.`,
-        ctaTab: "iplan",
+        ctaTab: "plan",
       });
     }
     if (m.weightedReturnPct >= 10 && m.weightedVolPct <= 18) {
@@ -555,7 +555,7 @@ export function buildInsights(
         severity: "info",
         title: "Доля инвестиций < 10% капитала",
         body: "При комфортном долге и подушке цель — 15–30% в инвестициях.",
-        ctaTab: "iplan",
+        ctaTab: "plan",
       });
     }
   } else if (m.hasAssets && m.surplusMonthly > 0) {
@@ -597,7 +597,7 @@ export function buildInsights(
           severity: "info",
           title: "Если откладывать на 20% больше",
           body: `Взнос ≈ ${formatRub(m.surplusMonthly * boost)}/мес заметно сократит срок достижения целей.`,
-          ctaTab: "iplan",
+          ctaTab: "plan",
         });
       }
     } else if (m.goalsFundable === true) {
@@ -618,8 +618,8 @@ export function buildInsights(
       severity: "info",
       title: "Добавьте сценарное планирование",
       body: "Проверьте устойчивость плана к потере дохода или шоку инфляции.",
-      ctaTab: "scenarios",
-      ctaLabel: "Сценарии",
+      ctaTab: "plan",
+      ctaLabel: "К плану",
     });
   }
 

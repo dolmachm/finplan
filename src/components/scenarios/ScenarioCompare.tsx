@@ -43,9 +43,11 @@ function fmtRub(n: number) {
 export function ScenarioCompare({
   scenarios,
   onUnauthorized,
+  compact = false,
 }: {
   scenarios: ScenarioRow[];
   onUnauthorized: (res: Response) => boolean;
+  compact?: boolean;
 }) {
   const [selected, setSelected] = useState<string[]>([]);
   const [comparisons, setComparisons] = useState<Comparison[]>([]);
@@ -106,13 +108,15 @@ export function ScenarioCompare({
   }
 
   return (
-    <Card className="space-y-4">
+    <Card className={compact ? "space-y-3 !p-3" : "space-y-4"}>
       <div>
-        <h2 className="font-medium">Сравнение сценариев</h2>
-        <HelpHint>
-          Выберите до 5 сохранённых сценариев — базовый план всегда в сравнении. CFP: «what-if»
-          рядом.
-        </HelpHint>
+        <h2 className={compact ? "text-sm font-medium" : "font-medium"}>Сравнение сценариев</h2>
+        {!compact && (
+          <HelpHint>
+            Выберите до 5 сохранённых сценариев — базовый план всегда в сравнении. CFP: «what-if»
+            рядом.
+          </HelpHint>
+        )}
       </div>
       <div className="flex flex-wrap gap-2">
         {scenarios.map((s) => (

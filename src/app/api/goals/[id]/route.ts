@@ -28,7 +28,7 @@ export async function PATCH(
   }
   const parsed = parseJsonBody(patchSchema, await req.json());
   if (!parsed.ok) return parsed.response;
-  const { targetDate, ...rest } = parsed.data;
+  const { targetDate, stages, ...rest } = parsed.data;
   const mergedDate = targetDate ? new Date(targetDate) : current.targetDate;
   const existing = await prisma.goal.findMany({ where: { userId } });
   if (
@@ -50,6 +50,14 @@ export async function PATCH(
     data: {
       ...rest,
       ...(targetDate ? { targetDate: mergedDate } : {}),
+      ...(stages
+        ? {
+            stages: stages.map((s) => ({
+              ...s,
+              targetDate: new Date(s.targetDate),
+            })),
+          }
+        : {}),
     },
   });
   await recordRevision({

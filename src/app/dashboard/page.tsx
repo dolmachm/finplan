@@ -9,24 +9,20 @@ import {
 } from "@/components/layout/DashboardShell";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { NetWorthChart } from "@/components/charts/NetWorthChart";
-import { MonteCarloBandChart } from "@/components/charts/MonteCarloBandChart";
 import { GoalsPanel } from "@/components/finance/GoalsPanel";
 import {
   FinanceDataPanel,
   type FinanceDataStatus,
 } from "@/components/finance/FinanceDataPanel";
 import { HomeDashboard } from "@/components/finance/HomeDashboard";
-import { InvestmentPlanPanel } from "@/components/finance/InvestmentPlanPanel";
 import { MacroSettingsCard } from "@/components/finance/MacroSettingsCard";
 import { ChangeHistoryPanel } from "@/components/finance/ChangeHistoryPanel";
-import { ScenariosPanel } from "@/components/scenarios/ScenariosPanel";
+import { PlanWorkspace } from "@/components/plan/PlanWorkspace";
 import { FormError } from "@/components/ui/FormError";
 import { HelpHint } from "@/components/ui/FormField";
 import { toast } from "@/components/ui/ToastProvider";
 import { FEATURE_HINTS } from "@/content/help";
 import { readApiError, NETWORK_ERROR_MESSAGE } from "@/shared/api-client";
-import { formatRub } from "@/shared/format";
 import type {
   Asset,
   Expense,
@@ -43,7 +39,9 @@ interface Projection {
       goalId: string;
       requiredMonthlySaving: number;
       projectedBalanceAtTarget: number;
-      inflationAdjustedTarget: number;
+      inflationAdjustedDesired?: number;
+      inflationAdjustedTarget?: number;
+      achievability?: string;
     }>;
     summary: {
       finalNetWorth: number;
@@ -218,7 +216,7 @@ export default function DashboardPage() {
   }, [scenarios, viewScenarioId]);
 
   useEffect(() => {
-    if (tab === "home") loadHomeSnapshot();
+    if (tab === "home" || tab === "plan") loadHomeSnapshot();
   }, [tab, loadHomeSnapshot]);
 
   useEffect(() => {
@@ -336,97 +334,22 @@ export default function DashboardPage() {
           />
         )}
 
-        {tab === "plan" && projection && viewScenarioId && (
-          <div className="space-y-8">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <HelpHint>
-                Выберите сценарий для просмотра прогноза. Активный сценарий отмечен — его можно сменить на вкладке «Сценарии».
-              </HelpHint>
-              <label className="flex items-center gap-2 text-sm">
-                <span className="text-muted">Отображать:</span>
-                <select
-                  value={viewScenarioId}
-                  onChange={(e) => setViewScenarioId(e.target.value)}
-                  disabled={projectionLoading}
-                  className="rounded-lg border border-border bg-card px-3 py-2 text-sm"
-                >
-                  <option value="base">Базовый (без правил)</option>
-                  {scenarios.map((s) => (
-                    <option key={s.id} value={s.id}>
-                      {s.name}
-                      {s.isActive ? " • активный" : ""}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            </div>
-
-            <section className="grid gap-4 sm:grid-cols-3">
-              <SummaryCard
-                title="Рекомендуемый взнос / мес"
-                hint="Сколько откладывать ежемесячно, чтобы успеть к целям"
-                value={projection.result.summary.recommendedMonthlySaving}
-              />
-              <SummaryCard
-                title="Средний профицит / мес"
-                hint="Доходы минус расходы и долги в среднем за горизонт"
-                value={projection.result.summary.avgMonthlySurplus}
-              />
-              <SummaryCard
-                title="Чистые активы (конец горизонта)"
-                hint="Прогноз накоплений к концу выбранного периода"
-                value={projection.result.summary.finalNetWorth}
-              />
-            </section>
-
-            <Card>
-              <h2 className="font-medium">
-                Timeline — {projection.scenario}
-                {projection.isActive && (
-                  <span className="ml-2 text-xs font-normal text-brand">активный</span>
-                )}
-              </h2>
-              {projectionLoading && (
-                <p className="mt-1 text-xs text-muted">Пересчёт…</p>
-              )}
-              <NetWorthChart data={projection.result.monthly} />
-            </Card>
-
-            {simJob?.result && (
-              <Card>
-                <h2 className="font-medium">Monte Carlo</h2>
-                <MonteCarloBandChart paths={simJob.result.samplePaths} />
-                <ul className="mt-4 space-y-2 text-sm">
-                  {simJob.result.goalProbabilities.map((g) => (
-                    <li key={g.goalId}>
-                      Цель: вероятность {(g.probability * 100).toFixed(1)}%,
-                      медиана {formatRub(g.median)}, 5%: {formatRub(g.p5)},
-                      95%: {formatRub(g.p95)}
-                    </li>
-                  ))}
-                </ul>
-              </Card>
-            )}
-
-            <div className="flex flex-wrap items-end gap-3">
-              <div className="flex-1 min-w-[200px]">
-                <HelpHint>{FEATURE_HINTS.monteCarlo}</HelpHint>
-              </div>
-              <Button type="button" onClick={runSimulation} disabled={simBusy}>
-                {simBusy ? "Расчёт…" : "Запустить Monte Carlo (5k)"}
-              </Button>
-              {simJob && (
-                <span className="text-sm text-muted">
-                  Статус: {simJob.status} ({simJob.progressPct}%)
-                </span>
-              )}
-            </div>
-            <FormError message={simError} />
-          </div>
-        )}
-
-        {tab === "iplan" && (
-          <InvestmentPlanPanel onUnauthorized={handleUnauthorized} />
+        {tab === "plan" && viewScenarioId && (
+          <PlanWorkspace
+            insightsInput={enrichedHome}
+            projection={projection}
+            projectionLoading={projectionLoading}
+            viewScenarioId={viewScenarioId}
+            onViewScenarioChange={setViewScenarioId}
+            scenarios={scenarios}
+            onActivateScenario={activateScenario}
+            onScenariosRefresh={loadScenarios}
+            simJob={simJob}
+            simBusy={simBusy}
+            simError={simError}
+            onRunSimulation={runSimulation}
+            onUnauthorized={handleUnauthorized}
+          />
         )}
 
         {tab === "assets" && (
@@ -435,7 +358,6 @@ export default function DashboardPage() {
               status={dataStatus}
               goalCount={goalCount}
               onGoPlan={() => setTab("plan")}
-              onGoIplan={() => setTab("iplan")}
             />
             <FinanceDataPanel
               onQuickAdd={quickAddAsset}
@@ -459,15 +381,6 @@ export default function DashboardPage() {
           </div>
         )}
 
-        {tab === "scenarios" && (
-          <ScenariosPanel
-            scenarios={scenarios}
-            onRefresh={loadScenarios}
-            onActivate={activateScenario}
-            onUnauthorized={handleUnauthorized}
-          />
-        )}
-
         {tab === "export" && (
           <Card className="space-y-6">
             <div>
@@ -487,34 +400,14 @@ export default function DashboardPage() {
   );
 }
 
-function SummaryCard({
-  title,
-  hint,
-  value,
-}: {
-  title: string;
-  hint?: string;
-  value: number;
-}) {
-  return (
-    <Card className="p-4">
-      <p className="text-xs text-muted">{title}</p>
-      {hint && <p className="mt-0.5 text-[11px] text-muted/80">{hint}</p>}
-      <p className="mt-1 text-lg font-semibold">{formatRub(value)}</p>
-    </Card>
-  );
-}
-
 function CfpProgressCard({
   status,
   goalCount,
   onGoPlan,
-  onGoIplan,
 }: {
   status: FinanceDataStatus | null;
   goalCount: number;
   onGoPlan: () => void;
-  onGoIplan: () => void;
 }) {
   const step1 = (status?.assetCount ?? 0) + (status?.liabilityCount ?? 0) > 0;
   const step2 = (status?.incomeCount ?? 0) > 0 && (status?.expenseCount ?? 0) > 0;
@@ -530,7 +423,7 @@ function CfpProgressCard({
       ? "Добавьте доходы и расходы"
       : !step3
         ? "Добавьте хотя бы одну цель"
-        : "Данные готовы — откройте «План» или «Инвест-план»";
+        : "Данные готовы — откройте «План»";
 
   return (
     <Card className="flex flex-wrap items-center justify-between gap-4 p-4">
@@ -545,14 +438,9 @@ function CfpProgressCard({
         </div>
         <HelpHint className="mt-2">{next}</HelpHint>
       </div>
-      <div className="flex flex-wrap gap-2">
-        <Button type="button" variant="secondary" onClick={onGoPlan}>
-          К плану
-        </Button>
-        <Button type="button" variant="secondary" onClick={onGoIplan}>
-          К инвест-плану
-        </Button>
-      </div>
+      <Button type="button" variant="secondary" onClick={onGoPlan}>
+        К плану
+      </Button>
     </Card>
   );
 }

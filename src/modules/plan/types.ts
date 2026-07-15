@@ -40,9 +40,48 @@ export interface PlanInput {
     targetMonthIndex: number;
     priority: number;
     allowPartialFunding: boolean;
+    minAmount: number | null;
+    maxAmount: number | null;
+    stages: Array<{
+      id: string;
+      label: string;
+      amount: number;
+      monthIndex: number;
+    }>;
   }>;
   scenarioModifiers?: ScenarioModifiers;
 }
+
+export type GoalFundingStageResult = {
+  id: string;
+  label: string;
+  monthIndex: number;
+  amountInflated: number;
+  requiredMonthly: number;
+  funded: boolean;
+};
+
+export type GoalFundingResult = {
+  goalId: string;
+  priority: number;
+  monthsToGoal: number;
+  minAmount: number;
+  desiredAmount: number;
+  maxAmount: number;
+  inflationAdjustedMin: number;
+  inflationAdjustedDesired: number;
+  inflationAdjustedMax: number;
+  projectedBalanceAtTarget: number;
+  reservedByHigherPriority: number;
+  availableAtTarget: number;
+  requiredMonthlySaving: number;
+  requiredMonthlyMin: number;
+  requiredMonthlyDesired: number;
+  requiredMonthlyMax: number;
+  allocatedMonthlySaving: number;
+  achievability: "max" | "desired" | "min" | "none";
+  stages: GoalFundingStageResult[];
+};
 
 export interface ScenarioModifiers {
   returnMultiplier?: number;
@@ -87,12 +126,7 @@ export interface MonthlyProjection {
 
 export interface DeterministicPlanResult {
   monthly: MonthlyProjection[];
-  goalFunding: Array<{
-    goalId: string;
-    requiredMonthlySaving: number;
-    projectedBalanceAtTarget: number;
-    inflationAdjustedTarget: number;
-  }>;
+  goalFunding: GoalFundingResult[];
   summary: {
     finalNetWorth: number;
     avgMonthlySurplus: number;

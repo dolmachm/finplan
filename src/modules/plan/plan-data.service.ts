@@ -58,16 +58,34 @@ export async function loadPlanInputForUser(userId: string): Promise<PlanInput> {
       growthRatePct: e.growthRatePct,
       isEssential: e.isEssential,
     })),
-    goals: goals.map((g) => ({
-      id: g.id,
-      name: g.name,
-      targetAmountNominal: g.targetAmountNominal,
-      targetMonthIndex: Math.max(
-        0,
-        differenceInMonths(startOfMonth(g.targetDate), now),
-      ),
-      priority: g.priority ?? 1,
-      allowPartialFunding: g.allowPartialFunding ?? true,
-    })),
+    goals: goals.map((g) => {
+      const stages = (g.stages ?? []).map((s) => ({
+        id: s.id,
+        label: s.label,
+        amount: s.amount,
+        monthIndex: Math.max(
+          0,
+          differenceInMonths(startOfMonth(new Date(s.targetDate)), now),
+        ),
+      }));
+      const lastStageMonth =
+        stages.length > 0
+          ? Math.max(...stages.map((s) => s.monthIndex))
+          : Math.max(
+              0,
+              differenceInMonths(startOfMonth(g.targetDate), now),
+            );
+      return {
+        id: g.id,
+        name: g.name,
+        targetAmountNominal: g.targetAmountNominal,
+        targetMonthIndex: lastStageMonth,
+        priority: g.priority ?? 1,
+        allowPartialFunding: g.allowPartialFunding ?? true,
+        minAmount: g.minAmount ?? null,
+        maxAmount: g.maxAmount ?? null,
+        stages,
+      };
+    }),
   };
 }

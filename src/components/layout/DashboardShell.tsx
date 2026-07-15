@@ -11,8 +11,6 @@ const navItems = [
   { id: "home", label: "Главная" },
   { id: "assets", label: "Данные" },
   { id: "plan", label: "План" },
-  { id: "iplan", label: "Инвест-план" },
-  { id: "scenarios", label: "Сценарии" },
   { id: "export", label: "Экспорт" },
 ] as const;
 

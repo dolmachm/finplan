@@ -76,9 +76,15 @@ type ApiPayload = {
 export function InvestmentPlanPanel({
   onUnauthorized,
   onAssetsChanged,
+  compact = false,
+  hideMcChart = false,
+  hideHistory = false,
 }: {
   onUnauthorized: (res: Response) => boolean;
   onAssetsChanged?: () => void;
+  compact?: boolean;
+  hideMcChart?: boolean;
+  hideHistory?: boolean;
 }) {
   const [data, setData] = useState<ApiPayload | null>(null);
   const [loading, setLoading] = useState(true);
@@ -401,16 +407,32 @@ export function InvestmentPlanPanel({
         ? "index"
         : "year";
 
+  const fieldCls = compact
+    ? "w-full rounded-lg border border-border bg-card px-2 py-1.5 text-xs"
+    : "w-full rounded-lg border border-border bg-card px-3 py-2.5 text-sm";
+
   return (
-    <div className="space-y-8">
-      <HelpHint>{FEATURE_HINTS.iplan}</HelpHint>
+    <div className={compact ? "space-y-3" : "space-y-8"}>
+      {!compact && <HelpHint>{FEATURE_HINTS.iplan}</HelpHint>}
 
       {budgetError && (
-        <div className="rounded-lg border border-danger/40 bg-danger/5 px-4 py-3 text-sm text-danger">
+        <div className="rounded-lg border border-danger/40 bg-danger/5 px-3 py-2 text-xs text-danger">
           {budgetError}
         </div>
       )}
 
+      {compact ? (
+        <Card className="!p-3">
+          <p className="text-xs text-muted">
+            Профицит (лимит взносов):{" "}
+            <span className="font-semibold text-brand">
+              {formatRub(data.surplusMonthly)}/мес
+            </span>
+            {" · "}
+            {formatRub(data.surplusAnnual)}/год
+          </p>
+        </Card>
+      ) : (
       <Card className="space-y-3">
         <h2 className="font-medium">Бюджет из вкладки «Данные»</h2>
         <HelpHint>
@@ -479,6 +501,7 @@ export function InvestmentPlanPanel({
           </div>
         </div>
       </Card>
+      )}
 
       <section className="flex flex-wrap items-center gap-2">
         {plan.variants.map((v) => (
@@ -494,8 +517,12 @@ export function InvestmentPlanPanel({
             }
             className={
               v.id === plan.activeVariantId
-                ? "rounded-lg bg-brand px-3 py-2 text-sm text-white"
-                : "rounded-lg border border-border bg-card px-3 py-2 text-sm hover:bg-muted/40"
+                ? compact
+                  ? "rounded-lg bg-brand px-2 py-1 text-xs text-white"
+                  : "rounded-lg bg-brand px-3 py-2 text-sm text-white"
+                : compact
+                  ? "rounded-lg border border-border bg-card px-2 py-1 text-xs hover:bg-muted/40"
+                  : "rounded-lg border border-border bg-card px-3 py-2 text-sm hover:bg-muted/40"
             }
           >
             {v.name}
@@ -507,41 +534,43 @@ export function InvestmentPlanPanel({
           </Button>
         )}
         <div className="ml-auto flex flex-wrap gap-2">
-          <Button type="button" variant="secondary" onClick={rerunMc} disabled={mcBusy}>
-            {mcBusy ? "…" : "Пересчёт MC"}
-          </Button>
+          {!hideMcChart && (
+            <Button type="button" variant="secondary" onClick={rerunMc} disabled={mcBusy}>
+              {mcBusy ? "…" : "Пересчёт MC"}
+            </Button>
+          )}
           <Button type="button" onClick={save} disabled={saving}>
             {saving ? "Сохранение…" : "Сохранить"}
           </Button>
         </div>
       </section>
 
-      <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <Card>
-          <p className="text-sm text-muted">Начальный капитал</p>
-          <p className="mt-1 text-2xl font-semibold">{formatRub(data.initialCapital)}</p>
+      <section className={`grid gap-2 ${compact ? "sm:grid-cols-2 lg:grid-cols-4" : "gap-4 sm:grid-cols-2 lg:grid-cols-4"}`}>
+        <Card className={compact ? "!p-3" : undefined}>
+          <p className={compact ? "text-xs text-muted" : "text-sm text-muted"}>Начальный капитал</p>
+          <p className={`mt-1 font-semibold ${compact ? "text-lg" : "text-2xl"}`}>{formatRub(data.initialCapital)}</p>
         </Card>
-        <Card>
-          <p className="text-sm text-muted">Детерминированный конец</p>
-          <p className="mt-1 text-2xl font-semibold">{formatRub(projection.finalCapital)}</p>
+        <Card className={compact ? "!p-3" : undefined}>
+          <p className={compact ? "text-xs text-muted" : "text-sm text-muted"}>Детерминированный конец</p>
+          <p className={`mt-1 font-semibold ${compact ? "text-lg" : "text-2xl"}`}>{formatRub(projection.finalCapital)}</p>
         </Card>
-        <Card>
-          <p className="text-sm text-muted">MC медиана (конец)</p>
-          <p className="mt-1 text-2xl font-semibold">
+        <Card className={compact ? "!p-3" : undefined}>
+          <p className={compact ? "text-xs text-muted" : "text-sm text-muted"}>MC медиана (конец)</p>
+          <p className={`mt-1 font-semibold ${compact ? "text-lg" : "text-2xl"}`}>
             {liveMc ? formatRub(liveMc.finalMedian) : "—"}
           </p>
         </Card>
-        <Card>
-          <p className="text-sm text-muted">Успех (капитал &gt; 0)</p>
-          <p className="mt-1 text-2xl font-semibold">
+        <Card className={compact ? "!p-3" : undefined}>
+          <p className={compact ? "text-xs text-muted" : "text-sm text-muted"}>Успех (капитал &gt; 0)</p>
+          <p className={`mt-1 font-semibold ${compact ? "text-lg" : "text-2xl"}`}>
             {liveMc ? `${(liveMc.finalSuccessRate * 100).toFixed(0)}%` : "—"}
           </p>
         </Card>
       </section>
 
-      <Card className="space-y-4">
-        <h2 className="font-medium">Параметры варианта (CFP / iPlan MC)</h2>
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <Card className={compact ? "space-y-3 !p-3" : "space-y-4"}>
+        <h2 className={compact ? "text-sm font-medium" : "font-medium"}>Параметры варианта</h2>
+        <div className={`grid ${compact ? "gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4" : "gap-4 sm:grid-cols-2 lg:grid-cols-4"}`}>
           <FormField label="Название">
             <Input
               value={active.name}
@@ -586,7 +615,7 @@ export function InvestmentPlanPanel({
           </FormField>
           <FormField label="Распределение доходностей" hint={FIELD_HINTS.iplanDistribution}>
             <select
-              className="w-full rounded-lg border border-border bg-card px-3 py-2.5 text-sm"
+              className={fieldCls}
               value={active.distribution}
               onChange={(e) =>
                 updateActive((v) => ({
@@ -604,7 +633,7 @@ export function InvestmentPlanPanel({
           </FormField>
           <FormField label="Ось времени">
             <select
-              className="w-full rounded-lg border border-border bg-card px-3 py-2.5 text-sm"
+              className={fieldCls}
               value={active.axisMode}
               onChange={(e) =>
                 updateActive((v) => ({
@@ -849,9 +878,9 @@ export function InvestmentPlanPanel({
         onAdd={() => addStream("goals")}
       />
 
-      <Card>
-        <h2 className="font-medium">Детерминированный капитал — {active.name}</h2>
-        <div className="mt-4 h-72">
+      <Card className={compact ? "!p-3" : undefined}>
+        <h2 className={compact ? "text-sm font-medium" : "font-medium"}>Детерминированный капитал — {active.name}</h2>
+        <div className={`mt-3 ${compact ? "h-48" : "h-72"}`}>
           <ResponsiveContainer width="100%" height="100%">
             <AreaChart data={projection.rows}>
               <defs>
@@ -884,7 +913,7 @@ export function InvestmentPlanPanel({
         </div>
       </Card>
 
-      {liveMc && (
+      {liveMc && !hideMcChart && (
         <Card>
           <h2 className="font-medium">
             Монте-Карло — P{active.percentileLow}/медиана/P{active.percentileHigh}
@@ -1029,7 +1058,7 @@ export function InvestmentPlanPanel({
         </table>
       </Card>
 
-      <ChangeHistoryPanel onUnauthorized={onUnauthorized} />
+      {!hideHistory && <ChangeHistoryPanel onUnauthorized={onUnauthorized} />}
     </div>
   );
 }

@@ -9,11 +9,17 @@ import { recordRevision } from "@/shared/revision";
 export async function GET() {
   const userId = await requireUserId();
   if (isErrorResponse(userId)) return userId;
+  const rows = await prisma.goal.findMany({
+    where: { userId },
+    orderBy: { priority: "asc" },
+  });
   return NextResponse.json(
-    await prisma.goal.findMany({
-      where: { userId },
-      orderBy: { priority: "asc" },
-    }),
+    rows.map((g) => ({
+      ...g,
+      minAmount: g.minAmount ?? null,
+      maxAmount: g.maxAmount ?? null,
+      stages: g.stages ?? [],
+    })),
   );
 }
 
@@ -41,6 +47,12 @@ export async function POST(req: Request) {
       userId,
       targetDate,
       linkedAssetId: data.linkedAssetId ?? null,
+      minAmount: data.minAmount ?? null,
+      maxAmount: data.maxAmount ?? null,
+      stages: (data.stages ?? []).map((s) => ({
+        ...s,
+        targetDate: new Date(s.targetDate),
+      })),
     },
   });
   await recordRevision({

@@ -25,10 +25,12 @@ export function ScenarioRulesEditor({
   scenarios,
   onSaved,
   onActivate,
+  compact = false,
 }: {
   scenarios: ScenarioRow[];
   onSaved: () => void;
   onActivate: (id: string) => void | Promise<void>;
+  compact?: boolean;
 }) {
   const [selectedId, setSelectedId] = useState<string | null>(
     scenarios[0]?.id ?? null,
@@ -158,7 +160,7 @@ export function ScenarioRulesEditor({
   }
 
   return (
-    <div className="grid gap-6 lg:grid-cols-[240px_1fr]">
+    <div className={`grid ${compact ? "gap-3 lg:grid-cols-[180px_1fr]" : "gap-6 lg:grid-cols-[240px_1fr]"}`}>
       <aside className="space-y-2">
         <h3 className="text-sm font-medium text-zinc-700">Сценарии</h3>
         {scenarios.map((s) => (
@@ -203,16 +205,18 @@ export function ScenarioRulesEditor({
         </button>
       </aside>
 
-      <div className="space-y-4">
+      <div className={compact ? "space-y-3" : "space-y-4"}>
         {selected && (
           <>
-            <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="flex flex-wrap items-center justify-between gap-2">
               <div>
-                <h2 className="text-lg font-medium">{selected.name}</h2>
-                <p className="text-sm text-zinc-500">
-                  Если случится условие А — сделайте действие Б (иначе — В). Можно вкладывать ветки.
-                </p>
-                <HelpHint>{FEATURE_HINTS.scenarios}</HelpHint>
+                <h2 className={compact ? "text-sm font-medium" : "text-lg font-medium"}>{selected.name}</h2>
+                {!compact && (
+                  <p className="text-sm text-zinc-500">
+                    Если случится условие А — сделайте действие Б (иначе — В). Можно вкладывать ветки.
+                  </p>
+                )}
+                {!compact && <HelpHint>{FEATURE_HINTS.scenarios}</HelpHint>}
               </div>
               <div className="flex flex-wrap gap-2">
                 <button

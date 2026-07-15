@@ -19,8 +19,17 @@ export type GoalType =
   | "LEGACY"
   | "OTHER";
 export type GoalStrategy = "SYSTEMATIC" | "LUMP_SUM" | "BALANCED";
+export type GoalAchievability = "max" | "desired" | "min" | "none";
 export type ScenarioKind = "PREDEFINED" | "CUSTOM";
 export type JobStatus = "PENDING" | "RUNNING" | "COMPLETED" | "FAILED";
+
+/** Этап выплаты / накопления внутри цели */
+export type GoalStage = {
+  id: string;
+  label: string;
+  amount: number;
+  targetDate: Date;
+};
 
 export type User = {
   id: string;
@@ -120,8 +129,15 @@ export type Goal = {
   userId: string;
   name: string;
   goalType: GoalType;
+  /** Желаемая сумма (legacy + основной ориентир) */
   targetAmountNominal: number;
   targetDate: Date;
+  /** Минимально приемлемая сумма; null → 80% желаемой при allowPartialFunding */
+  minAmount: number | null;
+  /** Максимум / «хотелка сверху»; null → = желаемая */
+  maxAmount: number | null;
+  /** Несколько выплат с разными датами; пусто → одна выплата на targetDate */
+  stages: GoalStage[];
   currency: string;
   priority: number;
   allowPartialFunding: boolean;
