@@ -464,6 +464,7 @@ export default function DashboardPage() {
             scenarios={scenarios}
             onRefresh={loadScenarios}
             onActivate={activateScenario}
+            onUnauthorized={handleUnauthorized}
           />
         )}
 

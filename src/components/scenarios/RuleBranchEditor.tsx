@@ -220,6 +220,13 @@ function ParamFields({
                 </option>
               ))}
             </select>
+          ) : f.type === "text" ? (
+            <input
+              type="text"
+              value={String(params[f.key] ?? f.default ?? "")}
+              onChange={(e) => onChange({ ...params, [f.key]: e.target.value })}
+              className="rounded border px-2 py-1.5 text-sm"
+            />
           ) : (
             <input
               type="number"

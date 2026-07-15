@@ -2,9 +2,20 @@ import type {
   DeterministicPlanResult,
   MonthlyProjection,
   PlanInput,
+  ScenarioAssetPurchase,
+  ScenarioAssetSale,
   ScenarioModifiers,
 } from "./types";
 import { amountForMonth } from "./frequency";
+
+type TrackedAsset = PlanInput["assets"][number] & { sold: boolean };
+
+function collectSales(mods?: ScenarioModifiers): ScenarioAssetSale[] {
+  if (!mods) return [];
+  const list = [...(mods.assetSales ?? [])];
+  if (mods.assetSale) list.push(mods.assetSale);
+  return list;
+}
 
 function applyModifiers(
   base: PlanInput,
@@ -12,20 +23,28 @@ function applyModifiers(
 ): PlanInput {
   if (!mods) return base;
   const m = mods;
+  const inflation =
+    base.baseInflationPct * (m.inflationMultiplier ?? 1) +
+    (m.inflationDeltaPct ?? 0);
+  const divMul = m.dividendMultiplier ?? 1;
   return {
     ...base,
     assets: base.assets.map((a) => ({
       ...a,
       currentValue: a.currentValue * (1 + (m.assetShockPct ?? 0) / 100),
-      expectedReturnPct:
-        a.expectedReturnPct * (m.returnMultiplier ?? 1),
+      expectedReturnPct: a.expectedReturnPct * (m.returnMultiplier ?? 1),
+      dividendIncomeMonthly: a.dividendIncomeMonthly * divMul,
     })),
-    baseInflationPct: base.baseInflationPct * (m.inflationMultiplier ?? 1),
+    baseInflationPct: inflation,
     expenses: base.expenses.map((e) => ({
       ...e,
       amount: e.amount * (1 - (m.expenseCutPct ?? 0) / 100),
     })),
   };
+}
+
+function activeValue(assets: TrackedAsset[]) {
+  return assets.filter((a) => !a.sold).reduce((s, a) => s + a.currentValue, 0);
 }
 
 export function runDeterministicPlan(
@@ -34,8 +53,11 @@ export function runDeterministicPlan(
 ): DeterministicPlanResult {
   const plan = applyModifiers(input, modifiers);
   const monthlyInflation = Math.pow(1 + plan.baseInflationPct / 100, 1 / 12) - 1;
+  const sales = collectSales(modifiers);
+  const purchases: ScenarioAssetPurchase[] = modifiers?.assetPurchases ?? [];
 
-  let portfolioValue = plan.assets.reduce((s, a) => s + a.currentValue, 0);
+  const tracked: TrackedAsset[] = plan.assets.map((a) => ({ ...a, sold: false }));
+  let cashFromSales = 0;
   let debtTotal = plan.liabilities.reduce((s, l) => s + l.remainingBalance, 0);
 
   const monthly: MonthlyProjection[] = [];
@@ -44,13 +66,41 @@ export function runDeterministicPlan(
   for (let m = 0; m < plan.horizonMonths; m++) {
     const inflationFactor = Math.pow(1 + monthlyInflation, m);
 
+    for (const sale of sales) {
+      if (sale.monthIndex !== m) continue;
+      const asset = tracked.find((a) => a.id === sale.assetId && !a.sold);
+      if (!asset) continue;
+      // Remove asset from portfolio (stop future return/dividend), keep net cash
+      cashFromSales += sale.proceeds;
+      asset.sold = true;
+      asset.currentValue = 0;
+      asset.dividendIncomeMonthly = 0;
+    }
+
+    for (const buy of purchases) {
+      if (buy.monthIndex !== m) continue;
+      const amount = Math.min(buy.amount, Math.max(0, cashFromSales));
+      if (amount <= 0) continue;
+      cashFromSales -= amount;
+      tracked.push({
+        id: `purchase_${m}_${tracked.length}`,
+        name: buy.name || "Новый актив",
+        type: "BROKERAGE",
+        currentValue: amount,
+        expectedReturnPct: buy.expectedReturnPct,
+        volatilityPct: 15,
+        maintenanceCostMonthly: 0,
+        dividendIncomeMonthly: buy.dividendIncomeMonthly,
+        liquidityDays: 3,
+        sold: false,
+      });
+    }
+
     let income = 0;
     for (const inc of plan.incomes) {
       const growth = Math.pow(1 + inc.growthRatePct / 100, m / 12);
       const gross = amountForMonth(inc.amount, inc.frequency, m) * growth;
-      if (modifiers?.incomeLossMonths && m < modifiers.incomeLossMonths) {
-        continue;
-      }
+      if (modifiers?.incomeLossMonths && m < modifiers.incomeLossMonths) continue;
       income += gross * (1 - inc.taxRatePct / 100);
     }
 
@@ -60,9 +110,8 @@ export function runDeterministicPlan(
       expenses +=
         amountForMonth(exp.amount, exp.frequency, m) * growth * inflationFactor;
     }
-
-    for (const a of plan.assets) {
-      expenses += a.maintenanceCostMonthly * inflationFactor;
+    for (const a of tracked) {
+      if (!a.sold) expenses += a.maintenanceCostMonthly * inflationFactor;
     }
 
     let debtPayments = 0;
@@ -76,22 +125,33 @@ export function runDeterministicPlan(
     }
 
     let investmentReturn = 0;
-    for (const a of plan.assets) {
-      const weight = portfolioValue > 0 ? a.currentValue / portfolioValue : 0;
+    const pool = activeValue(tracked);
+    for (const a of tracked) {
+      if (a.sold || a.currentValue <= 0) continue;
       const monthlyReturn = Math.pow(1 + a.expectedReturnPct / 100, 1 / 12) - 1;
-      investmentReturn += portfolioValue * weight * monthlyReturn;
-      investmentReturn += a.dividendIncomeMonthly;
+      const growth = a.currentValue * monthlyReturn;
+      a.currentValue += growth;
+      investmentReturn += growth + a.dividendIncomeMonthly;
     }
-
-    if (modifiers?.assetSale && modifiers.assetSale.monthIndex === m) {
-      portfolioValue += modifiers.assetSale.proceeds;
-    }
+    // Idle cash from sales earns 0 in MVP (conservative)
 
     const cashflow = income + investmentReturn - expenses - debtPayments;
-    portfolioValue += cashflow;
-    surplusSum += cashflow;
+    // Apply net cashflow to largest active asset (or hold as cash)
+    if (cashflow !== 0) {
+      const active = tracked.filter((a) => !a.sold);
+      if (active.length > 0) {
+        const main = active.reduce((b, a) =>
+          a.currentValue >= b.currentValue ? a : b,
+        );
+        main.currentValue = Math.max(0, main.currentValue + cashflow);
+      } else {
+        cashFromSales = Math.max(0, cashFromSales + cashflow);
+      }
+    }
 
-    const netWorth = portfolioValue - debtTotal;
+    void pool;
+    surplusSum += cashflow;
+    const netWorth = activeValue(tracked) + cashFromSales - debtTotal;
     monthly.push({
       month: m,
       netWorth,
@@ -111,29 +171,25 @@ export function runDeterministicPlan(
     const projectedBalanceAtTarget =
       monthly[Math.min(g.targetMonthIndex, monthly.length - 1)]?.netWorth ?? 0;
     const gap = Math.max(0, inflationAdjustedTarget - projectedBalanceAtTarget);
-    const requiredMonthlySaving = gap / monthsToGoal;
     return {
       goalId: g.id,
-      requiredMonthlySaving,
+      requiredMonthlySaving: gap / monthsToGoal,
       projectedBalanceAtTarget,
       inflationAdjustedTarget,
     };
   });
 
-  const recommendedMonthlySaving = [...plan.goals]
-    .sort((a, b) => a.priority - b.priority)
-    .reduce((sum, g) => {
-      const funding = goalFunding.find((f) => f.goalId === g.id);
-      return sum + (funding?.requiredMonthlySaving ?? 0);
-    }, 0);
-
+  const n = monthly.length || 1;
   return {
     monthly,
     goalFunding,
     summary: {
       finalNetWorth: monthly[monthly.length - 1]?.netWorth ?? 0,
-      avgMonthlySurplus: surplusSum / plan.horizonMonths,
-      recommendedMonthlySaving,
+      avgMonthlySurplus: surplusSum / n,
+      recommendedMonthlySaving: goalFunding.reduce(
+        (s, g) => s + g.requiredMonthlySaving,
+        0,
+      ),
     },
   };
 }

@@ -60,42 +60,44 @@ export function DashboardShell({
   const current = navItems.find((n) => n.id === tab);
 
   return (
-    <div className="flex min-h-full flex-col bg-background lg:flex-row">
-      <aside className="hidden w-56 shrink-0 flex-col border-r border-border bg-sidebar lg:flex">
-        <div className="px-5 py-5">
-          <BrandLogo href="/dashboard" />
-        </div>
-        <nav className="flex flex-1 flex-col gap-0.5 px-3 pb-3">
-          {navItems.map((item) => (
-            <NavButton
-              key={item.id}
-              active={tab === item.id}
-              label={item.label}
-              onClick={() => onTabChange(item.id)}
-            />
-          ))}
-        </nav>
-        <div className="space-y-0.5 border-t border-border p-3">
-          <Link
-            href="/faq"
-            className="block w-full rounded-xl px-3 py-2.5 text-left text-sm text-muted hover:bg-sidebar-hover hover:text-foreground"
-          >
-            FAQ
-          </Link>
-          <button
-            type="button"
-            onClick={() => {
-              toast.success("Выход выполнен");
-              signOut({ callbackUrl: "/" });
-            }}
-            className="w-full rounded-xl px-3 py-2.5 text-left text-sm text-muted hover:bg-sidebar-hover hover:text-foreground"
-          >
-            Выйти
-          </button>
+    <div className="min-h-screen bg-background">
+      <aside className="fixed inset-y-0 left-0 z-30 hidden w-56 flex-col border-r border-border bg-sidebar lg:flex">
+        <div className="flex h-full flex-col">
+          <div className="shrink-0 px-5 py-5">
+            <BrandLogo href="/dashboard" />
+          </div>
+          <nav className="flex flex-1 flex-col gap-0.5 overflow-y-auto px-3 pb-3">
+            {navItems.map((item) => (
+              <NavButton
+                key={item.id}
+                active={tab === item.id}
+                label={item.label}
+                onClick={() => onTabChange(item.id)}
+              />
+            ))}
+          </nav>
+          <div className="mt-auto shrink-0 space-y-0.5 border-t border-border p-3">
+            <Link
+              href="/faq"
+              className="block w-full rounded-xl px-3 py-2.5 text-left text-sm text-muted hover:bg-sidebar-hover hover:text-foreground"
+            >
+              FAQ
+            </Link>
+            <button
+              type="button"
+              onClick={() => {
+                toast.success("Выход выполнен");
+                signOut({ callbackUrl: "/" });
+              }}
+              className="w-full rounded-xl px-3 py-2.5 text-left text-sm text-muted hover:bg-sidebar-hover hover:text-foreground"
+            >
+              Выйти
+            </button>
+          </div>
         </div>
       </aside>
 
-      <div className="flex min-w-0 flex-1 flex-col">
+      <div className="flex min-h-screen min-w-0 flex-col lg:pl-56">
         <header className="border-b border-border bg-card px-4 py-3 sm:px-6 sm:py-4 lg:px-8">
           <div className="flex items-center justify-between gap-3 lg:block">
             <BrandLogo href="/dashboard" className="lg:hidden" />

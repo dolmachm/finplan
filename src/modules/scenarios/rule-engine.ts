@@ -112,17 +112,53 @@ function applyAction(
       if (asset) {
         const tax = Number(p.taxPct ?? 13) / 100;
         const fee = Number(p.feePct ?? 1) / 100;
-        const proceeds = asset.currentValue * (1 - tax - fee);
-        const penalty =
-          asset.liquidityDays > 30 ? 0.05 : 0;
-        next.assetSale = {
+        const penalty = asset.liquidityDays > 30 ? 0.05 : 0;
+        const proceeds = asset.currentValue * (1 - tax - fee) * (1 - penalty);
+        const sale = {
           assetId,
           monthIndex: Number(p.monthIndex ?? 0),
-          proceeds: proceeds * (1 - penalty),
+          proceeds,
         };
+        next.assetSale = sale;
+        next.assetSales = [...(next.assetSales ?? []), sale];
       }
       break;
     }
+    case "buy_asset": {
+      const amount = Number(p.amount ?? 0);
+      if (amount > 0) {
+        next.assetPurchases = [
+          ...(next.assetPurchases ?? []),
+          {
+            monthIndex: Number(p.monthIndex ?? 0),
+            amount,
+            name: String(p.name ?? "Новый актив"),
+            expectedReturnPct: Number(p.expectedReturnPct ?? 7),
+            dividendIncomeMonthly: Number(p.dividendIncomeMonthly ?? 0),
+          },
+        ];
+      }
+      break;
+    }
+    case "change_inflation": {
+      const mode = String(p.mode ?? "delta");
+      if (mode === "multiply") {
+        next.inflationMultiplier =
+          (next.inflationMultiplier ?? 1) * Number(p.factor ?? 1.25);
+      } else {
+        next.inflationDeltaPct =
+          (next.inflationDeltaPct ?? 0) + Number(p.deltaPct ?? 2);
+      }
+      break;
+    }
+    case "boost_returns":
+      next.returnMultiplier =
+        (next.returnMultiplier ?? 1) * (1 + Number(p.pct ?? 10) / 100);
+      break;
+    case "change_dividends":
+      next.dividendMultiplier =
+        (next.dividendMultiplier ?? 1) * (1 + Number(p.pct ?? -50) / 100);
+      break;
     case "rebalance":
       next.returnMultiplier = (next.returnMultiplier ?? 1) * 0.98;
       break;

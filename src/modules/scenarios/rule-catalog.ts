@@ -148,11 +148,57 @@ export const ACTION_CATALOG: CatalogEntry[] = [
   {
     type: "sell_asset",
     label: "Продать выбранный актив",
+    description: "Убирает актив из портфеля, добавляет чистую выручку",
     fields: [
       { key: "assetId", label: "Актив", type: "asset" },
       { key: "monthIndex", label: "Месяц", type: "month", default: 0 },
       { key: "taxPct", label: "Налог, %", type: "number", default: 13 },
       { key: "feePct", label: "Комиссия, %", type: "number", default: 1 },
+    ],
+  },
+  {
+    type: "buy_asset",
+    label: "Купить актив на выручку",
+    description: "Покупка нового актива из денег от продаж (CFP realloc)",
+    fields: [
+      { key: "monthIndex", label: "Месяц покупки", type: "month", default: 0 },
+      { key: "amount", label: "Сумма, ₽", type: "number", default: 1000000, min: 0 },
+      { key: "name", label: "Название", type: "text", default: "Новый актив" },
+      { key: "expectedReturnPct", label: "Доходность, %", type: "number", default: 7 },
+      { key: "dividendIncomeMonthly", label: "Доход/мес, ₽", type: "number", default: 0 },
+    ],
+  },
+  {
+    type: "change_inflation",
+    label: "Изменить инфляцию",
+    fields: [
+      {
+        key: "mode",
+        label: "Режим",
+        type: "select",
+        options: [
+          { value: "delta", label: "Сдвиг, п.п." },
+          { value: "multiply", label: "Множитель" },
+        ],
+        default: "delta",
+      },
+      { key: "deltaPct", label: "Сдвиг, п.п.", type: "number", default: 2, min: -20, max: 50 },
+      { key: "factor", label: "Множитель", type: "number", default: 1.25, min: 0.5, max: 5 },
+    ],
+  },
+  {
+    type: "boost_returns",
+    label: "Повысить доходность",
+    fields: [
+      { key: "pct", label: "На сколько %", type: "number", default: 10, min: 0, max: 100 },
+    ],
+  },
+  {
+    type: "change_dividends",
+    label: "Изменить доход от активов",
+    description: "Дивиденды / аренда: pct=+20 рост, pct=-100 обнуление",
+    fields: [
+      { key: "pct", label: "Изменение, %", type: "number", default: -50, min: -100, max: 200 },
     ],
   },
   {
@@ -211,6 +257,66 @@ export const RULE_TEMPLATES: Array<{ key: string; label: string; rule: ScenarioR
       condition: { type: "market_shock", params: { severityPct: -30, durationMonths: 12 } },
       then: { type: "reduce_returns", params: { pct: 25, months: 12 } },
       else: { type: "noop", params: {} },
+    },
+  },
+  {
+    key: "sell_and_rebuy",
+    label: "Продажа → покупка другого актива",
+    rule: {
+      id: newRuleId(),
+      name: "Продажа и реинвест",
+      enabled: true,
+      condition: { type: "sell_asset_on_date", params: { monthIndex: 24, taxPct: 13, feePct: 1 } },
+      then: {
+        type: "nested",
+        rules: [
+          {
+            id: newRuleId(),
+            name: "Продать",
+            enabled: true,
+            condition: { type: "always", params: {} },
+            then: { type: "sell_asset", params: { monthIndex: 24, taxPct: 13, feePct: 1 } },
+          },
+          {
+            id: newRuleId(),
+            name: "Купить",
+            enabled: true,
+            condition: { type: "always", params: {} },
+            then: {
+              type: "buy_asset",
+              params: {
+                monthIndex: 24,
+                amount: 1000000,
+                name: "Новый портфель",
+                expectedReturnPct: 8,
+                dividendIncomeMonthly: 0,
+              },
+            },
+          },
+        ],
+      },
+    },
+  },
+  {
+    key: "inflation_shock",
+    label: "Инфляционный шок +2 п.п.",
+    rule: {
+      id: newRuleId(),
+      name: "Инфляция +2 п.п.",
+      enabled: true,
+      condition: { type: "always", params: {} },
+      then: { type: "change_inflation", params: { mode: "delta", deltaPct: 2 } },
+    },
+  },
+  {
+    key: "dividend_cut",
+    label: "Падение доходов от активов −50%",
+    rule: {
+      id: newRuleId(),
+      name: "Дивиденды −50%",
+      enabled: true,
+      condition: { type: "always", params: {} },
+      then: { type: "change_dividends", params: { pct: -50 } },
     },
   },
   {

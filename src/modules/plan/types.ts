@@ -47,10 +47,32 @@ export interface PlanInput {
 export interface ScenarioModifiers {
   returnMultiplier?: number;
   inflationMultiplier?: number;
+  /** Additive inflation shift in percentage points (e.g. +2 → inflation += 2%) */
+  inflationDeltaPct?: number;
   assetShockPct?: number;
   incomeLossMonths?: number;
   expenseCutPct?: number;
-  assetSale?: { assetId: string; monthIndex: number; proceeds: number };
+  /** Scale asset dividend/rental income (1 = unchanged, 0 = stop) */
+  dividendMultiplier?: number;
+  /** @deprecated use assetSales */
+  assetSale?: ScenarioAssetSale;
+  assetSales?: ScenarioAssetSale[];
+  assetPurchases?: ScenarioAssetPurchase[];
+}
+
+export interface ScenarioAssetSale {
+  assetId: string;
+  monthIndex: number;
+  /** Net proceeds after tax/fees */
+  proceeds: number;
+}
+
+export interface ScenarioAssetPurchase {
+  monthIndex: number;
+  amount: number;
+  name: string;
+  expectedReturnPct: number;
+  dividendIncomeMonthly: number;
 }
 
 export interface MonthlyProjection {
