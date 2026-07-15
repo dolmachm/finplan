@@ -11,7 +11,7 @@ export function AuthShell({
   children: React.ReactNode;
 }) {
   return (
-    <div className="relative flex min-h-full flex-col items-center justify-center overflow-hidden bg-card px-6 py-16">
+    <div className="relative flex min-h-full flex-col items-center justify-center overflow-hidden bg-card px-4 py-12 sm:px-6 sm:py-16">
       <div
         className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_70%_50%_at_50%_0%,#fff7ed_0%,transparent_55%)]"
         aria-hidden

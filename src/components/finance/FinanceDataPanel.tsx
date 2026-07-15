@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { FormField, HelpHint } from "@/components/ui/FormField";
+import { FormPanelHeader } from "@/components/ui/FormPanelHeader";
 import { Input } from "@/components/ui/input";
 import { toast } from "@/components/ui/ToastProvider";
 import { FEATURE_HINTS, FIELD_HINTS } from "@/content/help";
@@ -65,6 +66,7 @@ export function FinanceDataPanel({
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [editView, setEditView] = useState<EditView>(null);
   const [loading, setLoading] = useState(true);
+  const editorRef = useRef<HTMLDivElement>(null);
 
   const statusRef = useRef(onStatusChange);
   statusRef.current = onStatusChange;
@@ -111,6 +113,23 @@ export function FinanceDataPanel({
     load();
   }, [load]);
 
+  useEffect(() => {
+    if (editView && editorRef.current) {
+      editorRef.current.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    }
+  }, [editView]);
+
+  const closeEditor = () => setEditView(null);
+  const onEditorSaved = async () => {
+    await load();
+    setEditView(null);
+    onRefresh?.();
+  };
+  const isBalanceEdit =
+    editView?.kind === "asset" || editView?.kind === "liability";
+  const isCashflowEdit =
+    editView?.kind === "income" || editView?.kind === "expense";
+
   async function handleQuickAdd() {
     await onQuickAdd();
     await load();
@@ -138,24 +157,6 @@ export function FinanceDataPanel({
     } catch {
       toast.error("Не удалось удалить");
     }
-  }
-
-  if (editView) {
-    return (
-      <ItemEditor
-        view={editView}
-        assets={assets}
-        liabilities={liabilities}
-        incomes={incomes}
-        expenses={expenses}
-        onBack={() => setEditView(null)}
-        onSaved={async () => {
-          await load();
-          setEditView(null);
-        }}
-        onUnauthorized={onUnauthorized}
-      />
-    );
   }
 
   const assetsTotal = assets.reduce((s, a) => s + a.currentValue, 0);
@@ -213,6 +214,21 @@ export function FinanceDataPanel({
             </button>
           </div>
         </Card>
+
+        {isBalanceEdit && editView && (
+          <div ref={editorRef} className="scroll-mt-4">
+            <ItemEditor
+              view={editView}
+              assets={assets}
+              liabilities={liabilities}
+              incomes={incomes}
+              expenses={expenses}
+              onBack={closeEditor}
+              onSaved={onEditorSaved}
+              onUnauthorized={onUnauthorized}
+            />
+          </div>
+        )}
 
         {loading ? (
           <p className="text-muted">Загрузка…</p>
@@ -285,6 +301,21 @@ export function FinanceDataPanel({
           </div>
         </Card>
 
+        {isCashflowEdit && editView && (
+          <div ref={editorRef} className="scroll-mt-4">
+            <ItemEditor
+              view={editView}
+              assets={assets}
+              liabilities={liabilities}
+              incomes={incomes}
+              expenses={expenses}
+              onBack={closeEditor}
+              onSaved={onEditorSaved}
+              onUnauthorized={onUnauthorized}
+            />
+          </div>
+        )}
+
         {!loading && (
           <>
             <DataTable
@@ -344,42 +375,72 @@ function DataTable({
   onDelete: (id: string) => void;
 }) {
   return (
-    <Card className="overflow-x-auto">
+    <Card className="overflow-hidden">
       <h3 className="font-medium">{title}</h3>
       {items.length === 0 ? (
         <p className="mt-3 text-sm text-muted">{empty}</p>
       ) : (
-        <table className="mt-4 w-full text-sm">
-          <thead>
-            <tr className="border-b border-border text-left text-muted">
-              {columns.map((c) => (
-                <th key={c} className="px-3 py-2 font-medium">
-                  {c}
-                </th>
-              ))}
-              <th className="px-3 py-2 font-medium" />
-            </tr>
-          </thead>
-          <tbody>
+        <>
+          <div className="mt-4 space-y-3 md:hidden">
             {items.map((item) => (
-              <tr key={item.id} className="border-b border-border last:border-0">
-                {item.cells.map((cell, ci) => (
-                  <td key={ci} className="px-3 py-2">
-                    {cell}
-                  </td>
-                ))}
-                <td className="px-3 py-2 text-right whitespace-nowrap">
-                  <Button type="button" variant="ghost" onClick={() => onEdit(item.id)}>
+              <div
+                key={item.id}
+                className="rounded-xl border border-border bg-background p-3"
+              >
+                <p className="font-medium text-foreground">{item.cells[0]}</p>
+                <dl className="mt-2 space-y-1">
+                  {columns.slice(1).map((col, ci) => (
+                    <div key={col} className="flex justify-between gap-3 text-sm">
+                      <dt className="text-muted">{col}</dt>
+                      <dd className="text-right text-foreground">{item.cells[ci + 1]}</dd>
+                    </div>
+                  ))}
+                </dl>
+                <div className="mt-3 flex gap-2 border-t border-border pt-3">
+                  <Button type="button" variant="secondary" className="flex-1" onClick={() => onEdit(item.id)}>
                     Изменить
                   </Button>
-                  <Button type="button" variant="ghost" onClick={() => onDelete(item.id)}>
+                  <Button type="button" variant="ghost" className="flex-1" onClick={() => onDelete(item.id)}>
                     Удалить
                   </Button>
-                </td>
-              </tr>
+                </div>
+              </div>
             ))}
-          </tbody>
-        </table>
+          </div>
+          <div className="mt-4 hidden overflow-x-auto md:block">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-border text-left text-muted">
+                  {columns.map((c) => (
+                    <th key={c} className="px-3 py-2 font-medium">
+                      {c}
+                    </th>
+                  ))}
+                  <th className="px-3 py-2 font-medium" />
+                </tr>
+              </thead>
+              <tbody>
+                {items.map((item) => (
+                  <tr key={item.id} className="border-b border-border last:border-0">
+                    {item.cells.map((cell, ci) => (
+                      <td key={ci} className="px-3 py-2">
+                        {cell}
+                      </td>
+                    ))}
+                    <td className="px-3 py-2 text-right whitespace-nowrap">
+                      <Button type="button" variant="ghost" onClick={() => onEdit(item.id)}>
+                        Изменить
+                      </Button>
+                      <Button type="button" variant="ghost" onClick={() => onDelete(item.id)}>
+                        Удалить
+                      </Button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </>
       )}
     </Card>
   );
@@ -552,11 +613,11 @@ function AssetEditor({
   }
 
   return (
-    <Card>
-      <button type="button" onClick={onBack} className="text-sm text-brand hover:underline">
-        ← К списку
-      </button>
-      <h2 className="mt-2 font-medium">{existing ? "Редактирование актива" : "Новый актив"}</h2>
+    <Card className="border-accent/20 bg-accent-light/30">
+      <FormPanelHeader
+        title={existing ? "Редактирование актива" : "Новый актив"}
+        onCancel={onBack}
+      />
       <div className="mt-4 grid gap-4 sm:grid-cols-2">
         <FormField label="Название" htmlFor="asset-name">
           <Input id="asset-name" value={name} onChange={(e) => setName(e.target.value)} placeholder="Брокерский счёт Тинькофф" />
@@ -671,9 +732,11 @@ function IncomeEditor({
   }
 
   return (
-    <Card>
-      <button type="button" onClick={onBack} className="text-sm text-brand hover:underline">← К списку</button>
-      <h2 className="mt-2 font-medium">{existing ? "Редактирование дохода" : "Новый доход"}</h2>
+    <Card className="border-accent/20 bg-accent-light/30">
+      <FormPanelHeader
+        title={existing ? "Редактирование дохода" : "Новый доход"}
+        onCancel={onBack}
+      />
       <div className="mt-4 grid gap-4 sm:grid-cols-2">
         <FormField label="Название" htmlFor="income-name">
           <Input id="income-name" value={name} onChange={(e) => setName(e.target.value)} placeholder="Зарплата / Премия" />
@@ -782,9 +845,11 @@ function ExpenseEditor({
   }
 
   return (
-    <Card>
-      <button type="button" onClick={onBack} className="text-sm text-brand hover:underline">← К списку</button>
-      <h2 className="mt-2 font-medium">{existing ? "Редактирование расхода" : "Новый расход"}</h2>
+    <Card className="border-accent/20 bg-accent-light/30">
+      <FormPanelHeader
+        title={existing ? "Редактирование расхода" : "Новый расход"}
+        onCancel={onBack}
+      />
       <div className="mt-4 grid gap-4 sm:grid-cols-2">
         <FormField label="Название" htmlFor="expense-name">
           <Input id="expense-name" value={name} onChange={(e) => setName(e.target.value)} placeholder="Ипотека / ОСАГО" />
@@ -894,13 +959,11 @@ function LiabilityEditor({
   }
 
   return (
-    <Card>
-      <button type="button" onClick={onBack} className="text-sm text-brand hover:underline">
-        ← К списку
-      </button>
-      <h2 className="mt-2 font-medium">
-        {existing ? "Редактирование пассива" : "Новый пассив"}
-      </h2>
+    <Card className="border-accent/20 bg-accent-light/30">
+      <FormPanelHeader
+        title={existing ? "Редактирование пассива" : "Новый пассив"}
+        onCancel={onBack}
+      />
       <div className="mt-4 grid gap-4 sm:grid-cols-2">
         <FormField label="Название" htmlFor="liability-name">
           <Input

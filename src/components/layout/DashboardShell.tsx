@@ -18,6 +18,36 @@ const navItems = [
 
 export type DashboardTab = (typeof navItems)[number]["id"];
 
+function NavButton({
+  active,
+  label,
+  onClick,
+  compact = false,
+}: {
+  active: boolean;
+  label: string;
+  onClick: () => void;
+  compact?: boolean;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={
+        active
+          ? compact
+            ? "shrink-0 rounded-xl bg-brand px-3 py-2 text-xs font-medium text-white sm:px-3.5 sm:text-sm"
+            : "rounded-xl bg-brand px-3 py-2.5 text-left text-sm font-medium text-white"
+          : compact
+            ? "shrink-0 rounded-xl px-3 py-2 text-xs text-muted transition-colors hover:bg-sidebar-hover hover:text-foreground sm:px-3.5 sm:text-sm"
+            : "rounded-xl px-3 py-2.5 text-left text-sm text-muted transition-colors hover:bg-sidebar-hover hover:text-foreground"
+      }
+    >
+      {label}
+    </button>
+  );
+}
+
 export function DashboardShell({
   tab,
   onTabChange,
@@ -27,26 +57,22 @@ export function DashboardShell({
   onTabChange: (tab: DashboardTab) => void;
   children: React.ReactNode;
 }) {
+  const current = navItems.find((n) => n.id === tab);
+
   return (
-    <div className="flex min-h-full bg-background">
-      <aside className="flex w-56 shrink-0 flex-col border-r border-border bg-sidebar">
+    <div className="flex min-h-full flex-col bg-background lg:flex-row">
+      <aside className="hidden w-56 shrink-0 flex-col border-r border-border bg-sidebar lg:flex">
         <div className="px-5 py-5">
           <BrandLogo href="/dashboard" />
         </div>
         <nav className="flex flex-1 flex-col gap-0.5 px-3 pb-3">
           {navItems.map((item) => (
-            <button
+            <NavButton
               key={item.id}
-              type="button"
+              active={tab === item.id}
+              label={item.label}
               onClick={() => onTabChange(item.id)}
-              className={
-                tab === item.id
-                  ? "rounded-xl bg-brand px-3 py-2.5 text-left text-sm font-medium text-white"
-                  : "rounded-xl px-3 py-2.5 text-left text-sm text-muted transition-colors hover:bg-sidebar-hover hover:text-foreground"
-              }
-            >
-              {item.label}
-            </button>
+            />
           ))}
         </nav>
         <div className="space-y-0.5 border-t border-border p-3">
@@ -68,14 +94,50 @@ export function DashboardShell({
           </button>
         </div>
       </aside>
+
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="border-b border-border bg-card px-8 py-4">
-          <h1 className="text-lg font-semibold tracking-tight text-foreground">
-            {navItems.find((n) => n.id === tab)?.label}
-          </h1>
-          <HelpHint>{TAB_HINTS[tab]}</HelpHint>
+        <header className="border-b border-border bg-card px-4 py-3 sm:px-6 sm:py-4 lg:px-8">
+          <div className="flex items-center justify-between gap-3 lg:block">
+            <BrandLogo href="/dashboard" className="lg:hidden" />
+            <div className="flex items-center gap-3">
+              <button
+                type="button"
+                onClick={() => {
+                  toast.success("Выход выполнен");
+                  signOut({ callbackUrl: "/" });
+                }}
+                className="text-sm text-muted hover:text-foreground lg:hidden"
+              >
+                Выйти
+              </button>
+              <div className="min-w-0 text-right lg:text-left">
+                <h1 className="text-base font-semibold tracking-tight text-foreground sm:text-lg">
+                  {current?.label}
+                </h1>
+                <HelpHint className="hidden sm:block">{TAB_HINTS[tab]}</HelpHint>
+              </div>
+            </div>
+          </div>
+          <HelpHint className="mt-2 sm:hidden">{TAB_HINTS[tab]}</HelpHint>
         </header>
-        <main className="flex-1 px-8 py-7">{children}</main>
+
+        <nav className="border-b border-border bg-card px-3 py-2 lg:hidden">
+          <div className="-mx-1 flex gap-1 overflow-x-auto pb-0.5">
+            {navItems.map((item) => (
+              <NavButton
+                key={item.id}
+                active={tab === item.id}
+                label={item.label}
+                onClick={() => onTabChange(item.id)}
+                compact
+              />
+            ))}
+          </div>
+        </nav>
+
+        <main className="flex-1 px-4 py-5 sm:px-6 sm:py-6 lg:px-8 lg:py-7">
+          {children}
+        </main>
       </div>
     </div>
   );

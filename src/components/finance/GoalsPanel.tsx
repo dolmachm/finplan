@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { FormField, HelpHint } from "@/components/ui/FormField";
+import { FormPanelHeader } from "@/components/ui/FormPanelHeader";
 import { Input } from "@/components/ui/input";
 import { toast } from "@/components/ui/ToastProvider";
 import { readApiError, parsePositiveNumber } from "@/shared/api-client";
@@ -37,6 +38,7 @@ export function GoalsPanel({
   const [assets, setAssets] = useState<Asset[]>([]);
   const [editView, setEditView] = useState<EditView>(null);
   const [loading, setLoading] = useState(true);
+  const editorRef = useRef<HTMLDivElement>(null);
   const countRef = useRef(onCountChange);
   countRef.current = onCountChange;
 
@@ -63,6 +65,12 @@ export function GoalsPanel({
     load();
   }, [load]);
 
+  useEffect(() => {
+    if (editView !== null && editorRef.current) {
+      editorRef.current.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    }
+  }, [editView]);
+
   async function remove(id: string) {
     const res = await fetch(`/api/goals/${id}`, { method: "DELETE" });
     if (onUnauthorized(res)) return;
@@ -75,78 +83,119 @@ export function GoalsPanel({
     onSaved?.();
   }
 
-  if (editView !== null) {
-    const existing = editView.id ? goals.find((g) => g.id === editView.id) : undefined;
-    return (
-      <GoalEditor
-        existing={existing}
-        assets={assets}
-        onBack={() => setEditView(null)}
-        onSaved={async () => {
-          await load();
-          setEditView(null);
-        }}
-        onUnauthorized={onUnauthorized}
-      />
-    );
-  }
+  const existing = editView?.id ? goals.find((g) => g.id === editView.id) : undefined;
 
   return (
-    <Card>
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h3 className="font-medium">Финансовые цели</h3>
-          <HelpHint className="mt-1">
-            {FEATURE_HINTS.goalsStep} Приоритет 1 — самая важная цель, если денег может не хватить на все сразу.
-          </HelpHint>
+    <div className="space-y-4">
+      <Card>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h3 className="font-medium">Финансовые цели</h3>
+            <HelpHint className="mt-1">
+              {FEATURE_HINTS.goalsStep} Приоритет 1 — самая важная цель, если денег может не хватить на все сразу.
+            </HelpHint>
+          </div>
+          <Button type="button" variant="secondary" onClick={() => setEditView({})}>
+            + Цель
+          </Button>
         </div>
-        <Button type="button" variant="secondary" onClick={() => setEditView({})}>
-          + Цель
-        </Button>
-      </div>
-      {loading ? (
-        <p className="mt-4 text-sm text-muted">Загрузка…</p>
-      ) : goals.length === 0 ? (
-        <p className="mt-4 text-sm text-muted">Нет целей — добавьте первую</p>
-      ) : (
-        <div className="mt-4 overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-border text-left text-muted">
-                {["Приор.", "Название", "Тип", "Сумма", "Срок", "Стратегия", "Частично", ""].map(
-                  (h) => (
-                    <th key={h} className="px-3 py-2 font-medium">
-                      {h}
-                    </th>
-                  ),
-                )}
-              </tr>
-            </thead>
-            <tbody>
-              {goals.map((g) => (
-                <tr key={g.id} className="border-b border-border last:border-0">
-                  <td className="px-3 py-2">{g.priority}</td>
-                  <td className="px-3 py-2">{g.name}</td>
-                  <td className="px-3 py-2">{goalTypeLabel(g.goalType ?? "OTHER")}</td>
-                  <td className="px-3 py-2">{formatRub(g.targetAmountNominal)}</td>
-                  <td className="px-3 py-2">{formatGoalDate(g.targetDate)}</td>
-                  <td className="px-3 py-2">{goalStrategyLabel(g.strategy ?? "SYSTEMATIC")}</td>
-                  <td className="px-3 py-2">{g.allowPartialFunding ? "Да" : "Нет"}</td>
-                  <td className="px-3 py-2 text-right whitespace-nowrap">
-                    <Button type="button" variant="ghost" onClick={() => setEditView({ id: g.id })}>
-                      Изменить
-                    </Button>
-                    <Button type="button" variant="ghost" onClick={() => remove(g.id)}>
-                      Удалить
-                    </Button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+      </Card>
+
+      {editView !== null && (
+        <div ref={editorRef} className="scroll-mt-4">
+          <GoalEditor
+            existing={existing}
+            assets={assets}
+            onBack={() => setEditView(null)}
+            onSaved={async () => {
+              await load();
+              setEditView(null);
+              onSaved?.();
+            }}
+            onUnauthorized={onUnauthorized}
+          />
         </div>
       )}
-    </Card>
+
+      <Card>
+        {loading ? (
+          <p className="text-sm text-muted">Загрузка…</p>
+        ) : goals.length === 0 ? (
+          <p className="text-sm text-muted">Нет целей — добавьте первую</p>
+        ) : (
+          <>
+            <div className="space-y-3 md:hidden">
+              {goals.map((g) => (
+                <div
+                  key={g.id}
+                  className="rounded-xl border border-border bg-background p-3"
+                >
+                  <p className="font-medium text-foreground">{g.name}</p>
+                  <dl className="mt-2 space-y-1 text-sm">
+                    <div className="flex justify-between gap-3">
+                      <dt className="text-muted">Тип</dt>
+                      <dd>{goalTypeLabel(g.goalType ?? "OTHER")}</dd>
+                    </div>
+                    <div className="flex justify-between gap-3">
+                      <dt className="text-muted">Сумма</dt>
+                      <dd>{formatRub(g.targetAmountNominal)}</dd>
+                    </div>
+                    <div className="flex justify-between gap-3">
+                      <dt className="text-muted">Срок</dt>
+                      <dd>{formatGoalDate(g.targetDate)}</dd>
+                    </div>
+                  </dl>
+                  <div className="mt-3 flex gap-2 border-t border-border pt-3">
+                    <Button type="button" variant="secondary" className="flex-1" onClick={() => setEditView({ id: g.id })}>
+                      Изменить
+                    </Button>
+                    <Button type="button" variant="ghost" className="flex-1" onClick={() => remove(g.id)}>
+                      Удалить
+                    </Button>
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div className="hidden overflow-x-auto md:block">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-border text-left text-muted">
+                    {["Приор.", "Название", "Тип", "Сумма", "Срок", "Стратегия", "Частично", ""].map(
+                      (h) => (
+                        <th key={h} className="px-3 py-2 font-medium">
+                          {h}
+                        </th>
+                      ),
+                    )}
+                  </tr>
+                </thead>
+                <tbody>
+                  {goals.map((g) => (
+                    <tr key={g.id} className="border-b border-border last:border-0">
+                      <td className="px-3 py-2">{g.priority}</td>
+                      <td className="px-3 py-2">{g.name}</td>
+                      <td className="px-3 py-2">{goalTypeLabel(g.goalType ?? "OTHER")}</td>
+                      <td className="px-3 py-2">{formatRub(g.targetAmountNominal)}</td>
+                      <td className="px-3 py-2">{formatGoalDate(g.targetDate)}</td>
+                      <td className="px-3 py-2">{goalStrategyLabel(g.strategy ?? "SYSTEMATIC")}</td>
+                      <td className="px-3 py-2">{g.allowPartialFunding ? "Да" : "Нет"}</td>
+                      <td className="px-3 py-2 text-right whitespace-nowrap">
+                        <Button type="button" variant="ghost" onClick={() => setEditView({ id: g.id })}>
+                          Изменить
+                        </Button>
+                        <Button type="button" variant="ghost" onClick={() => remove(g.id)}>
+                          Удалить
+                        </Button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </>
+        )}
+      </Card>
+    </div>
   );
 }
 
@@ -244,13 +293,11 @@ function GoalEditor({
   }
 
   return (
-    <Card>
-      <button type="button" onClick={onBack} className="text-sm text-brand hover:underline">
-        ← К списку целей
-      </button>
-      <h2 className="mt-2 font-medium">
-        {existing ? "Редактирование цели" : "Новая цель"}
-      </h2>
+    <Card className="border-accent/20 bg-accent-light/30">
+      <FormPanelHeader
+        title={existing ? "Редактирование цели" : "Новая цель"}
+        onCancel={onBack}
+      />
       <div className="mt-4 grid gap-4 sm:grid-cols-2">
         <FormField label="Название" htmlFor="goal-name">
           <Input
