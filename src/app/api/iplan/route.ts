@@ -16,8 +16,16 @@ import {
   toBudgetLines,
   validateContributionsVsBudget,
 } from "@/modules/iplan/budget";
+import { envelopeReserveBudgetLine } from "@/modules/budget/envelopes";
 import type { IPlanVariant, InvestmentPlan } from "@/modules/iplan/types";
-import type { Asset, Expense, Goal, Income, MacroSettings } from "@/shared/types";
+import type {
+  Asset,
+  BudgetCategory,
+  Expense,
+  Goal,
+  Income,
+  MacroSettings,
+} from "@/shared/types";
 import { recordRevision } from "@/shared/revision";
 import { newId } from "@/shared/db/helpers";
 
@@ -64,21 +72,27 @@ const putSchema = z.object({
 });
 
 async function loadContext(userId: string) {
-  const [plan, assets, incomes, expenses, goals, macro] = await Promise.all([
-    prisma.investmentPlan.findUnique({ where: { userId } }),
-    prisma.asset.findMany({ where: { userId } }),
-    prisma.income.findMany({ where: { userId } }),
-    prisma.expense.findMany({ where: { userId } }),
-    prisma.goal.findMany({ where: { userId }, orderBy: { priority: "asc" } }),
-    prisma.macroSettings.findUnique({ where: { userId } }),
-  ]) as [
-    InvestmentPlan | null,
-    Asset[],
-    Income[],
-    Expense[],
-    Goal[],
-    MacroSettings | null,
-  ];
+  const [plan, assets, incomes, expenses, goals, macro, budgetCategories] =
+    await Promise.all([
+      prisma.investmentPlan.findUnique({ where: { userId } }),
+      prisma.asset.findMany({ where: { userId } }),
+      prisma.income.findMany({ where: { userId } }),
+      prisma.expense.findMany({ where: { userId } }),
+      prisma.goal.findMany({ where: { userId }, orderBy: { priority: "asc" } }),
+      prisma.macroSettings.findUnique({ where: { userId } }),
+      prisma.budgetCategory.findMany({
+        where: { userId },
+        orderBy: { sortOrder: "asc" },
+      }),
+    ]) as [
+      InvestmentPlan | null,
+      Asset[],
+      Income[],
+      Expense[],
+      Goal[],
+      MacroSettings | null,
+      BudgetCategory[],
+    ];
 
   const investmentAssets = assets.filter((a) => a.assetClass === "INVESTMENT");
   const capitalAssets = investmentAssets.length > 0 ? investmentAssets : assets;
@@ -86,7 +100,10 @@ async function loadContext(userId: string) {
   const wRet = weightedReturnPct(capitalAssets);
   const wVol = weightedVolatilityPct(capitalAssets);
   const budgetIncomes = toBudgetLines(incomes);
-  const budgetExpenses = toBudgetLines(expenses);
+  const reserve = envelopeReserveBudgetLine(expenses, budgetCategories);
+  const budgetExpenses = toBudgetLines(
+    reserve ? [...expenses, reserve] : expenses,
+  );
   const surplusMonthly = baselineMonthlySurplus(budgetIncomes, budgetExpenses);
 
   return {
@@ -98,6 +115,7 @@ async function loadContext(userId: string) {
     wVol,
     incomes,
     expenses,
+    budgetCategories,
     budgetIncomes,
     budgetExpenses,
     surplusMonthly,
@@ -196,6 +214,7 @@ function payload(
     suggestedVolatilityPct: ctx.wVol,
     incomes: ctx.incomes,
     expenses: ctx.expenses,
+    budgetCategories: ctx.budgetCategories,
     surplusMonthly: ctx.surplusMonthly,
     surplusAnnual: ctx.surplusMonthly * 12,
     projection,

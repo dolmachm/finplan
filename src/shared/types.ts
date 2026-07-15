@@ -124,6 +124,21 @@ export type Expense = {
   updatedAt: Date;
 };
 
+/** Optional YNAB-style category envelope; Expense.category stores this id when linked */
+export type BudgetCategoryKind = "expense" | "income";
+
+export type BudgetCategory = {
+  id: string;
+  userId: string;
+  name: string;
+  kind: BudgetCategoryKind;
+  /** Monthly envelope limit; null = no limit */
+  monthlyLimit: number | null;
+  sortOrder: number;
+  createdAt: Date;
+  updatedAt: Date;
+};
+
 export type Goal = {
   id: string;
   userId: string;

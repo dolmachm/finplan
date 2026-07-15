@@ -53,6 +53,13 @@ export const expenseSchema = z.object({
   growthRatePct: z.number().default(0),
 });
 
+export const budgetCategorySchema = z.object({
+  name: z.string().min(1).max(80),
+  kind: z.enum(["expense", "income"]).default("expense"),
+  monthlyLimit: z.number().nonnegative().nullable().default(null),
+  sortOrder: z.number().int().nonnegative().optional(),
+});
+
 export const goalStageSchema = z.object({
   id: z.string().min(1),
   label: z.string().min(1).max(80),

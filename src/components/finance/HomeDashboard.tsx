@@ -13,7 +13,10 @@ import {
   type HomeDashboardInput,
   type InsightSeverity,
 } from "@/modules/dashboard/insights";
+import { buildSavingsCorridor } from "@/modules/budget/savings-corridor";
 import { formatRub } from "@/shared/format";
+import { EnvelopeOverviewCard } from "@/components/finance/EnvelopeOverview";
+import { SavingsCorridorCard } from "@/components/finance/SavingsCorridorCard";
 
 const severityClass: Record<InsightSeverity, string> = {
   critical: "border-l-4 border-l-red-500",
@@ -43,6 +46,11 @@ export function HomeDashboard({
   }
 
   const metrics = computeDashboardMetrics(input);
+  const corridor = buildSavingsCorridor({
+    incomes: input.incomes,
+    expenses: input.expenses,
+    budgetCategories: input.budgetCategories,
+  });
   const all = buildInsights(metrics);
   const actions = topActions(all);
   const insights = all.filter((i) => i.kind === "insight").slice(0, 6);
@@ -51,6 +59,17 @@ export function HomeDashboard({
   return (
     <div className="space-y-8">
       <SummaryGrid metrics={metrics} />
+      {corridor && (
+        <SavingsCorridorCard data={corridor} onNavigate={onNavigate} />
+      )}
+      <EnvelopeOverviewCard
+        statuses={metrics.envelopes}
+        plannedTotal={metrics.envelopePlannedTotal}
+        limitTotal={metrics.envelopeLimitTotal}
+        incomeMonthly={metrics.incomeMonthly}
+        overspentCount={metrics.envelopeOverspentCount}
+        onNavigate={onNavigate}
+      />
       <StageCard metrics={metrics} onNavigate={onNavigate} />
       {actions.length > 0 && (
         <section className="space-y-3">
@@ -93,11 +112,14 @@ function SummaryGrid({ metrics: m }: { metrics: DashboardMetrics }) {
     { label: "Доход / мес", value: formatRub(m.incomeMonthly) },
     { label: "Расход / мес", value: formatRub(m.expenseMonthly) },
     {
-      label: "Профицит / мес",
+      label: "Можно откладывать / мес",
       value: formatRub(m.surplusMonthly),
-      hint: m.recommendedMonthlySaving
-        ? `Реком. взнос ${formatRub(m.recommendedMonthlySaving)}`
-        : undefined,
+      hint:
+        m.incomeMonthly > 0
+          ? `Δ доход−расход · ${(m.savingsRate * 100).toFixed(0)}% дохода`
+          : m.recommendedMonthlySaving
+            ? `Реком. взнос ${formatRub(m.recommendedMonthlySaving)}`
+            : undefined,
     },
   ];
   return (

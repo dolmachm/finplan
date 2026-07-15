@@ -23,6 +23,7 @@ import type {
   Asset,
   AssetClass,
   AssetType,
+  BudgetCategory,
   Expense,
   Income,
   Liability,
@@ -31,6 +32,10 @@ import type {
 import { readApiError, parsePositiveNumber } from "@/shared/api-client";
 import { formatMoneyInput } from "@/shared/format-input";
 import { formatRub } from "@/shared/format";
+import { envelopeStatuses, budgetExpenseFloor } from "@/modules/budget/envelopes";
+import { EnvelopeBars } from "@/components/finance/EnvelopeOverview";
+import { monthlyEquivalent } from "@/modules/plan/frequency";
+import type { PlanFrequency } from "@/modules/plan/frequency";
 
 const selectClass =
   "w-full rounded-lg border border-border bg-card px-4 py-2.5 text-sm";
@@ -64,6 +69,7 @@ export function FinanceDataPanel({
   const [liabilities, setLiabilities] = useState<Liability[]>([]);
   const [incomes, setIncomes] = useState<Income[]>([]);
   const [expenses, setExpenses] = useState<Expense[]>([]);
+  const [categories, setCategories] = useState<BudgetCategory[]>([]);
   const [editView, setEditView] = useState<EditView>(null);
   const [loading, setLoading] = useState(true);
   const editorRef = useRef<HTMLDivElement>(null);
@@ -74,27 +80,31 @@ export function FinanceDataPanel({
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const [aRes, lRes, iRes, eRes] = await Promise.all([
+      const [aRes, lRes, iRes, eRes, cRes] = await Promise.all([
         fetch("/api/assets", { cache: "no-store" }),
         fetch("/api/liabilities", { cache: "no-store" }),
         fetch("/api/incomes", { cache: "no-store" }),
         fetch("/api/expenses", { cache: "no-store" }),
+        fetch("/api/budget-categories", { cache: "no-store" }),
       ]);
       if (
         onUnauthorized(aRes) ||
         onUnauthorized(lRes) ||
         onUnauthorized(iRes) ||
-        onUnauthorized(eRes)
+        onUnauthorized(eRes) ||
+        onUnauthorized(cRes)
       )
         return;
       const nextAssets: Asset[] = aRes.ok ? await aRes.json() : [];
       const nextLiabilities: Liability[] = lRes.ok ? await lRes.json() : [];
       const nextIncomes: Income[] = iRes.ok ? await iRes.json() : [];
       const nextExpenses: Expense[] = eRes.ok ? await eRes.json() : [];
+      const nextCategories: BudgetCategory[] = cRes.ok ? await cRes.json() : [];
       setAssets(nextAssets);
       setLiabilities(nextLiabilities);
       setIncomes(nextIncomes);
       setExpenses(nextExpenses);
+      setCategories(nextCategories);
       statusRef.current?.({
         assetCount: nextAssets.length,
         liabilityCount: nextLiabilities.length,
@@ -161,6 +171,8 @@ export function FinanceDataPanel({
 
   const assetsTotal = assets.reduce((s, a) => s + a.currentValue, 0);
   const debtTotal = liabilities.reduce((s, l) => s + l.remainingBalance, 0);
+  const categoryName = (id: string) =>
+    categories.find((c) => c.id === id)?.name ?? (id === "general" ? "Без категории" : id);
 
   return (
     <section className="space-y-8">
@@ -223,6 +235,7 @@ export function FinanceDataPanel({
               liabilities={liabilities}
               incomes={incomes}
               expenses={expenses}
+              categories={categories}
               onBack={closeEditor}
               onSaved={onEditorSaved}
               onUnauthorized={onUnauthorized}
@@ -309,6 +322,7 @@ export function FinanceDataPanel({
               liabilities={liabilities}
               incomes={incomes}
               expenses={expenses}
+              categories={categories}
               onBack={closeEditor}
               onSaved={onEditorSaved}
               onUnauthorized={onUnauthorized}
@@ -343,7 +357,7 @@ export function FinanceDataPanel({
                 id: e.id,
                 cells: [
                   e.name,
-                  e.category,
+                  categoryName(e.category),
                   formatRub(e.amount),
                   frequencyLabel(e.frequency),
                   essentialLabel(e.isEssential),
@@ -351,6 +365,16 @@ export function FinanceDataPanel({
               }))}
               onEdit={(id) => setEditView({ kind: "expense", id })}
               onDelete={(id) => remove("expense", id)}
+            />
+            <BudgetEnvelopesPanel
+              categories={categories}
+              expenses={expenses}
+              incomes={incomes}
+              onUnauthorized={onUnauthorized}
+              onChanged={async () => {
+                await load();
+                onRefresh?.();
+              }}
             />
           </>
         )}
@@ -452,6 +476,7 @@ function ItemEditor({
   liabilities,
   incomes,
   expenses,
+  categories,
   onBack,
   onSaved,
   onUnauthorized,
@@ -461,6 +486,7 @@ function ItemEditor({
   liabilities: Liability[];
   incomes: Income[];
   expenses: Expense[];
+  categories: BudgetCategory[];
   onBack: () => void;
   onSaved: () => void | Promise<void>;
   onUnauthorized: (res: Response) => boolean;
@@ -502,6 +528,7 @@ function ItemEditor({
   return (
     <ExpenseEditor
       existing={existing}
+      categories={categories}
       onBack={onBack}
       onSaved={onSaved}
       onUnauthorized={onUnauthorized}
@@ -785,20 +812,30 @@ function IncomeEditor({
 
 function ExpenseEditor({
   existing,
+  categories,
   onBack,
   onSaved,
   onUnauthorized,
 }: {
   existing?: Expense;
+  categories: BudgetCategory[];
   onBack: () => void;
   onSaved: () => void | Promise<void>;
   onUnauthorized: (res: Response) => boolean;
 }) {
+  const expenseCategories = categories.filter((c) => c.kind === "expense");
+  const defaultCat =
+    (existing?.category &&
+      expenseCategories.some((c) => c.id === existing.category) &&
+      existing.category) ||
+    expenseCategories[0]?.id ||
+    "general";
   const [name, setName] = useState(existing?.name ?? "");
   const [amount, setAmount] = useState(
     existing ? formatMoneyInput(String(existing.amount)) : "",
   );
   const [frequency, setFrequency] = useState(existing?.frequency ?? "MONTHLY");
+  const [category, setCategory] = useState(defaultCat);
   const [isEssential, setIsEssential] = useState(existing?.isEssential ?? true);
   const [saving, setSaving] = useState(false);
 
@@ -816,7 +853,7 @@ function ExpenseEditor({
     try {
       const body = {
         name: name.trim(),
-        category: existing?.category?.trim() || "general",
+        category: category.trim() || "general",
         amount: amountNum.value,
         frequency,
         isEssential,
@@ -862,6 +899,24 @@ function ExpenseEditor({
             {FREQUENCY_OPTIONS.map((o) => (
               <option key={o.value} value={o.value}>{o.label}</option>
             ))}
+          </select>
+        </FormField>
+        <FormField label="Категория" htmlFor="expense-category" hint="Для конверта бюджета">
+          <select
+            id="expense-category"
+            className={selectClass}
+            value={category}
+            onChange={(e) => setCategory(e.target.value)}
+          >
+            {expenseCategories.length === 0 ? (
+              <option value="general">Без категории</option>
+            ) : (
+              expenseCategories.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name}
+                </option>
+              ))
+            )}
           </select>
         </FormField>
       </div>
@@ -1021,6 +1076,287 @@ function LiabilityEditor({
         </Button>
         <Button type="button" variant="secondary" onClick={onBack}>
           Отмена
+        </Button>
+      </div>
+    </Card>
+  );
+}
+
+function BudgetEnvelopesPanel({
+  categories,
+  expenses,
+  incomes,
+  onUnauthorized,
+  onChanged,
+}: {
+  categories: BudgetCategory[];
+  expenses: Expense[];
+  incomes: Income[];
+  onUnauthorized: (res: Response) => boolean;
+  onChanged: () => void | Promise<void>;
+}) {
+  const statuses = envelopeStatuses(expenses, categories);
+  const [limitDrafts, setLimitDrafts] = useState<Record<string, string>>({});
+  const [newName, setNewName] = useState("");
+  const [busyId, setBusyId] = useState<string | null>(null);
+
+  const incomeMonthly = incomes.reduce(
+    (s, i) => s + monthlyEquivalent(i.amount, i.frequency as PlanFrequency),
+    0,
+  );
+  const plannedTotal = expenses.reduce(
+    (s, e) => s + monthlyEquivalent(e.amount, e.frequency as PlanFrequency),
+    0,
+  );
+  const limitTotal = statuses
+    .filter((s) => s.monthlyLimit != null)
+    .reduce((s, e) => s + (e.monthlyLimit as number), 0);
+  const floor = budgetExpenseFloor(expenses, categories);
+  const afterBudget = incomeMonthly - floor;
+  const overspentCount = statuses.filter((s) => s.overspent).length;
+
+  useEffect(() => {
+    const next: Record<string, string> = {};
+    for (const c of categories) {
+      if (c.kind !== "expense") continue;
+      next[c.id] =
+        c.monthlyLimit == null ? "" : formatMoneyInput(String(c.monthlyLimit));
+    }
+    setLimitDrafts(next);
+  }, [categories]);
+
+  async function saveLimit(id: string) {
+    const raw = limitDrafts[id] ?? "";
+    let monthlyLimit: number | null = null;
+    if (raw.trim()) {
+      const parsed = parsePositiveNumber(raw, "Лимит");
+      if (!parsed.ok) {
+        toast.error(parsed.message);
+        return;
+      }
+      monthlyLimit = parsed.value;
+    }
+    setBusyId(id);
+    try {
+      const res = await fetch(`/api/budget-categories/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ monthlyLimit }),
+      });
+      if (onUnauthorized(res)) return;
+      if (!res.ok) {
+        const { message } = await readApiError(res);
+        toast.error(message);
+        return;
+      }
+      toast.success("Лимит сохранён");
+      await onChanged();
+    } catch {
+      toast.error("Не удалось сохранить лимит");
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  async function addCategory() {
+    if (!newName.trim()) {
+      toast.error("Укажите название категории");
+      return;
+    }
+    setBusyId("__new__");
+    try {
+      const res = await fetch("/api/budget-categories", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: newName.trim(),
+          kind: "expense",
+          monthlyLimit: null,
+        }),
+      });
+      if (onUnauthorized(res)) return;
+      if (!res.ok) {
+        const { message } = await readApiError(res);
+        toast.error(message);
+        return;
+      }
+      setNewName("");
+      toast.success("Категория добавлена");
+      await onChanged();
+    } catch {
+      toast.error("Не удалось добавить категорию");
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  async function removeCategory(id: string) {
+    setBusyId(id);
+    try {
+      const res = await fetch(`/api/budget-categories/${id}`, {
+        method: "DELETE",
+        cache: "no-store",
+      });
+      if (onUnauthorized(res)) return;
+      if (!res.ok) {
+        toast.error("Не удалось удалить");
+        return;
+      }
+      toast.success("Категория удалена");
+      await onChanged();
+    } catch {
+      toast.error("Не удалось удалить");
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  return (
+    <Card>
+      <div>
+        <p className="text-xs font-medium uppercase tracking-wide text-muted">
+          Опционально · Бюджет
+        </p>
+        <h3 className="mt-1 font-medium">Конверты по категориям</h3>
+        <HelpHint className="mt-1">
+          Месячный лимит — потолок категории. Запланированные расходы
+          сравниваются с лимитом; в инвест-плане учитывается резерв конвертов.
+        </HelpHint>
+      </div>
+
+      <div className="mt-4 grid gap-3 sm:grid-cols-3">
+        <div className="rounded-xl border border-border bg-background p-3">
+          <p className="text-xs text-muted">Расходы / мес</p>
+          <p className="mt-1 text-base font-semibold tabular-nums">
+            {formatRub(plannedTotal)}
+          </p>
+        </div>
+        <div className="rounded-xl border border-border bg-background p-3">
+          <p className="text-xs text-muted">Лимиты / мес</p>
+          <p className="mt-1 text-base font-semibold tabular-nums">
+            {limitTotal > 0 ? formatRub(limitTotal) : "—"}
+          </p>
+        </div>
+        <div className="rounded-xl border border-border bg-background p-3">
+          <p className="text-xs text-muted">После бюджета</p>
+          <p
+            className={`mt-1 text-base font-semibold tabular-nums ${
+              afterBudget < 0 ? "text-red-600" : ""
+            }`}
+          >
+            {formatRub(afterBudget)}
+          </p>
+        </div>
+      </div>
+
+      {overspentCount > 0 && (
+        <p className="mt-3 text-sm text-amber-700">
+          Перерасход в {overspentCount}{" "}
+          {overspentCount === 1 ? "категории" : "категориях"} — см. ниже
+        </p>
+      )}
+
+      {statuses.length > 0 && (
+        <div className="mt-4 rounded-xl border border-border bg-background p-4">
+          <p className="mb-3 text-xs font-medium uppercase tracking-wide text-muted">
+            Сводка
+          </p>
+          <EnvelopeBars statuses={statuses} />
+        </div>
+      )}
+
+      {statuses.length === 0 ? (
+        <p className="mt-4 text-sm text-muted">Категории пока не созданы</p>
+      ) : (
+        <ul className="mt-4 space-y-3">
+          {statuses.map((s) => (
+            <li
+              key={s.categoryId}
+              className={`rounded-xl border bg-background p-3 ${
+                s.overspent ? "border-red-300" : "border-border"
+              }`}
+            >
+              <div className="flex flex-wrap items-start justify-between gap-2">
+                <div>
+                  <p className="font-medium">{s.name}</p>
+                  <p className="mt-0.5 text-sm text-muted">
+                    {formatRub(s.plannedMonthly)}/мес
+                    {s.monthlyLimit != null
+                      ? ` из ${formatRub(s.monthlyLimit)}`
+                      : " · без лимита"}
+                    {s.remaining != null && (
+                      <span
+                        className={
+                          s.overspent ? " text-red-600" : " text-foreground"
+                        }
+                      >
+                        {" "}
+                        ·{" "}
+                        {s.overspent
+                          ? `−${formatRub(-s.remaining)}`
+                          : `+${formatRub(s.remaining)}`}
+                      </span>
+                    )}
+                  </p>
+                </div>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  disabled={busyId === s.categoryId}
+                  onClick={() => removeCategory(s.categoryId)}
+                >
+                  Удалить
+                </Button>
+              </div>
+              <div className="mt-3 flex flex-wrap items-end gap-2">
+                <FormField
+                  label="Лимит, ₽/мес"
+                  htmlFor={`limit-${s.categoryId}`}
+                  className="min-w-[10rem] flex-1"
+                >
+                  <Input
+                    id={`limit-${s.categoryId}`}
+                    inputMode="numeric"
+                    value={limitDrafts[s.categoryId] ?? ""}
+                    onChange={(e) =>
+                      setLimitDrafts((prev) => ({
+                        ...prev,
+                        [s.categoryId]: formatMoneyInput(e.target.value),
+                      }))
+                    }
+                    placeholder="без лимита"
+                  />
+                </FormField>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  disabled={busyId === s.categoryId}
+                  onClick={() => saveLimit(s.categoryId)}
+                >
+                  {busyId === s.categoryId ? "…" : "Сохранить"}
+                </Button>
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      <div className="mt-4 flex flex-wrap items-end gap-2 border-t border-border pt-4">
+        <FormField label="Новая категория" htmlFor="new-cat" className="min-w-[12rem] flex-1">
+          <Input
+            id="new-cat"
+            value={newName}
+            onChange={(e) => setNewName(e.target.value)}
+            placeholder="Например, Дети"
+          />
+        </FormField>
+        <Button
+          type="button"
+          variant="secondary"
+          disabled={busyId === "__new__"}
+          onClick={addCategory}
+        >
+          + Категория
         </Button>
       </div>
     </Card>

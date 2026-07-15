@@ -107,13 +107,14 @@ export default function DashboardPage() {
   const loadHomeSnapshot = useCallback(async () => {
     setHomeLoading(true);
     try {
-      const [aRes, lRes, iRes, eRes, gRes, sRes] = await Promise.all([
+      const [aRes, lRes, iRes, eRes, gRes, sRes, cRes] = await Promise.all([
         fetch("/api/assets", { cache: "no-store" }),
         fetch("/api/liabilities", { cache: "no-store" }),
         fetch("/api/incomes", { cache: "no-store" }),
         fetch("/api/expenses", { cache: "no-store" }),
         fetch("/api/goals", { cache: "no-store" }),
         fetch("/api/scenarios", { cache: "no-store" }),
+        fetch("/api/budget-categories", { cache: "no-store" }),
       ]);
       if (
         handleUnauthorized(aRes) ||
@@ -121,7 +122,8 @@ export default function DashboardPage() {
         handleUnauthorized(iRes) ||
         handleUnauthorized(eRes) ||
         handleUnauthorized(gRes) ||
-        handleUnauthorized(sRes)
+        handleUnauthorized(sRes) ||
+        handleUnauthorized(cRes)
       )
         return;
       const assets: Asset[] = aRes.ok ? await aRes.json() : [];
@@ -130,6 +132,7 @@ export default function DashboardPage() {
       const expenses: Expense[] = eRes.ok ? await eRes.json() : [];
       const goals: Goal[] = gRes.ok ? await gRes.json() : [];
       const scenariosPayload = sRes.ok ? await sRes.json() : { scenarios: [] };
+      const budgetCategories = cRes.ok ? await cRes.json() : [];
       const scenarioList = (scenariosPayload.scenarios ?? []) as Array<{
         id: string;
       }>;
@@ -141,6 +144,7 @@ export default function DashboardPage() {
         expenses,
         goals,
         scenarioCount: scenarioList.length,
+        budgetCategories,
       });
     } finally {
       setHomeLoading(false);

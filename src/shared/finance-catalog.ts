@@ -73,6 +73,19 @@ export function essentialLabel(isEssential: boolean): string {
   return isEssential ? "Обязательный" : "Переменный";
 }
 
+/** Default expense envelopes seeded on first budget-categories GET */
+export const DEFAULT_EXPENSE_CATEGORIES: Array<{ name: string; sortOrder: number }> = [
+  { name: "Жильё", sortOrder: 0 },
+  { name: "Еда", sortOrder: 1 },
+  { name: "Транспорт", sortOrder: 2 },
+  { name: "Здоровье", sortOrder: 3 },
+  { name: "Связь", sortOrder: 4 },
+  { name: "Развлечения", sortOrder: 5 },
+  { name: "Одежда", sortOrder: 6 },
+  { name: "Подписки", sortOrder: 7 },
+  { name: "Прочее", sortOrder: 8 },
+];
+
 export function resolveAssetClass(
   type: AssetType | undefined,
   assetClass?: "PERSONAL" | "INVESTMENT",

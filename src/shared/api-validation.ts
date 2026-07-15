@@ -16,6 +16,8 @@ const FIELD_LABELS: Record<string, string> = {
   targetAmountNominal: "Целевая сумма",
   targetDate: "Дата цели",
   category: "Категория",
+  monthlyLimit: "Месячный лимит",
+  kind: "Тип категории",
   source: "Источник",
   type: "Тип",
   numRuns: "Количество прогонов",

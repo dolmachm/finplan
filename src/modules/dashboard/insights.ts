@@ -1,6 +1,7 @@
 import { monthlyEquivalent } from "@/modules/plan/frequency";
 import type {
   Asset,
+  BudgetCategory,
   Expense,
   Goal,
   Income,
@@ -8,6 +9,10 @@ import type {
 } from "@/shared/types";
 import type { PlanFrequency } from "@/modules/plan/frequency";
 import { formatRub } from "@/shared/format";
+import {
+  envelopeOverviewSummary,
+  type EnvelopeStatus,
+} from "@/modules/budget/envelopes";
 
 const LIQUID_TYPES = new Set(["CASH", "BANK_ACCOUNT", "DEPOSIT"]);
 
@@ -59,6 +64,15 @@ export type DashboardMetrics = {
   step2: boolean;
   step3: boolean;
   completenessPct: number;
+  envelopeOverspent: Array<{
+    name: string;
+    plannedMonthly: number;
+    monthlyLimit: number;
+  }>;
+  envelopes: EnvelopeStatus[];
+  envelopePlannedTotal: number;
+  envelopeLimitTotal: number;
+  envelopeOverspentCount: number;
 };
 
 export type HomeDashboardInput = {
@@ -68,6 +82,7 @@ export type HomeDashboardInput = {
   expenses: Expense[];
   goals: Goal[];
   scenarioCount: number;
+  budgetCategories?: BudgetCategory[];
   recommendedMonthlySaving?: number;
   goalProbabilities?: Array<{ probability: number }>;
 };
@@ -86,6 +101,7 @@ export function computeDashboardMetrics(
     expenses,
     goals,
     scenarioCount,
+    budgetCategories = [],
     recommendedMonthlySaving = 0,
     goalProbabilities,
   } = input;
@@ -171,6 +187,15 @@ export function computeDashboardMetrics(
     ((step1 ? 1 : 0) + (step2 ? 1 : 0) + (step3 ? 1 : 0)) / 3 * 100,
   );
 
+  const envelopeSummary = envelopeOverviewSummary(expenses, budgetCategories);
+  const envelopeOverspent = envelopeSummary.statuses
+    .filter((e) => e.overspent && e.monthlyLimit != null)
+    .map((e) => ({
+      name: e.name,
+      plannedMonthly: e.plannedMonthly,
+      monthlyLimit: e.monthlyLimit as number,
+    }));
+
   return {
     assetsTotal,
     liabilitiesTotal,
@@ -206,6 +231,11 @@ export function computeDashboardMetrics(
     step2,
     step3,
     completenessPct,
+    envelopeOverspent,
+    envelopes: envelopeSummary.statuses,
+    envelopePlannedTotal: envelopeSummary.plannedTotal,
+    envelopeLimitTotal: envelopeSummary.limitTotal,
+    envelopeOverspentCount: envelopeSummary.overspentCount,
   };
 }
 
@@ -255,6 +285,23 @@ export function buildInsights(
       body: "Укажите финансовые цели, чтобы план и Monte Carlo имели смысл.",
       ctaTab: "assets",
       ctaLabel: "К целям",
+    });
+  }
+
+  if (m.envelopeOverspent.length > 0) {
+    const top = m.envelopeOverspent[0]!;
+    const extra =
+      m.envelopeOverspent.length > 1
+        ? ` и ещё ${m.envelopeOverspent.length - 1}`
+        : "";
+    push(insights, {
+      id: "insight-envelope-over",
+      kind: "insight",
+      severity: "warning",
+      title: "Перерасход по конвертам",
+      body: `«${top.name}»: запланировано ${formatRub(top.plannedMonthly)}/мес при лимите ${formatRub(top.monthlyLimit)}${extra}. Скорректируйте расходы или лимиты.`,
+      ctaTab: "assets",
+      ctaLabel: "К данным",
     });
   }
   if (m.step1 && m.step2 && m.step3) {

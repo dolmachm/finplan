@@ -32,6 +32,7 @@ import {
   toBudgetLines,
   validateContributionsVsBudget,
 } from "@/modules/iplan/budget";
+import { envelopeReserveBudgetLine } from "@/modules/budget/envelopes";
 import type {
   IPlanDistribution,
   IPlanMcResult,
@@ -40,7 +41,7 @@ import type {
   IPlanVariant,
   InvestmentPlan,
 } from "@/modules/iplan/types";
-import type { Asset, Expense, Income } from "@/shared/types";
+import type { Asset, BudgetCategory, Expense, Income } from "@/shared/types";
 import { ChangeHistoryPanel } from "@/components/finance/ChangeHistoryPanel";
 
 const FREQ_OPTIONS: { value: IPlanStreamFrequency; label: string }[] = [
@@ -69,6 +70,7 @@ type ApiPayload = {
   suggestedVolatilityPct: number;
   incomes: Income[];
   expenses: Expense[];
+  budgetCategories?: BudgetCategory[];
   surplusMonthly: number;
   surplusAnnual: number;
 };
@@ -138,10 +140,14 @@ export function InvestmentPlanPanel({
     () => (data ? toBudgetLines(data.incomes) : []),
     [data],
   );
-  const budgetExpenses = useMemo(
-    () => (data ? toBudgetLines(data.expenses) : []),
-    [data],
-  );
+  const budgetExpenses = useMemo(() => {
+    if (!data) return [];
+    const reserve = envelopeReserveBudgetLine(
+      data.expenses,
+      data.budgetCategories ?? [],
+    );
+    return toBudgetLines(reserve ? [...data.expenses, reserve] : data.expenses);
+  }, [data]);
 
   const projection = useMemo(() => {
     if (!active || !data) return null;
