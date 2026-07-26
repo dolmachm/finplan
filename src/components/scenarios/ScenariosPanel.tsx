@@ -2,6 +2,7 @@
 
 import { ScenarioRulesEditor } from "./ScenarioRulesEditor";
 import { ScenarioCompare } from "./ScenarioCompare";
+import { ScenarioSuggestions } from "./ScenarioSuggestions";
 
 export function ScenariosPanel({
   scenarios,
@@ -9,13 +10,24 @@ export function ScenariosPanel({
   onActivate,
   compact = false,
 }: {
-  scenarios: Array<{ id: string; name: string; isActive: boolean; rules: unknown }>;
+  scenarios: Array<{
+    id: string;
+    name: string;
+    isActive: boolean;
+    rules: unknown;
+    templateKey?: string | null;
+  }>;
   onRefresh: () => void;
   onActivate: (id: string) => void;
   compact?: boolean;
 }) {
   return (
     <div className={compact ? "space-y-3" : "space-y-6"}>
+      <ScenarioSuggestions
+        scenarios={scenarios}
+        onRefresh={onRefresh}
+        compact={compact}
+      />
       <section
         className={
           compact

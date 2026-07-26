@@ -32,8 +32,16 @@ export async function POST(req: Request) {
       userId,
       name: data.name,
       kind: data.templateKey ? "PREDEFINED" : "CUSTOM",
-      templateKey: data.templateKey,
-      params: (data.params ?? { templateKey: data.templateKey }) as InputJsonValue,
+      templateKey: data.templateKey ?? null,
+      params: (data.params ??
+        (data.templateKey
+          ? {
+              templateKey: data.templateKey,
+              ...(template?.modifiers
+                ? { modifiers: template.modifiers }
+                : {}),
+            }
+          : {})) as InputJsonValue,
       rules: (data.rules ?? template?.rules ?? []) as InputJsonValue,
     },
   });
