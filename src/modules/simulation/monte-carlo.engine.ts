@@ -34,61 +34,79 @@ export interface MonteCarloResult {
   progress: number;
 }
 
-export function runMonteCarlo(
+const CHUNK = 40;
+
+function yieldEventLoop() {
+  return new Promise<void>((resolve) => {
+    if (typeof setImmediate === "function") setImmediate(resolve);
+    else setTimeout(resolve, 0);
+  });
+}
+
+function runOnePath(
+  baseInput: PlanInput,
+  horizonMonths: number,
+  chol: number[][],
+  crisisShockPct: number | undefined,
+  applyCrisis: boolean,
+) {
+  const perturbedAssets = baseInput.assets.map((a, i) => {
+    const monthlyVol = a.volatilityPct / 100 / Math.sqrt(12);
+    const monthlyMu = a.expectedReturnPct / 100 / 12;
+    let logSum = 0;
+    for (let m = 0; m < horizonMonths; m++) {
+      const z1 = randn();
+      const z2 = randn();
+      const shock = i % 2 === 0 ? chol[0][0] * z1 : chol[1][0] * z1 + chol[1][1] * z2;
+      logSum += monthlyMu + shock * monthlyVol;
+    }
+    const avgMonthly = logSum / Math.max(1, horizonMonths);
+    let currentValue = a.currentValue;
+    if (applyCrisis && crisisShockPct) {
+      currentValue *= 1 + crisisShockPct / 100;
+    }
+    return {
+      ...a,
+      expectedReturnPct: (Math.pow(1 + avgMonthly, 12) - 1) * 100,
+      currentValue,
+    };
+  });
+
+  return runDeterministicPlan({
+    ...baseInput,
+    horizonMonths,
+    assets: perturbedAssets,
+  });
+}
+
+/** Асинхронный MC: чанки + yield, чтобы прогресс писался в Redis и UI не залипал на 0%. */
+export async function runMonteCarlo(
   baseInput: PlanInput,
   params: MonteCarloParams,
-  onProgress?: (pct: number) => void,
-): MonteCarloResult {
-  const { numRuns, horizonMonths, correlation = 0.3, crisisShockPct } =
-    params;
+  onProgress?: (pct: number) => void | Promise<void>,
+): Promise<MonteCarloResult> {
+  const { numRuns, horizonMonths, correlation = 0.3, crisisShockPct } = params;
   const chol = cholesky2x2(correlation);
 
   const finalWealth: number[] = [];
   const goalHits: Record<string, number[]> = {};
-
-  for (const g of baseInput.goals) {
-    goalHits[g.id] = [];
-  }
+  for (const g of baseInput.goals) goalHits[g.id] = [];
 
   const sampleWorst: number[] = [];
   const sampleMedian: number[] = [];
   const sampleBest: number[] = [];
 
+  await onProgress?.(1);
+
   for (let run = 0; run < numRuns; run++) {
-    const shocks = Array.from({ length: horizonMonths }, () => {
-      const z1 = randn();
-      const z2 = randn();
-      const r1 = chol[0][0] * z1;
-      const r2 = chol[1][0] * z1 + chol[1][1] * z2;
-      return { r1, r2 };
-    });
-
-    const applyCrisis = crisisShockPct && run < numRuns * 0.15;
-    const perturbedAssets = baseInput.assets.map((a, i) => {
-      const monthlyVol = (a.volatilityPct / 100) / Math.sqrt(12);
-      let totalReturn = a.expectedReturnPct;
-      for (let m = 0; m < horizonMonths; m++) {
-        const shock = i % 2 === 0 ? shocks[m].r1 : shocks[m].r2;
-        totalReturn += shock * monthlyVol * 100;
-      }
-      const avgMonthly =
-        Math.pow(1 + totalReturn / 100 / horizonMonths, 1) - 1;
-      let currentValue = a.currentValue;
-      if (applyCrisis) {
-        currentValue *= 1 + crisisShockPct / 100;
-      }
-      return {
-        ...a,
-        expectedReturnPct: (Math.pow(1 + avgMonthly, 12) - 1) * 100,
-        currentValue,
-      };
-    });
-
-    const planResult = runDeterministicPlan({
-      ...baseInput,
+    const applyCrisis = !!(crisisShockPct && run < numRuns * 0.15);
+    const planResult = runOnePath(
+      baseInput,
       horizonMonths,
-      assets: perturbedAssets,
-    });
+      chol,
+      crisisShockPct,
+      applyCrisis,
+    );
 
     const nw = planResult.monthly.map((x) => x.netWorth);
     const final = nw[nw.length - 1] ?? 0;
@@ -115,17 +133,20 @@ export function runMonteCarlo(
       sampleMedian.push(...nw);
       sampleBest.push(...nw);
     } else {
-      const f = final;
-      if (f < (sampleWorst[sampleWorst.length - 1] ?? Infinity)) {
+      if (final < (sampleWorst[sampleWorst.length - 1] ?? Infinity)) {
         sampleWorst.splice(0, sampleWorst.length, ...nw);
       }
-      if (f > (sampleBest[sampleBest.length - 1] ?? -Infinity)) {
+      if (final > (sampleBest[sampleBest.length - 1] ?? -Infinity)) {
         sampleBest.splice(0, sampleBest.length, ...nw);
+      }
+      if (run === Math.floor(numRuns / 2)) {
+        sampleMedian.splice(0, sampleMedian.length, ...nw);
       }
     }
 
-    if (run % 100 === 0 && onProgress) {
-      onProgress(Math.round((run / numRuns) * 100));
+    if (run % CHUNK === 0 || run === numRuns - 1) {
+      await onProgress?.(Math.max(1, Math.round(((run + 1) / numRuns) * 95)));
+      await yieldEventLoop();
     }
   }
 
@@ -133,8 +154,6 @@ export function runMonteCarlo(
 
   const goalResults: GoalMonteCarloResult[] = baseInput.goals.map((g) => {
     const hits = goalHits[g.id];
-    const balances = hits.map((h, i) => (h ? finalWealth[i] : 0));
-    balances.sort((a, b) => a - b);
     const prob = hits.reduce((s, h) => s + h, 0) / numRuns;
     return {
       goalId: g.id,
@@ -145,7 +164,7 @@ export function runMonteCarlo(
     };
   });
 
-  onProgress?.(100);
+  await onProgress?.(100);
 
   return {
     goalResults,
@@ -163,10 +182,10 @@ export function runMonteCarlo(
   };
 }
 
-export function runSensitivity(
+export async function runSensitivity(
   baseInput: PlanInput,
-  runs: number = 500,
-): Record<string, GoalMonteCarloResult[]> {
+  runs: number = 80,
+): Promise<Record<string, GoalMonteCarloResult[]>> {
   const deltas = [
     { key: "inflation+1", inflation: 1 },
     { key: "inflation-1", inflation: -1 },
@@ -189,7 +208,7 @@ export function runSensitivity(
         amount: e.amount * (1 - (d.expenseCut ?? 0) / 100),
       })),
     };
-    const mc = runMonteCarlo(modified, {
+    const mc = await runMonteCarlo(modified, {
       numRuns: runs,
       horizonMonths: baseInput.horizonMonths,
     });

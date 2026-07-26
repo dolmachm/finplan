@@ -8,6 +8,8 @@ import {
 import { resolveScenarioModifiers } from "@/modules/scenarios/scenario-modifiers";
 
 const DAILY_QUOTA = Number(process.env.SIMULATION_DAILY_QUOTA ?? 10);
+export const DEFAULT_MC_RUNS = 1200;
+const SENSITIVITY_RUNS = 40;
 
 export async function checkSimulationQuota(userId: string): Promise<boolean> {
   const since = new Date();
@@ -34,29 +36,43 @@ export async function enqueueSimulation(
     scenarioParams = (scenario.params as Record<string, unknown>) ?? {};
   }
 
-  const job = await prisma.simulationJob.create({
+  return prisma.simulationJob.create({
     data: {
       userId,
       scenarioId: opts.scenarioId,
-      numRuns: opts.numRuns ?? 5000,
+      numRuns: opts.numRuns ?? DEFAULT_MC_RUNS,
       params: scenarioParams as unknown as InputJsonValue,
       status: "PENDING",
     },
   });
-
-  return job;
 }
 
 export async function processSimulationJob(jobId: string) {
+  const job = await prisma.simulationJob.findUnique({ where: { id: jobId } });
+  if (!job || job.status !== "PENDING") return;
+  await runSimulationJobBody(jobId);
+}
+
+/** Для API: можно вызывать, если статус уже RUNNING */
+export async function processSimulationJobForce(jobId: string) {
+  await runSimulationJobBody(jobId);
+}
+
+async function runSimulationJobBody(jobId: string) {
   const job = await prisma.simulationJob.findUnique({
     where: { id: jobId },
     include: { scenario: true },
   });
-  if (!job || job.status !== "PENDING") return;
+  if (!job) return;
+  if (job.status === "COMPLETED" || job.status === "FAILED") return;
 
   await prisma.simulationJob.update({
     where: { id: jobId },
-    data: { status: "RUNNING", startedAt: new Date(), progressPct: 0 },
+    data: {
+      status: "RUNNING",
+      startedAt: job.startedAt ?? new Date(),
+      progressPct: Math.max(1, job.progressPct || 0),
+    },
   });
 
   try {
@@ -70,9 +86,9 @@ export async function processSimulationJob(jobId: string) {
     );
 
     const deterministic = runDeterministicPlan(planInput, modifiers);
-    const numRuns = Math.min(Math.max(job.numRuns, 1000), 10000);
+    const numRuns = Math.min(Math.max(job.numRuns, 500), 5000);
 
-    const mc = runMonteCarlo(
+    const mc = await runMonteCarlo(
       planInput,
       {
         numRuns,
@@ -82,20 +98,29 @@ export async function processSimulationJob(jobId: string) {
       async (pct) => {
         await prisma.simulationJob.update({
           where: { id: jobId },
-          data: { progressPct: pct },
+          data: { progressPct: Math.min(95, pct) },
         });
       },
     );
 
-    const sensitivity = runSensitivity(planInput, 300);
+    await prisma.simulationJob.update({
+      where: { id: jobId },
+      data: { progressPct: 96 },
+    });
+
+    const sensitivity = await runSensitivity(planInput, SENSITIVITY_RUNS);
 
     await prisma.planSnapshot.create({
       data: {
         userId: job.userId,
         scenarioId: job.scenarioId,
         deterministic: deterministic as unknown as InputJsonValue,
-        cashflowMonthly: deterministic.monthly.map((m) => m.cashflow) as unknown as InputJsonValue,
-        netWorthMonthly: deterministic.monthly.map((m) => m.netWorth) as unknown as InputJsonValue,
+        cashflowMonthly: deterministic.monthly.map(
+          (m) => m.cashflow,
+        ) as unknown as InputJsonValue,
+        netWorthMonthly: deterministic.monthly.map(
+          (m) => m.netWorth,
+        ) as unknown as InputJsonValue,
       },
     });
 

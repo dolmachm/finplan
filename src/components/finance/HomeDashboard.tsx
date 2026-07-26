@@ -3,12 +3,14 @@
 /**
  * Home: сразу Score + SummaryGrid из summary API;
  * ниже fold — отложенный mount через IntersectionObserver (без второго fetch).
+ * First-run: онбординг; gather/ready — разные CTA.
  */
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { HelpHint } from "@/components/ui/FormField";
+import { OnboardingWelcome } from "@/components/onboarding/OnboardingWelcome";
 import type { DashboardTab } from "@/components/layout/DashboardShell";
 import {
   buildInsights,
@@ -19,6 +21,12 @@ import {
 } from "@/modules/dashboard/insights";
 import type { FinancialScore } from "@/modules/dashboard/scoring";
 import type { SavingsCorridor } from "@/modules/budget/savings-corridor";
+import {
+  nextIncompleteStep,
+  resolveJourneyPhase,
+  useOnboardingDismissed,
+  type DataSub,
+} from "@/modules/dashboard/journey";
 import { formatRub } from "@/shared/format";
 import { EnvelopeOverviewCard } from "@/components/finance/EnvelopeOverview";
 import { SavingsCorridorCard } from "@/components/finance/SavingsCorridorCard";
@@ -38,6 +46,11 @@ const severityLabel: Record<InsightSeverity, string> = {
   positive: "Хорошо",
 };
 
+export type HomeNavigate = (
+  tab: DashboardTab,
+  opts?: { dataSub?: DataSub },
+) => void;
+
 export function HomeDashboard({
   metrics,
   score,
@@ -49,15 +62,20 @@ export function HomeDashboard({
   score: FinancialScore | null;
   corridor?: SavingsCorridor | null;
   loading: boolean;
-  onNavigate: (tab: DashboardTab) => void;
+  onNavigate: HomeNavigate;
 }) {
   const [belowFold, setBelowFold] = useState(false);
+  const [onboardingDismissed, dismissOnboardingUi] = useOnboardingDismissed();
+  const hydrated = useSyncExternalStore(
+    () => () => {},
+    () => true,
+    () => false,
+  );
   const sentinelRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     const el = sentinelRef.current;
     if (!el || belowFold) return;
-    // rootMargin подгружает блок чуть до появления во viewport.
     const obs = new IntersectionObserver(
       (entries) => {
         if (entries.some((e) => e.isIntersecting)) {
@@ -75,8 +93,36 @@ export function HomeDashboard({
     return <p className="text-muted">Загрузка сводки…</p>;
   }
 
+  // Пустой профиль: ждём клиент, чтобы не мигать gather ↔ welcome.
+  if (metrics.completenessPct === 0 && !hydrated) {
+    return <p className="text-muted">Загрузка сводки…</p>;
+  }
+
+  const phase = resolveJourneyPhase(metrics, onboardingDismissed);
+
+  function finishOnboarding(start: boolean) {
+    dismissOnboardingUi();
+    if (start) onNavigate("assets", { dataSub: "balance" });
+  }
+
+  if (phase === "welcome") {
+    return (
+      <OnboardingWelcome
+        onStart={() => finishOnboarding(true)}
+        onSkip={() => finishOnboarding(false)}
+      />
+    );
+  }
+
   return (
     <div className="space-y-8">
+      {phase === "gather" && (
+        <GatherBanner metrics={metrics} onNavigate={onNavigate} />
+      )}
+      {phase === "ready" && (
+        <ReadyBanner onNavigate={onNavigate} />
+      )}
+
       <ScoreCard score={score} mode="overall" />
       <SummaryGrid metrics={metrics} />
 
@@ -87,6 +133,7 @@ export function HomeDashboard({
           metrics={metrics}
           score={score}
           corridor={corridor}
+          phase={phase}
           onNavigate={onNavigate}
         />
       ) : (
@@ -96,16 +143,75 @@ export function HomeDashboard({
   );
 }
 
+function GatherBanner({
+  metrics,
+  onNavigate,
+}: {
+  metrics: DashboardMetrics;
+  onNavigate: HomeNavigate;
+}) {
+  const next = nextIncompleteStep(metrics);
+  return (
+    <Card className="flex flex-wrap items-center justify-between gap-4 border-brand/25 bg-brand-light/40">
+      <div>
+        <p className="text-xs font-medium uppercase tracking-wide text-brand">
+          Заполнение · {metrics.completenessPct}%
+        </p>
+        <p className="mt-1 text-sm font-medium">
+          Следующий шаг — {next.label}
+        </p>
+        <HelpHint className="mt-1">{next.hint}</HelpHint>
+      </div>
+      <Button
+        type="button"
+        onClick={() => {
+          if (metrics.completenessPct >= 100) onNavigate("plan");
+          else onNavigate("assets", { dataSub: next.dataSub });
+        }}
+      >
+        {next.cta}
+      </Button>
+    </Card>
+  );
+}
+
+function ReadyBanner({ onNavigate }: { onNavigate: HomeNavigate }) {
+  return (
+    <Card className="flex flex-wrap items-center justify-between gap-4">
+      <div>
+        <p className="text-sm font-medium">Профиль заполнен</p>
+        <p className="mt-1 text-sm text-muted">
+          Смотрите прогноз и риски — или обновите данные, если что-то изменилось.
+        </p>
+      </div>
+      <div className="flex flex-wrap gap-2">
+        <Button
+          type="button"
+          variant="secondary"
+          onClick={() => onNavigate("assets", { dataSub: "balance" })}
+        >
+          К данным
+        </Button>
+        <Button type="button" onClick={() => onNavigate("plan")}>
+          Открыть план
+        </Button>
+      </div>
+    </Card>
+  );
+}
+
 function BelowFold({
   metrics,
   score,
   corridor,
+  phase,
   onNavigate,
 }: {
   metrics: DashboardMetrics;
   score: FinancialScore;
   corridor: SavingsCorridor | null;
-  onNavigate: (tab: DashboardTab) => void;
+  phase: "gather" | "ready";
+  onNavigate: HomeNavigate;
 }) {
   const all = buildInsights(metrics, score);
   const actions = topActions(all);
@@ -126,7 +232,9 @@ function BelowFold({
         overspentCount={metrics.envelopeOverspentCount}
         onNavigate={onNavigate}
       />
-      <StageCard metrics={metrics} onNavigate={onNavigate} />
+      {phase === "gather" && (
+        <StageCard metrics={metrics} onNavigate={onNavigate} />
+      )}
       {showAdvice && actions.length > 0 && (
         <section className="space-y-3">
           <h2 className="font-medium">Сделать в первую очередь</h2>
@@ -198,12 +306,13 @@ function StageCard({
   onNavigate,
 }: {
   metrics: DashboardMetrics;
-  onNavigate: (tab: DashboardTab) => void;
+  onNavigate: HomeNavigate;
 }) {
+  const next = nextIncompleteStep(m);
   const steps = [
-    { done: m.step1, label: "Точка 0" },
-    { done: m.step2, label: "Денежный поток" },
-    { done: m.step3, label: "Цели" },
+    { done: m.step1, label: "Точка 0", sub: "balance" as const },
+    { done: m.step2, label: "Денежный поток", sub: "cashflow" as const },
+    { done: m.step3, label: "Цели", sub: "goals" as const },
   ];
   return (
     <Card className="flex flex-wrap items-center justify-between gap-4 p-4">
@@ -213,26 +322,28 @@ function StageCard({
         </p>
         <div className="mt-2 flex flex-wrap gap-3 text-sm">
           {steps.map((s) => (
-            <span
+            <button
               key={s.label}
-              className={s.done ? "text-emerald-700" : "text-muted"}
+              type="button"
+              onClick={() => onNavigate("assets", { dataSub: s.sub })}
+              className={
+                s.done
+                  ? "text-emerald-700 hover:underline"
+                  : "text-muted hover:text-foreground hover:underline"
+              }
             >
               {s.done ? "✓" : "○"} {s.label}
-            </span>
+            </button>
           ))}
         </div>
-        <HelpHint className="mt-2">
-          {!m.step1
-            ? "Начните с активов и пассивов на вкладке «Данные»."
-            : !m.step2
-              ? "Добавьте доходы и расходы."
-              : !m.step3
-                ? "Задайте цели и настройки прогноза."
-                : "Профиль готов — смотрите план и риски."}
-        </HelpHint>
+        <HelpHint className="mt-2">{next.hint}</HelpHint>
       </div>
-      <Button type="button" variant="secondary" onClick={() => onNavigate("assets")}>
-        {m.completenessPct < 100 ? "Продолжить ввод" : "К данным"}
+      <Button
+        type="button"
+        variant="secondary"
+        onClick={() => onNavigate("assets", { dataSub: next.dataSub })}
+      >
+        {next.cta}
       </Button>
     </Card>
   );
@@ -245,7 +356,7 @@ function ActionCard({
 }: {
   item: DashboardInsight;
   index: number;
-  onNavigate: (tab: DashboardTab) => void;
+  onNavigate: HomeNavigate;
 }) {
   return (
     <Card className={`p-4 ${severityClass[item.severity]}`}>
@@ -277,7 +388,7 @@ function InsightList({
   title: string;
   empty: string;
   items: DashboardInsight[];
-  onNavigate: (tab: DashboardTab) => void;
+  onNavigate: HomeNavigate;
 }) {
   return (
     <section className="space-y-3">

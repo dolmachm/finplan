@@ -22,6 +22,7 @@ export type PlanSection = "overview" | "montecarlo" | "iplan" | "scenarios";
 type SimJob = {
   status: string;
   progressPct: number;
+  startedAt?: string | null;
   result?: {
     samplePaths: Array<{ label: string; netWorth: number[] }>;
     goalProbabilities: Array<{
@@ -33,6 +34,21 @@ type SimJob = {
     }>;
   };
 };
+
+function formatEta(job: SimJob): string | null {
+  if (job.status !== "RUNNING" && job.status !== "PENDING") return null;
+  const pct = Math.max(0, job.progressPct || 0);
+  if (!job.startedAt || pct < 2) {
+    return "обычно 30–90 сек";
+  }
+  const started = new Date(job.startedAt).getTime();
+  const elapsed = Date.now() - started;
+  if (elapsed < 1000) return "обычно 30–90 сек";
+  const totalMs = (elapsed / pct) * 100;
+  const leftSec = Math.max(5, Math.round((totalMs - elapsed) / 1000));
+  if (leftSec < 60) return `≈ ${leftSec} сек`;
+  return `≈ ${Math.ceil(leftSec / 60)} мин`;
+}
 
 export function PlanWorkspace({
   section = "overview",
@@ -176,10 +192,35 @@ export function PlanWorkspace({
             </Button>
             {simJob && (
               <span className="text-sm text-muted">
-                {simJob.status} ({simJob.progressPct}%)
+                {simJob.status === "RUNNING" || simJob.status === "PENDING"
+                  ? `Считаем… ${simJob.progressPct}%`
+                  : simJob.status === "COMPLETED"
+                    ? "Готово"
+                    : simJob.status}{" "}
+                {formatEta(simJob) &&
+                  (simJob.status === "RUNNING" || simJob.status === "PENDING") && (
+                    <span>· осталось {formatEta(simJob)}</span>
+                  )}
               </span>
             )}
           </div>
+          {simBusy && (
+            <p className="text-xs text-muted">
+              Примерное время: 30–90 секунд. Можно свернуть вкладку — пришлём
+              уведомление, когда расчёт завершится (разрешите уведомления в
+              браузере).
+            </p>
+          )}
+          {simBusy && (
+            <div className="h-2 overflow-hidden rounded-full bg-muted">
+              <div
+                className="h-full bg-brand transition-all duration-500"
+                style={{
+                  width: `${Math.min(100, Math.max(2, simJob?.progressPct ?? 2))}%`,
+                }}
+              />
+            </div>
+          )}
           <FormError message={simError} />
           {simJob?.result && (
             <>

@@ -3,7 +3,14 @@ import { z } from "zod";
 import { parseJsonBody } from "@/shared/api-validation";
 import { prisma } from "@/shared/db";
 import { requireUserId, isErrorResponse } from "@/shared/session";
-import { enqueueSimulation } from "@/modules/simulation/simulation.service";
+import {
+  DEFAULT_MC_RUNS,
+  enqueueSimulation,
+  processSimulationJobForce,
+} from "@/modules/simulation/simulation.service";
+
+/** Длинный расчёт на хостинге с лимитом времени */
+export const maxDuration = 120;
 
 export async function GET() {
   const userId = await requireUserId();
@@ -18,7 +25,7 @@ export async function GET() {
 
 const postSchema = z.object({
   scenarioId: z.string().optional(),
-  numRuns: z.number().int().min(1000).max(10000).optional(),
+  numRuns: z.number().int().min(500).max(5000).optional(),
 });
 
 export async function POST(req: Request) {
@@ -35,15 +42,22 @@ export async function POST(req: Request) {
     });
     const job = await enqueueSimulation(userId, {
       scenarioId: body.scenarioId ?? active?.id,
-      numRuns: body.numRuns ?? 5000,
+      numRuns: body.numRuns ?? DEFAULT_MC_RUNS,
     });
 
-    const { processSimulationJob } = await import(
-      "@/modules/simulation/simulation.service"
-    );
-    void processSimulationJob(job.id);
+    await prisma.simulationJob.update({
+      where: { id: job.id },
+      data: { status: "RUNNING", startedAt: new Date(), progressPct: 1 },
+    });
 
-    return NextResponse.json(job, { status: 202 });
+    // Полный await — иначе job мог навсегда остаться PENDING без воркера.
+    await processSimulationJobForce(job.id);
+
+    const done = await prisma.simulationJob.findUnique({
+      where: { id: job.id },
+      include: { result: true },
+    });
+    return NextResponse.json(done ?? job);
   } catch (e) {
     if (e instanceof Error && e.message === "QUOTA_EXCEEDED") {
       return NextResponse.json(

@@ -15,6 +15,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { HomeDashboard } from "@/components/finance/HomeDashboard";
+import { StepContinueBar } from "@/components/onboarding/StepContinueBar";
 import { FormError } from "@/components/ui/FormError";
 import { HelpHint } from "@/components/ui/FormField";
 import { SubNav } from "@/components/ui/SubNav";
@@ -23,6 +24,10 @@ import { FEATURE_HINTS } from "@/content/help";
 import { readApiError, NETWORK_ERROR_MESSAGE } from "@/shared/api-client";
 import { apiFetch, apiFetchJson } from "@/shared/api-fetch";
 import { ensureOnlineForWrite } from "@/shared/offline";
+import {
+  nextIncompleteStep,
+  type DataSub,
+} from "@/modules/dashboard/journey";
 import {
   FinanceStoreProvider,
   useFinanceStore,
@@ -74,7 +79,6 @@ const ReportEditor = dynamic(
   { ssr: false, loading: () => <p className="text-muted">Загрузка…</p> },
 );
 
-type DataSub = "balance" | "cashflow" | "goals";
 type ExportSub = "report" | "csv";
 
 const DATA_SUB_ITEMS = [
@@ -134,6 +138,7 @@ function DashboardPageInner() {
     id: string;
     status: string;
     progressPct: number;
+    startedAt?: string | null;
     result?: {
       goalProbabilities: Array<{
         goalId: string;
@@ -270,6 +275,21 @@ function DashboardPageInner() {
     }
   }
 
+  function notifyRiskReady(ok: boolean, detail?: string) {
+    toast[ok ? "success" : "error"](
+      ok ? "Прогноз риска готов" : (detail ?? "Расчёт риска не удался"),
+    );
+    if (typeof window !== "undefined" && "Notification" in window) {
+      if (Notification.permission === "granted") {
+        new Notification(ok ? "FinPlan: прогноз риска готов" : "FinPlan: ошибка расчёта", {
+          body: ok
+            ? "Можно открыть вкладку «Прогноз риска» и посмотреть график."
+            : detail,
+        });
+      }
+    }
+  }
+
   function pollJob(id: string) {
     if (pollRef.current) clearInterval(pollRef.current);
     pollRef.current = setInterval(async () => {
@@ -281,7 +301,7 @@ function DashboardPageInner() {
         if (pollRef.current) clearInterval(pollRef.current);
         pollRef.current = null;
         void loadProjection();
-        toast.success("Прогноз риска готов");
+        notifyRiskReady(true);
       }
       if (job.status === "FAILED") {
         if (pollRef.current) clearInterval(pollRef.current);
@@ -290,9 +310,9 @@ function DashboardPageInner() {
           job.errorMessage ??
           "Расчёт завершился с ошибкой. Проверьте данные плана и попробуйте снова";
         setSimError(message);
-        toast.error(message);
+        notifyRiskReady(false, message);
       }
-    }, 2000);
+    }, 1500);
   }
 
   async function runSimulation() {
@@ -300,11 +320,19 @@ function DashboardPageInner() {
     setSimError("");
     setSimStarting(true);
     try {
+      if (typeof window !== "undefined" && "Notification" in window) {
+        if (Notification.permission === "default") {
+          void Notification.requestPermission();
+        }
+      }
+      toast.success(
+        "Считаем риски (~30–90 сек). Пришлём уведомление, когда будет готово.",
+      );
       const res = await apiFetch("/api/simulations", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          numRuns: 5000,
+          numRuns: 1200,
           scenarioId:
             viewScenarioId === "base"
               ? undefined
@@ -320,8 +348,16 @@ function DashboardPageInner() {
       }
       const job = await res.json();
       setSimJob(job);
-      toast.success("Прогноз риска запущен");
-      pollJob(job.id);
+      if (job.status === "COMPLETED") {
+        void loadProjection();
+        notifyRiskReady(true);
+      } else if (job.status === "FAILED") {
+        const message = job.errorMessage ?? "Ошибка расчёта";
+        setSimError(message);
+        notifyRiskReady(false, message);
+      } else {
+        pollJob(job.id);
+      }
     } catch {
       const message = NETWORK_ERROR_MESSAGE;
       setSimError(message);
@@ -382,6 +418,33 @@ function DashboardPageInner() {
     }
   }
 
+  const journeySteps = {
+    step1: (dataStatus.assetCount ?? 0) + (dataStatus.liabilityCount ?? 0) > 0,
+    step2: (dataStatus.incomeCount ?? 0) > 0 && (dataStatus.expenseCount ?? 0) > 0,
+    step3: goalCount > 0,
+    completenessPct: 0,
+  };
+  journeySteps.completenessPct = Math.round(
+    ((journeySteps.step1 ? 1 : 0) +
+      (journeySteps.step2 ? 1 : 0) +
+      (journeySteps.step3 ? 1 : 0)) /
+      3 *
+      100,
+  );
+
+  function navigateHome(
+    nextTab: DashboardTab,
+    opts?: { dataSub?: DataSub },
+  ) {
+    if (opts?.dataSub) setDataSub(opts.dataSub);
+    setTab(nextTab);
+  }
+
+  function goPlan() {
+    setPlanSub("overview");
+    setTab("plan");
+  }
+
   return (
     <DashboardShell
       tab={tab}
@@ -404,17 +467,26 @@ function DashboardPageInner() {
           score={score}
           corridor={summary?.corridor ?? null}
           loading={summaryLoading && !summary}
-          onNavigate={setTab}
+          onNavigate={navigateHome}
         />
       )}
 
       {tab === "plan" && (
-        <div>
+        <div className="space-y-4">
           <SubNav
             items={PLAN_SUB_ITEMS}
             value={planSub}
             onChange={setPlanSub}
           />
+          {journeySteps.completenessPct < 100 && (
+            <PlanIncompleteBanner
+              steps={journeySteps}
+              onContinue={(sub) => {
+                setDataSub(sub);
+                setTab("assets");
+              }}
+            />
+          )}
           {!entitiesReady || entitiesLoading ? (
             <p className="text-muted">Загрузка плана…</p>
           ) : viewScenarioId ? (
@@ -441,14 +513,22 @@ function DashboardPageInner() {
       {tab === "assets" && (
         <div className="space-y-6">
           <SubNav
-            items={DATA_SUB_ITEMS}
+            items={DATA_SUB_ITEMS.map((item) => ({
+              ...item,
+              label:
+                item.id === "balance"
+                  ? `${journeySteps.step1 ? "✓ " : ""}${item.label}`
+                  : item.id === "cashflow"
+                    ? `${journeySteps.step2 ? "✓ " : ""}${item.label}`
+                    : `${journeySteps.step3 ? "✓ " : ""}${item.label}`,
+            }))}
             value={dataSub}
             onChange={setDataSub}
           />
           <CfpProgressCard
-            status={dataStatus}
-            goalCount={goalCount}
-            onGoPlan={() => setTab("plan")}
+            steps={journeySteps}
+            current={dataSub}
+            onGoPlan={goPlan}
             onGoSub={setDataSub}
           />
           {!entitiesReady || entitiesLoading ? (
@@ -477,6 +557,12 @@ function DashboardPageInner() {
                   <ChangeHistoryPanel />
                 </div>
               )}
+              <StepContinueBar
+                current={dataSub}
+                steps={journeySteps}
+                onGoSub={setDataSub}
+                onGoPlan={goPlan}
+              />
             </>
           )}
         </div>
@@ -500,57 +586,101 @@ function DashboardPageInner() {
 }
 
 function CfpProgressCard({
-  status,
-  goalCount,
+  steps,
+  current,
   onGoPlan,
   onGoSub,
 }: {
-  status: FinanceDataStatus | null;
-  goalCount: number;
+  steps: {
+    step1: boolean;
+    step2: boolean;
+    step3: boolean;
+    completenessPct: number;
+  };
+  current: DataSub;
   onGoPlan: () => void;
   onGoSub: (sub: DataSub) => void;
 }) {
-  const step1 = (status?.assetCount ?? 0) + (status?.liabilityCount ?? 0) > 0;
-  const step2 =
-    (status?.incomeCount ?? 0) > 0 && (status?.expenseCount ?? 0) > 0;
-  const step3 = goalCount > 0;
-  const steps = [
-    { done: step1, label: "1. Точка 0", sub: "balance" as const },
-    { done: step2, label: "2. Денежный поток", sub: "cashflow" as const },
-    { done: step3, label: "3. Цели", sub: "goals" as const },
+  const items = [
+    { done: steps.step1, label: "1. Точка 0", sub: "balance" as const },
+    { done: steps.step2, label: "2. Денежный поток", sub: "cashflow" as const },
+    { done: steps.step3, label: "3. Цели", sub: "goals" as const },
   ];
-  const next = !step1
-    ? "Зафиксируйте активы и/или пассивы"
-    : !step2
-      ? "Добавьте доходы и расходы"
-      : !step3
-        ? "Добавьте хотя бы одну цель"
-        : "Данные готовы — откройте «План»";
+  const next = nextIncompleteStep(steps);
+  const allDone = steps.completenessPct >= 100;
 
   return (
     <Card className="flex flex-wrap items-center justify-between gap-4">
       <div>
-        <p className="text-sm font-medium">Прогресс заполнения финплана</p>
+        <p className="text-sm font-medium">
+          Прогресс заполнения · {steps.completenessPct}%
+        </p>
         <div className="mt-2 flex flex-wrap gap-3 text-sm">
-          {steps.map((s) => (
-            <button
-              key={s.label}
-              type="button"
-              onClick={() => onGoSub(s.sub)}
-              className={
-                s.done
-                  ? "text-accent hover:underline"
-                  : "text-muted hover:text-foreground hover:underline"
-              }
-            >
-              {s.done ? "✓" : "○"} {s.label}
-            </button>
-          ))}
+          {items.map((s) => {
+            const active = current === s.sub;
+            return (
+              <button
+                key={s.label}
+                type="button"
+                onClick={() => onGoSub(s.sub)}
+                className={
+                  active
+                    ? "font-medium text-brand underline"
+                    : s.done
+                      ? "text-accent hover:underline"
+                      : "text-muted hover:text-foreground hover:underline"
+                }
+              >
+                {s.done ? "✓" : "○"} {s.label}
+              </button>
+            );
+          })}
         </div>
-        <HelpHint className="mt-2">{next}</HelpHint>
+        <HelpHint className="mt-2">
+          {allDone ? "Данные готовы — откройте «План»." : next.hint}
+        </HelpHint>
       </div>
-      <Button type="button" variant="secondary" onClick={onGoPlan}>
-        К плану
+      <Button
+        type="button"
+        variant={allDone ? "primary" : "secondary"}
+        onClick={() => {
+          if (allDone) onGoPlan();
+          else onGoSub(next.dataSub);
+        }}
+      >
+        {allDone ? "К плану" : next.cta}
+      </Button>
+    </Card>
+  );
+}
+
+function PlanIncompleteBanner({
+  steps,
+  onContinue,
+}: {
+  steps: {
+    step1: boolean;
+    step2: boolean;
+    step3: boolean;
+    completenessPct: number;
+  };
+  onContinue: (sub: DataSub) => void;
+}) {
+  const next = nextIncompleteStep(steps);
+  return (
+    <Card className="flex flex-wrap items-center justify-between gap-4 border-amber-200 bg-amber-50/60">
+      <div>
+        <p className="text-sm font-medium">План точнее с полными данными</p>
+        <p className="mt-1 text-sm text-muted">
+          Заполнено {steps.completenessPct}%. Следующий шаг — {next.label}.
+        </p>
+      </div>
+      <Button
+        type="button"
+        variant="secondary"
+        onClick={() => onContinue(next.dataSub)}
+      >
+        {next.cta}
       </Button>
     </Card>
   );

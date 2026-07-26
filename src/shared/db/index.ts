@@ -270,7 +270,7 @@ const simulationJobRepo = {
     const row = await createEntity<SimulationJob>("simJob", {
       status: "PENDING",
       progressPct: 0,
-      numRuns: 5000,
+      numRuns: 1200,
       stepMonths: 1,
       params: {},
       errorMessage: null,
@@ -285,12 +285,21 @@ const simulationJobRepo = {
     return row;
   },
 
-  async findUnique(args: { where: { id: string }; include?: { scenario?: boolean } }) {
+  async findUnique(args: {
+    where: { id: string };
+    include?: { scenario?: boolean; result?: boolean };
+  }) {
     const job = await getJson<SimulationJob>(`simJob:${args.where.id}`);
     if (!job) return null;
-    const result: SimulationJob & { scenario?: Scenario | null } = { ...job };
+    const result: SimulationJob & {
+      scenario?: Scenario | null;
+      result?: SimulationResult | null;
+    } = { ...job };
     if (args.include?.scenario && job.scenarioId) {
       result.scenario = await getJson<Scenario>(`scenario:${job.scenarioId}`);
+    }
+    if (args.include?.result) {
+      result.result = await getJson<SimulationResult>(`simResult:${job.id}`);
     }
     return result;
   },
