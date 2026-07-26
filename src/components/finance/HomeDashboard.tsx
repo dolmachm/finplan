@@ -1,22 +1,23 @@
 "use client";
 
+import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { HelpHint } from "@/components/ui/FormField";
 import type { DashboardTab } from "@/components/layout/DashboardShell";
 import {
   buildInsights,
-  computeDashboardMetrics,
   topActions,
   type DashboardInsight,
   type DashboardMetrics,
-  type HomeDashboardInput,
   type InsightSeverity,
 } from "@/modules/dashboard/insights";
-import { buildSavingsCorridor } from "@/modules/budget/savings-corridor";
+import type { FinancialScore } from "@/modules/dashboard/scoring";
+import type { SavingsCorridor } from "@/modules/budget/savings-corridor";
 import { formatRub } from "@/shared/format";
 import { EnvelopeOverviewCard } from "@/components/finance/EnvelopeOverview";
 import { SavingsCorridorCard } from "@/components/finance/SavingsCorridorCard";
+import { ScoreCard } from "@/components/finance/ScoreCard";
 
 const severityClass: Record<InsightSeverity, string> = {
   critical: "border-l-4 border-l-red-500",
@@ -33,32 +34,77 @@ const severityLabel: Record<InsightSeverity, string> = {
 };
 
 export function HomeDashboard({
-  input,
+  metrics,
+  score,
+  corridor = null,
   loading,
   onNavigate,
 }: {
-  input: HomeDashboardInput | null;
+  metrics: DashboardMetrics | null;
+  score: FinancialScore | null;
+  corridor?: SavingsCorridor | null;
   loading: boolean;
   onNavigate: (tab: DashboardTab) => void;
 }) {
-  if (loading || !input) {
+  const [belowFold, setBelowFold] = useState(false);
+  const sentinelRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    const el = sentinelRef.current;
+    if (!el || belowFold) return;
+    const obs = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((e) => e.isIntersecting)) {
+          setBelowFold(true);
+          obs.disconnect();
+        }
+      },
+      { rootMargin: "120px 0px" },
+    );
+    obs.observe(el);
+    return () => obs.disconnect();
+  }, [belowFold, metrics]);
+
+  if (loading || !metrics || !score) {
     return <p className="text-muted">Загрузка сводки…</p>;
   }
 
-  const metrics = computeDashboardMetrics(input);
-  const corridor = buildSavingsCorridor({
-    incomes: input.incomes,
-    expenses: input.expenses,
-    budgetCategories: input.budgetCategories,
-  });
+  return (
+    <div className="space-y-8">
+      <ScoreCard score={score} mode="overall" />
+      <SummaryGrid metrics={metrics} />
+
+      <div ref={sentinelRef} aria-hidden className="h-px" />
+
+      {belowFold ? (
+        <BelowFold
+          metrics={metrics}
+          corridor={corridor}
+          onNavigate={onNavigate}
+        />
+      ) : (
+        <p className="text-sm text-muted">Прокрутите ниже за деталями…</p>
+      )}
+    </div>
+  );
+}
+
+function BelowFold({
+  metrics,
+  corridor,
+  onNavigate,
+}: {
+  metrics: DashboardMetrics;
+  corridor: SavingsCorridor | null;
+  onNavigate: (tab: DashboardTab) => void;
+}) {
   const all = buildInsights(metrics);
   const actions = topActions(all);
   const insights = all.filter((i) => i.kind === "insight").slice(0, 6);
   const recs = all.filter((i) => i.kind === "recommendation").slice(0, 6);
 
   return (
-    <div className="space-y-8">
-      <SummaryGrid metrics={metrics} />
+    <>
       {corridor && (
         <SavingsCorridorCard data={corridor} onNavigate={onNavigate} />
       )}
@@ -100,7 +146,7 @@ export function HomeDashboard({
           onNavigate={onNavigate}
         />
       </div>
-    </div>
+    </>
   );
 }
 

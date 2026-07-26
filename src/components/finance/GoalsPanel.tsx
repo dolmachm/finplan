@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { FormField, HelpHint } from "@/components/ui/FormField";
@@ -9,6 +9,8 @@ import { Modal, ModalFormBox, ModalFormActions } from "@/components/ui/Modal";
 import { selectClass } from "@/components/ui/form-controls";
 import { toast } from "@/components/ui/ToastProvider";
 import { readApiError, parsePositiveNumber } from "@/shared/api-client";
+import { apiFetch } from "@/shared/api-fetch";
+import { ensureOnlineForWrite } from "@/shared/offline";
 import { formatMoneyInput } from "@/shared/format-input";
 import { formatRub } from "@/shared/format";
 import { FIELD_HINTS, FEATURE_HINTS } from "@/content/help";
@@ -25,6 +27,10 @@ import {
   type GoalPathSettings,
 } from "@/modules/plan/goal-paths";
 import type { Asset, Goal, GoalStrategy, GoalType } from "@/shared/types";
+import type { FinancialScore } from "@/modules/dashboard/scoring";
+import { useFinanceStore } from "@/modules/finance/finance-store";
+import { ScoreCard } from "@/components/finance/ScoreCard";
+import type { PlanProjection } from "@/modules/plan/projection-types";
 
 type EditView = { id?: string } | null;
 
@@ -54,89 +60,83 @@ function newStageId() {
 }
 
 export function GoalsPanel({
-  onSaved,
-  onUnauthorized,
-  onCountChange,
+  score = null,
 }: {
-  onSaved?: () => void;
-  onUnauthorized: (res: Response) => boolean;
-  onCountChange?: (count: number) => void;
+  score?: FinancialScore | null;
 }) {
-  const [goals, setGoals] = useState<Goal[]>([]);
-  const [assets, setAssets] = useState<Asset[]>([]);
+  const {
+    goals,
+    assets,
+    entitiesLoading: snapshotLoading,
+    upsert,
+    remove: removeEntity,
+  } = useFinanceStore();
   const [funding, setFunding] = useState<Record<string, GoalFundingResult>>({});
   const [avgSurplus, setAvgSurplus] = useState(0);
   const [editView, setEditView] = useState<EditView>(null);
-  const [loading, setLoading] = useState(true);
-  const countRef = useRef(onCountChange);
-  countRef.current = onCountChange;
+  const [projectionLoading, setProjectionLoading] = useState(true);
 
-  const load = useCallback(async () => {
-    setLoading(true);
+  const loadProjection = useCallback(async () => {
+    setProjectionLoading(true);
     try {
-      const [gRes, aRes, pRes] = await Promise.all([
-        fetch("/api/goals"),
-        fetch("/api/assets"),
-        fetch("/api/plan/projection?scenarioId=base", { cache: "no-store" }),
-      ]);
-      if (onUnauthorized(gRes) || onUnauthorized(aRes)) return;
-      if (gRes.ok) {
-        const next: Goal[] = await gRes.json();
-        setGoals(next);
-        countRef.current?.(next.length);
+      const res = await apiFetch("/api/plan/projection?scenarioId=base");
+      if (!res?.ok) return;
+      const data = (await res.json()) as PlanProjection;
+      const map: Record<string, GoalFundingResult> = {};
+      for (const f of data.result?.goalFunding ?? []) {
+        map[f.goalId] = f;
       }
-      if (aRes.ok) setAssets(await aRes.json());
-      if (pRes.ok) {
-        const data = await pRes.json();
-        const map: Record<string, GoalFundingResult> = {};
-        for (const f of (data.result?.goalFunding ?? []) as GoalFundingResult[]) {
-          map[f.goalId] = f;
-        }
-        setFunding(map);
-        setAvgSurplus(data.result?.summary?.avgMonthlySurplus ?? 0);
-      }
+      setFunding(map);
+      setAvgSurplus(data.result?.summary?.avgMonthlySurplus ?? 0);
     } finally {
-      setLoading(false);
+      setProjectionLoading(false);
     }
-  }, [onUnauthorized]);
+  }, []);
 
   useEffect(() => {
-    load();
-  }, [load]);
+    void loadProjection();
+  }, [loadProjection, goals.length]);
+
+  const loading = snapshotLoading || projectionLoading;
 
   async function remove(id: string) {
-    const res = await fetch(`/api/goals/${id}`, { method: "DELETE" });
-    if (onUnauthorized(res)) return;
+    if (!ensureOnlineForWrite()) return;
+    const res = await apiFetch(`/api/goals/${id}`, { method: "DELETE" });
+    if (!res) return;
     if (!res.ok) {
       toast.error("Не удалось удалить цель");
       return;
     }
+    removeEntity("goals", id);
     toast.success("Цель удалена");
-    await load();
-    onSaved?.();
+    void loadProjection();
   }
 
   async function savePathSettings(goalId: string, pathSettings: GoalPathSettings) {
-    const res = await fetch(`/api/goals/${goalId}`, {
+    if (!ensureOnlineForWrite()) return;
+    const res = await apiFetch(`/api/goals/${goalId}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ pathSettings }),
     });
-    if (onUnauthorized(res)) return;
+    if (!res) return;
     if (!res.ok) {
       toast.error((await readApiError(res)).message);
       return;
     }
-    setGoals((prev) =>
-      prev.map((g) => (g.id === goalId ? { ...g, pathSettings } : g)),
-    );
+    const saved = (await res.json()) as Goal;
+    upsert("goals", saved);
     toast.success("Вариант достижения сохранён");
   }
 
   const existing = editView?.id ? goals.find((g) => g.id === editView.id) : undefined;
+  const planningScore = score;
 
   return (
     <div className="space-y-4">
+      {planningScore && (
+        <ScoreCard score={planningScore} mode="block" blockId="planning" compact />
+      )}
       <Card className="!p-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
@@ -163,11 +163,9 @@ export function GoalsPanel({
             assets={assets}
             onBack={() => setEditView(null)}
             onSaved={async () => {
-              await load();
               setEditView(null);
-              onSaved?.();
+              void loadProjection();
             }}
-            onUnauthorized={onUnauthorized}
           />
         </Modal>
       )}
@@ -448,14 +446,13 @@ function GoalEditor({
   assets,
   onBack,
   onSaved,
-  onUnauthorized,
 }: {
   existing?: Goal;
   assets: Asset[];
   onBack: () => void;
   onSaved: () => void | Promise<void>;
-  onUnauthorized: (res: Response) => boolean;
 }) {
+  const { upsert } = useFinanceStore();
   const existingDate = existing?.targetDate ? new Date(existing.targetDate) : null;
   const defaultYears = existingDate
     ? String(Math.max(1, existingDate.getFullYear() - new Date().getFullYear()))
@@ -499,6 +496,7 @@ function GoalEditor({
   }
 
   async function save() {
+    if (!ensureOnlineForWrite()) return;
     if (!name.trim()) {
       toast.error("Укажите название цели");
       return;
@@ -603,7 +601,7 @@ function GoalEditor({
         strategy,
         linkedAssetId: linkedAssetId || null,
       };
-      const res = await fetch(
+      const res = await apiFetch(
         existing ? `/api/goals/${existing.id}` : "/api/goals",
         {
           method: existing ? "PATCH" : "POST",
@@ -611,12 +609,13 @@ function GoalEditor({
           body: JSON.stringify(body),
         },
       );
-      if (onUnauthorized(res)) return;
+      if (!res) return;
       if (!res.ok) {
         const { message } = await readApiError(res);
         toast.error(message);
         return;
       }
+      upsert("goals", (await res.json()) as Goal);
       toast.success(existing ? "Цель обновлена" : "Цель добавлена");
       await onSaved();
     } catch {

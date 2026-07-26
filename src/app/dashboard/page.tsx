@@ -1,7 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useCallback, useEffect, useRef, useState } from "react";
+import dynamic from "next/dynamic";
 import { Disclaimer } from "@/components/Disclaimer";
 import {
   DashboardShell,
@@ -9,30 +9,65 @@ import {
 } from "@/components/layout/DashboardShell";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { GoalsPanel } from "@/components/finance/GoalsPanel";
-import {
-  FinanceDataPanel,
-  type FinanceDataStatus,
-} from "@/components/finance/FinanceDataPanel";
 import { HomeDashboard } from "@/components/finance/HomeDashboard";
-import { MacroSettingsCard } from "@/components/finance/MacroSettingsCard";
-import { ChangeHistoryPanel } from "@/components/finance/ChangeHistoryPanel";
-import { PlanWorkspace, type PlanSection } from "@/components/plan/PlanWorkspace";
-import { ReportEditor } from "@/components/reports/ReportEditor";
 import { FormError } from "@/components/ui/FormError";
 import { HelpHint } from "@/components/ui/FormField";
 import { SubNav } from "@/components/ui/SubNav";
 import { toast } from "@/components/ui/ToastProvider";
 import { FEATURE_HINTS } from "@/content/help";
 import { readApiError, NETWORK_ERROR_MESSAGE } from "@/shared/api-client";
-import type {
-  Asset,
-  Expense,
-  Goal,
-  Income,
-  Liability,
-} from "@/shared/types";
-import type { HomeDashboardInput } from "@/modules/dashboard/insights";
+import { apiFetch, apiFetchJson } from "@/shared/api-fetch";
+import { ensureOnlineForWrite } from "@/shared/offline";
+import {
+  FinanceStoreProvider,
+  useFinanceStore,
+} from "@/modules/finance/finance-store";
+import type { FinanceDataStatus } from "@/components/finance/FinanceDataPanel";
+import type { PlanSection } from "@/components/plan/PlanWorkspace";
+import type { PlanProjection } from "@/modules/plan/projection-types";
+import type { Scenario } from "@/shared/types";
+
+const FinanceDataPanel = dynamic(
+  () =>
+    import("@/components/finance/FinanceDataPanel").then(
+      (m) => m.FinanceDataPanel,
+    ),
+  { ssr: false, loading: () => <p className="text-muted">Загрузка…</p> },
+);
+
+const GoalsPanel = dynamic(
+  () =>
+    import("@/components/finance/GoalsPanel").then((m) => m.GoalsPanel),
+  { ssr: false, loading: () => <p className="text-muted">Загрузка…</p> },
+);
+
+const MacroSettingsCard = dynamic(
+  () =>
+    import("@/components/finance/MacroSettingsCard").then(
+      (m) => m.MacroSettingsCard,
+    ),
+  { ssr: false },
+);
+
+const ChangeHistoryPanel = dynamic(
+  () =>
+    import("@/components/finance/ChangeHistoryPanel").then(
+      (m) => m.ChangeHistoryPanel,
+    ),
+  { ssr: false },
+);
+
+const PlanWorkspace = dynamic(
+  () =>
+    import("@/components/plan/PlanWorkspace").then((m) => m.PlanWorkspace),
+  { ssr: false, loading: () => <p className="text-muted">Загрузка плана…</p> },
+);
+
+const ReportEditor = dynamic(
+  () =>
+    import("@/components/reports/ReportEditor").then((m) => m.ReportEditor),
+  { ssr: false, loading: () => <p className="text-muted">Загрузка…</p> },
+);
 
 type DataSub = "balance" | "cashflow" | "goals";
 type ExportSub = "report" | "csv";
@@ -55,42 +90,41 @@ const EXPORT_SUB_ITEMS = [
   { id: "csv" as const, label: "CSV" },
 ];
 
-interface Projection {
-  result: {
-    monthly: Array<{ month: number; netWorth: number; cashflow: number }>;
-    goalFunding: Array<{
-      goalId: string;
-      requiredMonthlySaving: number;
-      projectedBalanceAtTarget: number;
-      inflationAdjustedDesired?: number;
-      inflationAdjustedTarget?: number;
-      achievability?: string;
-    }>;
-    summary: {
-      finalNetWorth: number;
-      avgMonthlySurplus: number;
-      recommendedMonthlySaving: number;
-    };
-  };
-  scenario: string;
-  scenarioId: string | null;
-  isActive: boolean;
+export default function DashboardPage() {
+  return (
+    <FinanceStoreProvider>
+      <DashboardPageInner />
+    </FinanceStoreProvider>
+  );
 }
 
-export default function DashboardPage() {
-  const router = useRouter();
+function DashboardPageInner() {
+  const store = useFinanceStore();
+  const {
+    loadSummary,
+    ensureSnapshot,
+    summaryLoading,
+    entitiesLoading,
+    entitiesReady,
+    summary,
+    score,
+    homeInput,
+    scenarios,
+    assets,
+    liabilities,
+    incomes,
+    expenses,
+    goals,
+    setScenarios,
+    setEnrichment,
+    upsert,
+  } = store;
+
   const [tab, setTab] = useState<DashboardTab>("home");
   const [dataSub, setDataSub] = useState<DataSub>("balance");
   const [planSub, setPlanSub] = useState<PlanSection>("overview");
   const [exportSub, setExportSub] = useState<ExportSub>("report");
-  const [dataStatus, setDataStatus] = useState<FinanceDataStatus | null>(null);
-  const [goalCount, setGoalCount] = useState(0);
-  const [homeInput, setHomeInput] = useState<HomeDashboardInput | null>(null);
-  const [homeLoading, setHomeLoading] = useState(true);
-  const [projection, setProjection] = useState<Projection | null>(null);
-  const [scenarios, setScenarios] = useState<
-    Array<{ id: string; name: string; isActive: boolean; rules: unknown }>
-  >([]);
+  const [projection, setProjection] = useState<PlanProjection | null>(null);
   const [simJob, setSimJob] = useState<{
     id: string;
     status: string;
@@ -106,166 +140,169 @@ export default function DashboardPage() {
       samplePaths: Array<{ label: string; netWorth: number[] }>;
     };
   } | null>(null);
-  const [loading, setLoading] = useState(true);
   const [simError, setSimError] = useState("");
   const [simStarting, setSimStarting] = useState(false);
   const [addingAsset, setAddingAsset] = useState(false);
   const [viewScenarioId, setViewScenarioId] = useState<string | null>(null);
   const [projectionLoading, setProjectionLoading] = useState(false);
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const simBusy =
     simStarting ||
     simJob?.status === "PENDING" ||
     simJob?.status === "RUNNING";
 
-  const handleUnauthorized = useCallback(
-    (res: Response) => {
-      if (res.status === 401) {
-        router.push("/login?session=expired");
-        return true;
-      }
-      return false;
-    },
-    [router],
-  );
+  const needsEntities =
+    tab === "assets" || tab === "plan" || tab === "export";
 
-  const loadHomeSnapshot = useCallback(async () => {
-    setHomeLoading(true);
-    try {
-      const [aRes, lRes, iRes, eRes, gRes, sRes, cRes] = await Promise.all([
-        fetch("/api/assets", { cache: "no-store" }),
-        fetch("/api/liabilities", { cache: "no-store" }),
-        fetch("/api/incomes", { cache: "no-store" }),
-        fetch("/api/expenses", { cache: "no-store" }),
-        fetch("/api/goals", { cache: "no-store" }),
-        fetch("/api/scenarios", { cache: "no-store" }),
-        fetch("/api/budget-categories", { cache: "no-store" }),
-      ]);
-      if (
-        handleUnauthorized(aRes) ||
-        handleUnauthorized(lRes) ||
-        handleUnauthorized(iRes) ||
-        handleUnauthorized(eRes) ||
-        handleUnauthorized(gRes) ||
-        handleUnauthorized(sRes) ||
-        handleUnauthorized(cRes)
-      )
-        return;
-      const assets: Asset[] = aRes.ok ? await aRes.json() : [];
-      const liabilities: Liability[] = lRes.ok ? await lRes.json() : [];
-      const incomes: Income[] = iRes.ok ? await iRes.json() : [];
-      const expenses: Expense[] = eRes.ok ? await eRes.json() : [];
-      const goals: Goal[] = gRes.ok ? await gRes.json() : [];
-      const scenariosPayload = sRes.ok ? await sRes.json() : { scenarios: [] };
-      const budgetCategories = cRes.ok ? await cRes.json() : [];
-      const scenarioList = (scenariosPayload.scenarios ?? []) as Array<{
-        id: string;
-      }>;
-      setGoalCount(goals.length);
-      setHomeInput({
-        assets,
-        liabilities,
-        incomes,
-        expenses,
-        goals,
-        scenarioCount: scenarioList.length,
-        budgetCategories,
-      });
-    } finally {
-      setHomeLoading(false);
-    }
-  }, [handleUnauthorized]);
-
-  const loadProjection = useCallback(
-    async (scenarioId?: string) => {
-      const id = scenarioId ?? viewScenarioId;
-      if (!id) return;
-      setProjectionLoading(true);
-      try {
-        const res = await fetch(
-          `/api/plan/projection?scenarioId=${encodeURIComponent(id)}`,
-        );
-        if (handleUnauthorized(res)) return;
-        if (res.ok) {
-          setProjection(await res.json());
-        } else {
-          const { message } = await readApiError(res);
-          toast.error(
-            message ||
-              "Не удалось загрузить прогноз. Проверьте данные на вкладке «Данные».",
-          );
-        }
-      } catch {
-        toast.error(NETWORK_ERROR_MESSAGE);
-      } finally {
-        setProjectionLoading(false);
-      }
-    },
-    [handleUnauthorized, viewScenarioId],
-  );
-
-  const loadScenarios = useCallback(async () => {
-    try {
-      const res = await fetch("/api/scenarios");
-      if (handleUnauthorized(res)) return;
-      if (res.ok) {
-        const data = await res.json();
-        setScenarios(data.scenarios);
-        return data.scenarios as Array<{
-          id: string;
-          name: string;
-          isActive: boolean;
-        }>;
-      }
-      const { message } = await readApiError(res);
-      toast.error(message || "Не удалось загрузить сценарии");
-      return [];
-    } catch {
-      toast.error(NETWORK_ERROR_MESSAGE);
-      return [];
-    }
-  }, [handleUnauthorized]);
-
-  const enrichedHome: HomeDashboardInput | null = homeInput
+  const dataStatus: FinanceDataStatus = summary
     ? {
-        ...homeInput,
-        recommendedMonthlySaving:
-          projection?.result.summary.recommendedMonthlySaving,
-        goalProbabilities: simJob?.result?.goalProbabilities,
+        assetCount: summary.counts.assets,
+        liabilityCount: summary.counts.liabilities,
+        incomeCount: summary.counts.incomes,
+        expenseCount: summary.counts.expenses,
+        netWorthApprox: summary.metrics.netWorth,
       }
-    : null;
+    : {
+        assetCount: assets.length,
+        liabilityCount: liabilities.length,
+        incomeCount: incomes.length,
+        expenseCount: expenses.length,
+        netWorthApprox:
+          assets.reduce((s, a) => s + a.currentValue, 0) -
+          liabilities.reduce((s, l) => s + l.remainingBalance, 0),
+      };
+
+  const goalCount = summary?.counts.goals ?? goals.length;
 
   useEffect(() => {
-    loadScenarios().finally(() => setLoading(false));
-  }, [loadScenarios]);
+    void loadSummary();
+  }, [loadSummary]);
+
+  useEffect(() => {
+    if (needsEntities) void ensureSnapshot();
+  }, [needsEntities, ensureSnapshot]);
 
   useEffect(() => {
     if (viewScenarioId !== null) return;
+    if (!entitiesReady) {
+      if (summary) setViewScenarioId("base");
+      return;
+    }
     const active = scenarios.find((s) => s.isActive);
     setViewScenarioId(active?.id ?? "base");
-  }, [scenarios, viewScenarioId]);
+  }, [scenarios, viewScenarioId, entitiesReady, summary]);
 
   useEffect(() => {
-    if (tab === "home" || tab === "plan") loadHomeSnapshot();
-  }, [tab, loadHomeSnapshot]);
+    if (projection?.result.summary) {
+      setEnrichment({
+        recommendedMonthlySaving:
+          projection.result.summary.recommendedMonthlySaving,
+        projectionCashflowAvg: projection.result.summary.avgMonthlySurplus,
+      });
+    }
+  }, [projection, setEnrichment]);
 
   useEffect(() => {
-    if (tab === "plan" && viewScenarioId) loadProjection(viewScenarioId);
-  }, [tab, viewScenarioId, loadProjection]);
+    if (simJob?.result?.goalProbabilities) {
+      setEnrichment({
+        goalProbabilities: simJob.result.goalProbabilities,
+      });
+    }
+  }, [simJob, setEnrichment]);
+
+  const loadProjection = useCallback(async (scenarioId?: string) => {
+    const id = scenarioId ?? viewScenarioId;
+    if (!id) return;
+    setProjectionLoading(true);
+    try {
+      const res = await apiFetch(
+        `/api/plan/projection?scenarioId=${encodeURIComponent(id)}`,
+      );
+      if (!res) return;
+      if (res.ok) {
+        setProjection(await res.json());
+      } else {
+        const { message } = await readApiError(res);
+        toast.error(
+          message ||
+            "Не удалось загрузить прогноз. Проверьте данные на вкладке «Данные».",
+        );
+      }
+    } catch {
+      toast.error(NETWORK_ERROR_MESSAGE);
+    } finally {
+      setProjectionLoading(false);
+    }
+  }, [viewScenarioId]);
+
+  useEffect(() => {
+    if (
+      tab === "plan" &&
+      viewScenarioId &&
+      (planSub === "overview" || planSub === "montecarlo")
+    ) {
+      void loadProjection(viewScenarioId);
+    }
+  }, [tab, viewScenarioId, planSub, loadProjection]);
+
+  useEffect(() => {
+    return () => {
+      if (pollRef.current) clearInterval(pollRef.current);
+    };
+  }, []);
+
+  async function refreshScenarios() {
+    const result = await apiFetchJson<{ scenarios: Scenario[] }>(
+      "/api/scenarios",
+    );
+    if (result.ok) {
+      setScenarios(result.data.scenarios);
+    }
+  }
+
+  function pollJob(id: string) {
+    if (pollRef.current) clearInterval(pollRef.current);
+    pollRef.current = setInterval(async () => {
+      const res = await apiFetch(`/api/simulations/${id}`);
+      if (!res?.ok) return;
+      const job = await res.json();
+      setSimJob(job);
+      if (job.status === "COMPLETED") {
+        if (pollRef.current) clearInterval(pollRef.current);
+        pollRef.current = null;
+        void loadProjection();
+        toast.success("Прогноз риска готов");
+      }
+      if (job.status === "FAILED") {
+        if (pollRef.current) clearInterval(pollRef.current);
+        pollRef.current = null;
+        const message =
+          job.errorMessage ??
+          "Расчёт завершился с ошибкой. Проверьте данные плана и попробуйте снова";
+        setSimError(message);
+        toast.error(message);
+      }
+    }, 2000);
+  }
 
   async function runSimulation() {
+    if (!ensureOnlineForWrite()) return;
     setSimError("");
     setSimStarting(true);
     try {
-      const res = await fetch("/api/simulations", {
+      const res = await apiFetch("/api/simulations", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           numRuns: 5000,
-          scenarioId: viewScenarioId === "base" ? undefined : viewScenarioId ?? undefined,
+          scenarioId:
+            viewScenarioId === "base"
+              ? undefined
+              : (viewScenarioId ?? undefined),
         }),
       });
-      if (handleUnauthorized(res)) return;
+      if (!res) return;
       if (!res.ok) {
         const { message } = await readApiError(res);
         setSimError(message);
@@ -285,46 +322,28 @@ export default function DashboardPage() {
     }
   }
 
-  function pollJob(id: string) {
-    const interval = setInterval(async () => {
-      const res = await fetch(`/api/simulations/${id}`);
-      if (!res.ok) return;
-      const job = await res.json();
-      setSimJob(job);
-      if (job.status === "COMPLETED") {
-        clearInterval(interval);
-        loadProjection();
-        toast.success("Прогноз риска готов");
-      }
-      if (job.status === "FAILED") {
-        clearInterval(interval);
-        const message =
-          job.errorMessage ??
-          "Расчёт завершился с ошибкой. Проверьте данные плана и попробуйте снова";
-        setSimError(message);
-        toast.error(message);
-      }
-    }, 2000);
-  }
-
   async function activateScenario(id: string) {
-    const res = await fetch(`/api/scenarios/${id}/activate`, { method: "POST" });
-    if (handleUnauthorized(res)) return;
+    if (!ensureOnlineForWrite()) return;
+    const res = await apiFetch(`/api/scenarios/${id}/activate`, {
+      method: "POST",
+    });
+    if (!res) return;
     if (!res.ok) {
       const { message } = await readApiError(res);
       setSimError(message);
       toast.error(message);
       return;
     }
-    await loadScenarios();
+    await refreshScenarios();
     setViewScenarioId(id);
     toast.success("Сценарий применён");
   }
 
   async function quickAddAsset() {
+    if (!ensureOnlineForWrite()) return;
     setAddingAsset(true);
     try {
-      const res = await fetch("/api/assets", {
+      const res = await apiFetch("/api/assets", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -336,15 +355,19 @@ export default function DashboardPage() {
           volatilityPct: 12,
         }),
       });
-      if (handleUnauthorized(res)) return;
+      if (!res) return;
       if (!res.ok) {
         const { message } = await readApiError(res);
         toast.error(message);
         return;
       }
+      const asset = await res.json();
+      upsert("assets", asset);
       toast.success("Демо-портфель добавлен");
     } catch {
-      toast.error("Не удалось добавить портфель. Проверьте подключение и попробуйте снова.");
+      toast.error(
+        "Не удалось добавить портфель. Проверьте подключение и попробуйте снова.",
+      );
     } finally {
       setAddingAsset(false);
     }
@@ -354,87 +377,103 @@ export default function DashboardPage() {
     <DashboardShell tab={tab} onTabChange={setTab}>
       <Disclaimer className="mb-6" />
 
-      {loading && tab !== "home" && <p className="text-muted">Загрузка…</p>}
+      {tab === "home" && (
+        <HomeDashboard
+          metrics={summary?.metrics ?? null}
+          score={score}
+          corridor={summary?.corridor ?? null}
+          loading={summaryLoading && !summary}
+          onNavigate={setTab}
+        />
+      )}
 
-        {tab === "home" && (
-          <HomeDashboard
-            input={enrichedHome}
-            loading={homeLoading}
-            onNavigate={setTab}
+      {tab === "plan" && (
+        <div>
+          <SubNav
+            items={PLAN_SUB_ITEMS}
+            value={planSub}
+            onChange={setPlanSub}
           />
-        )}
-
-        {tab === "plan" && viewScenarioId && (
-          <div>
-            <SubNav items={PLAN_SUB_ITEMS} value={planSub} onChange={setPlanSub} />
+          {!entitiesReady || entitiesLoading ? (
+            <p className="text-muted">Загрузка плана…</p>
+          ) : viewScenarioId ? (
             <PlanWorkspace
               section={planSub}
-              insightsInput={enrichedHome}
+              insightsInput={homeInput}
+              score={score}
               projection={projection}
               projectionLoading={projectionLoading}
               viewScenarioId={viewScenarioId}
               onViewScenarioChange={setViewScenarioId}
               scenarios={scenarios}
               onActivateScenario={activateScenario}
-              onScenariosRefresh={loadScenarios}
+              onScenariosRefresh={refreshScenarios}
               simJob={simJob}
               simBusy={simBusy}
               simError={simError}
               onRunSimulation={runSimulation}
-              onUnauthorized={handleUnauthorized}
             />
-          </div>
-        )}
+          ) : null}
+        </div>
+      )}
 
-        {tab === "assets" && (
-          <div className="space-y-6">
-            <SubNav items={DATA_SUB_ITEMS} value={dataSub} onChange={setDataSub} />
-            <CfpProgressCard
-              status={dataStatus}
-              goalCount={goalCount}
-              onGoPlan={() => setTab("plan")}
-              onGoSub={setDataSub}
-            />
-            {(dataSub === "balance" || dataSub === "cashflow") && (
-              <FinanceDataPanel
-                mode={dataSub}
-                onQuickAdd={quickAddAsset}
-                onUnauthorized={handleUnauthorized}
-                addingAsset={addingAsset}
-                onStatusChange={setDataStatus}
-              />
-            )}
-            {dataSub === "goals" && (
-              <div className="space-y-6">
-                <div>
-                  <p className="text-xs font-medium uppercase tracking-wide text-muted">
-                    Шаг 3 · Цели и горизонт
-                  </p>
-                  <h2 className="mt-1 font-medium">Цели и макропараметры</h2>
-                  <HelpHint className="mt-1">{FEATURE_HINTS.goalsStep}</HelpHint>
-                </div>
-                <MacroSettingsCard onUnauthorized={handleUnauthorized} />
-                <GoalsPanel
-                  onUnauthorized={handleUnauthorized}
-                  onCountChange={setGoalCount}
+      {tab === "assets" && (
+        <div className="space-y-6">
+          <SubNav
+            items={DATA_SUB_ITEMS}
+            value={dataSub}
+            onChange={setDataSub}
+          />
+          <CfpProgressCard
+            status={dataStatus}
+            goalCount={goalCount}
+            onGoPlan={() => setTab("plan")}
+            onGoSub={setDataSub}
+          />
+          {!entitiesReady || entitiesLoading ? (
+            <p className="text-muted">Загрузка данных…</p>
+          ) : (
+            <>
+              {(dataSub === "balance" || dataSub === "cashflow") && (
+                <FinanceDataPanel
+                  mode={dataSub}
+                  onQuickAdd={quickAddAsset}
+                  addingAsset={addingAsset}
+                  score={score}
                 />
-                <ChangeHistoryPanel onUnauthorized={handleUnauthorized} />
-              </div>
-            )}
-          </div>
-        )}
-
-        {tab === "export" && (
-          <div>
-            <SubNav items={EXPORT_SUB_ITEMS} value={exportSub} onChange={setExportSub} />
-            <Card className="space-y-6">
-              {exportSub === "report" && (
-                <ReportEditor onUnauthorized={handleUnauthorized} />
               )}
-              {exportSub === "csv" && <CsvImport />}
-            </Card>
-          </div>
-        )}
+              {dataSub === "goals" && (
+                <div className="space-y-6">
+                  <div>
+                    <p className="text-xs font-medium uppercase tracking-wide text-muted">
+                      Шаг 3 · Цели и горизонт
+                    </p>
+                    <h2 className="mt-1 font-medium">Цели и макропараметры</h2>
+                    <HelpHint className="mt-1">{FEATURE_HINTS.goalsStep}</HelpHint>
+                  </div>
+                  <MacroSettingsCard />
+                  <GoalsPanel score={score} />
+                  <ChangeHistoryPanel />
+                </div>
+              )}
+            </>
+          )}
+        </div>
+      )}
+
+      {tab === "export" && (
+        <div>
+          <SubNav
+            items={EXPORT_SUB_ITEMS}
+            value={exportSub}
+            onChange={setExportSub}
+          />
+          <Card className="space-y-6">
+            {exportSub === "report" && <ReportEditor />}
+            {exportSub === "csv" && <CsvImport />}
+          </Card>
+        </div>
+      )}
     </DashboardShell>
   );
 }
@@ -451,7 +490,8 @@ function CfpProgressCard({
   onGoSub: (sub: DataSub) => void;
 }) {
   const step1 = (status?.assetCount ?? 0) + (status?.liabilityCount ?? 0) > 0;
-  const step2 = (status?.incomeCount ?? 0) > 0 && (status?.expenseCount ?? 0) > 0;
+  const step2 =
+    (status?.incomeCount ?? 0) > 0 && (status?.expenseCount ?? 0) > 0;
   const step3 = goalCount > 0;
   const steps = [
     { done: step1, label: "1. Точка 0", sub: "balance" as const },
@@ -498,16 +538,25 @@ function CfpProgressCard({
 function CsvImport() {
   const [result, setResult] = useState("");
   const [error, setError] = useState("");
+  const { refresh } = useFinanceStore();
 
   async function onFile(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
+    if (!ensureOnlineForWrite()) {
+      e.target.value = "";
+      return;
+    }
     setResult("");
     setError("");
 
     const fd = new FormData();
     fd.append("file", file);
-    const res = await fetch("/api/import/csv", { method: "POST", body: fd });
+    const res = await apiFetch("/api/import/csv", {
+      method: "POST",
+      body: fd,
+    });
+    if (!res) return;
     const data = await res.json().catch(() => ({}));
 
     if (!res.ok) {
@@ -540,6 +589,7 @@ function CsvImport() {
     const message = lines.join(". ");
     setResult(message);
     toast.success(`Импортировано: ${data.created} из ${data.total}`);
+    void refresh();
     e.target.value = "";
   }
 
@@ -550,7 +600,12 @@ function CsvImport() {
       <p className="mt-2 text-xs text-muted">
         Колонки: type (asset|income|expense), name, amount, category
       </p>
-      <input type="file" accept=".csv" onChange={onFile} className="mt-3 text-sm" />
+      <input
+        type="file"
+        accept=".csv"
+        onChange={onFile}
+        className="mt-3 text-sm"
+      />
       {result && <p className="mt-2 text-sm text-success">{result}</p>}
       <FormError message={error} />
     </div>

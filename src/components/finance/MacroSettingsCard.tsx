@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { FormField, HelpHint } from "@/components/ui/FormField";
@@ -8,39 +8,27 @@ import { Input } from "@/components/ui/input";
 import { Modal, ModalFormBox, ModalFormActions } from "@/components/ui/Modal";
 import { toast } from "@/components/ui/ToastProvider";
 import { readApiError } from "@/shared/api-client";
+import { apiFetch } from "@/shared/api-fetch";
+import { ensureOnlineForWrite } from "@/shared/offline";
 import { FIELD_HINTS } from "@/content/help";
 import type { MacroSettings } from "@/shared/types";
+import { useFinanceStore } from "@/modules/finance/finance-store";
 
-export function MacroSettingsCard({
-  onUnauthorized,
-  onSaved,
-}: {
-  onUnauthorized: (res: Response) => boolean;
-  onSaved?: () => void;
-}) {
-  const [macro, setMacro] = useState<MacroSettings | null>(null);
+export function MacroSettingsCard() {
+  const { macro, setMacro } = useFinanceStore();
   const [open, setOpen] = useState(false);
   const [inflation, setInflation] = useState("4");
   const [tax, setTax] = useState("13");
   const [horizon, setHorizon] = useState("30");
   const [saving, setSaving] = useState(false);
 
-  const load = useCallback(async () => {
-    const res = await fetch("/api/macro", { cache: "no-store" });
-    if (onUnauthorized(res)) return;
-    if (!res.ok) return;
-    const m = (await res.json()) as MacroSettings | null;
-    setMacro(m);
-    if (m) {
-      setInflation(String(m.baseInflationPct));
-      setTax(String(m.incomeTaxPct));
-      setHorizon(String(m.planHorizonYears));
-    }
-  }, [onUnauthorized]);
-
   useEffect(() => {
-    load();
-  }, [load]);
+    if (macro) {
+      setInflation(String(macro.baseInflationPct));
+      setTax(String(macro.incomeTaxPct));
+      setHorizon(String(macro.planHorizonYears));
+    }
+  }, [macro]);
 
   function openEditor() {
     if (macro) {
@@ -52,9 +40,10 @@ export function MacroSettingsCard({
   }
 
   async function save() {
+    if (!ensureOnlineForWrite()) return;
     setSaving(true);
     try {
-      const res = await fetch("/api/macro", {
+      const res = await apiFetch("/api/macro", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -63,15 +52,14 @@ export function MacroSettingsCard({
           planHorizonYears: Math.min(50, Math.max(1, Number(horizon) || 30)),
         }),
       });
-      if (onUnauthorized(res)) return;
+      if (!res) return;
       if (!res.ok) {
         toast.error((await readApiError(res)).message);
         return;
       }
-      setMacro(await res.json());
+      setMacro((await res.json()) as MacroSettings);
       toast.success("Макропараметры сохранены");
       setOpen(false);
-      onSaved?.();
     } finally {
       setSaving(false);
     }

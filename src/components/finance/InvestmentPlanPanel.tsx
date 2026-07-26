@@ -21,6 +21,8 @@ import { formControlClass } from "@/components/ui/form-controls";
 import { toast } from "@/components/ui/ToastProvider";
 import { FEATURE_HINTS, FIELD_HINTS } from "@/content/help";
 import { readApiError, parsePositiveNumber } from "@/shared/api-client";
+import { apiFetch } from "@/shared/api-fetch";
+import { ensureOnlineForWrite } from "@/shared/offline";
 import { formatMoneyInput } from "@/shared/format-input";
 import { formatRub } from "@/shared/format";
 import { newClientId } from "@/modules/iplan/client-id";
@@ -44,6 +46,13 @@ import type {
 } from "@/modules/iplan/types";
 import type { Asset, BudgetCategory, Expense, Income } from "@/shared/types";
 import { ChangeHistoryPanel } from "@/components/finance/ChangeHistoryPanel";
+import { ScoreCard } from "@/components/finance/ScoreCard";
+import type { HomeDashboardInput } from "@/modules/dashboard/insights";
+import {
+  scoreFromHomeInput,
+  type FinancialScore,
+} from "@/modules/dashboard/scoring";
+import { useFinanceStore } from "@/modules/finance/finance-store";
 
 const FREQ_OPTIONS: { value: IPlanStreamFrequency; label: string }[] = [
   { value: "MONTHLY", label: "в месяц" },
@@ -77,18 +86,21 @@ type ApiPayload = {
 };
 
 export function InvestmentPlanPanel({
-  onUnauthorized,
   onAssetsChanged,
   compact = false,
   hideMcChart = false,
   hideHistory = false,
+  insightsInput = null,
+  score: scoreProp = null,
 }: {
-  onUnauthorized: (res: Response) => boolean;
   onAssetsChanged?: () => void;
   compact?: boolean;
   hideMcChart?: boolean;
   hideHistory?: boolean;
+  insightsInput?: HomeDashboardInput | null;
+  score?: FinancialScore | null;
 }) {
+  const { upsert } = useFinanceStore();
   const [data, setData] = useState<ApiPayload | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -104,8 +116,8 @@ export function InvestmentPlanPanel({
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch("/api/iplan", { cache: "no-store" });
-      if (onUnauthorized(res)) return;
+      const res = await apiFetch("/api/iplan");
+      if (!res) return;
       if (!res.ok) {
         toast.error((await readApiError(res)).message);
         return;
@@ -120,6 +132,7 @@ export function InvestmentPlanPanel({
         suggestedVolatilityPct: json.suggestedVolatilityPct ?? 15,
         incomes: json.incomes ?? [],
         expenses: json.expenses ?? [],
+        budgetCategories: json.budgetCategories,
         surplusMonthly: json.surplusMonthly ?? 0,
         surplusAnnual: json.surplusAnnual ?? 0,
       });
@@ -127,7 +140,7 @@ export function InvestmentPlanPanel({
     } finally {
       setLoading(false);
     }
-  }, [onUnauthorized]);
+  }, []);
 
   useEffect(() => {
     load();
@@ -203,13 +216,14 @@ export function InvestmentPlanPanel({
 
   async function save() {
     if (!plan || !active) return;
+    if (!ensureOnlineForWrite()) return;
     if (budgetError) {
       toast.error(budgetError);
       return;
     }
     setSaving(true);
     try {
-      const res = await fetch("/api/iplan", {
+      const res = await apiFetch("/api/iplan", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -217,7 +231,7 @@ export function InvestmentPlanPanel({
           variants: plan.variants.map(normalizeVariant),
         }),
       });
-      if (onUnauthorized(res)) return;
+      if (!res) return;
       if (!res.ok) {
         toast.error((await readApiError(res)).message);
         return;
@@ -264,6 +278,7 @@ export function InvestmentPlanPanel({
   }
 
   async function addInvestmentAsset() {
+    if (!ensureOnlineForWrite()) return;
     const parsed = parsePositiveNumber(assetDraft.currentValue, "Сумма");
     if (!assetDraft.name.trim() || !parsed.ok) {
       toast.error(!parsed.ok ? parsed.message : "Укажите название актива");
@@ -271,7 +286,7 @@ export function InvestmentPlanPanel({
     }
     const ret = Number(assetDraft.expectedReturnPct.replace(",", ".")) || 0;
     const vol = Number(assetDraft.volatilityPct.replace(",", ".")) || 15;
-    const res = await fetch("/api/assets", {
+    const res = await apiFetch("/api/assets", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -288,11 +303,12 @@ export function InvestmentPlanPanel({
         taxEffectPct: 0,
       }),
     });
-    if (onUnauthorized(res)) return;
+    if (!res) return;
     if (!res.ok) {
       toast.error((await readApiError(res)).message);
       return;
     }
+    upsert("assets", (await res.json()) as Asset);
     setAssetDraft({
       name: "",
       currentValue: "",
@@ -305,16 +321,18 @@ export function InvestmentPlanPanel({
   }
 
   async function patchAsset(id: string, patch: Partial<Asset>) {
-    const res = await fetch(`/api/assets/${id}`, {
+    if (!ensureOnlineForWrite()) return;
+    const res = await apiFetch(`/api/assets/${id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(patch),
     });
-    if (onUnauthorized(res)) return;
+    if (!res) return;
     if (!res.ok) {
       toast.error((await readApiError(res)).message);
       return;
     }
+    upsert("assets", (await res.json()) as Asset);
     onAssetsChanged?.();
     await load();
   }
@@ -418,8 +436,23 @@ export function InvestmentPlanPanel({
     ? `${formControlClass} !px-2 !py-1.5 !text-xs`
     : formControlClass;
 
+  const investScore =
+    scoreProp ??
+    scoreFromHomeInput(
+      insightsInput ?? {
+        assets: data.assets,
+        liabilities: [],
+        incomes: data.incomes,
+        expenses: data.expenses,
+        goals: [],
+        scenarioCount: 0,
+        budgetCategories: data.budgetCategories,
+      },
+    );
+
   return (
     <div className={compact ? "space-y-3" : "space-y-8"}>
+      <ScoreCard score={investScore} mode="block" blockId="investments" compact />
       {!compact && <HelpHint>{FEATURE_HINTS.iplan}</HelpHint>}
 
       {budgetError && (
@@ -1066,7 +1099,7 @@ export function InvestmentPlanPanel({
         </table>
       </Card>
 
-      {!hideHistory && <ChangeHistoryPanel onUnauthorized={onUnauthorized} />}
+      {!hideHistory && <ChangeHistoryPanel />}
     </div>
   );
 }

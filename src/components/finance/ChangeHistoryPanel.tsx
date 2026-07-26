@@ -3,25 +3,21 @@
 import { useCallback, useEffect, useState } from "react";
 import { Card } from "@/components/ui/card";
 import { HelpHint } from "@/components/ui/FormField";
+import { apiFetch } from "@/shared/api-fetch";
 import type { EntityRevision } from "@/shared/types";
 
-export function ChangeHistoryPanel({
-  onUnauthorized,
-}: {
-  onUnauthorized: (res: Response) => boolean;
-}) {
+export function ChangeHistoryPanel() {
   const [items, setItems] = useState<EntityRevision[]>([]);
 
   const load = useCallback(async () => {
-    const res = await fetch("/api/history?limit=30", { cache: "no-store" });
-    if (onUnauthorized(res)) return;
-    if (!res.ok) return;
+    const res = await apiFetch("/api/history?limit=30");
+    if (!res?.ok) return;
     const data = (await res.json()) as { items: EntityRevision[] };
     setItems(data.items ?? []);
-  }, [onUnauthorized]);
+  }, []);
 
   useEffect(() => {
-    load();
+    void load();
   }, [load]);
 
   return (

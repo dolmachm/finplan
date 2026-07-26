@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { BrandLogo } from "@/components/brand/BrandLogo";
+import { PwaInstallButton } from "@/components/pwa/PwaInstall";
 
 export function PageShell({
   children,
@@ -11,14 +12,17 @@ export function PageShell({
   return (
     <div className="min-h-full bg-card">
       <header className="border-b border-border">
-        <div className="mx-auto flex max-w-5xl items-center justify-between px-4 py-4 sm:px-6 sm:py-5">
+        <div className="mx-auto flex max-w-5xl items-center justify-between gap-3 px-4 py-4 sm:px-6 sm:py-5">
           <BrandLogo />
-          <Link
-            href="/login"
-            className="text-sm font-medium text-muted transition-colors hover:text-foreground"
-          >
-            Войти
-          </Link>
+          <div className="flex items-center gap-2 sm:gap-3">
+            <PwaInstallButton compact />
+            <Link
+              href="/login"
+              className="text-sm font-medium text-muted transition-colors hover:text-foreground"
+            >
+              Войти
+            </Link>
+          </div>
         </div>
       </header>
       <div

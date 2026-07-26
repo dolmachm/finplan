@@ -7,13 +7,11 @@ export function ScenariosPanel({
   scenarios,
   onRefresh,
   onActivate,
-  onUnauthorized,
   compact = false,
 }: {
   scenarios: Array<{ id: string; name: string; isActive: boolean; rules: unknown }>;
   onRefresh: () => void;
   onActivate: (id: string) => void;
-  onUnauthorized: (res: Response) => boolean;
   compact?: boolean;
 }) {
   return (
@@ -32,11 +30,7 @@ export function ScenariosPanel({
           compact={compact}
         />
       </section>
-      <ScenarioCompare
-        scenarios={scenarios}
-        onUnauthorized={onUnauthorized}
-        compact={compact}
-      />
+      <ScenarioCompare scenarios={scenarios} compact={compact} />
     </div>
   );
 }

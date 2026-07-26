@@ -20,7 +20,9 @@ export function getAuthSecret(): string {
   if (process.env.NODE_ENV !== "production") {
     return "dev-auth-secret-change-me";
   }
-  return "";
+  throw new Error(
+    "AUTH_SECRET (or NEXTAUTH_SECRET) is required in production",
+  );
 }
 
 export const authConfig = {

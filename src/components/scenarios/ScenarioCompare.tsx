@@ -15,6 +15,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { HelpHint } from "@/components/ui/FormField";
 import { toast } from "@/components/ui/ToastProvider";
+import { apiFetch } from "@/shared/api-fetch";
 
 type ScenarioRow = { id: string; name: string; isActive: boolean };
 
@@ -42,11 +43,9 @@ function fmtRub(n: number) {
 
 export function ScenarioCompare({
   scenarios,
-  onUnauthorized,
   compact = false,
 }: {
   scenarios: ScenarioRow[];
-  onUnauthorized: (res: Response) => boolean;
   compact?: boolean;
 }) {
   const [selected, setSelected] = useState<string[]>([]);
@@ -64,8 +63,8 @@ export function ScenarioCompare({
     try {
       const qs =
         selected.length > 0 ? `?ids=${selected.map(encodeURIComponent).join(",")}` : "";
-      const res = await fetch(`/api/plan/compare${qs}`, { cache: "no-store" });
-      if (onUnauthorized(res)) return;
+      const res = await apiFetch(`/api/plan/compare${qs}`);
+      if (!res) return;
       if (!res.ok) {
         toast.error("Не удалось сравнить сценарии");
         return;
@@ -75,7 +74,7 @@ export function ScenarioCompare({
     } finally {
       setLoading(false);
     }
-  }, [selected, onUnauthorized]);
+  }, [selected]);
 
   useEffect(() => {
     void load();

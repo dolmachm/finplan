@@ -180,6 +180,7 @@ function ensurePlan(
 function payload(
   plan: InvestmentPlan,
   ctx: Awaited<ReturnType<typeof loadContext>>,
+  opts?: { includeMonteCarlo?: boolean },
 ) {
   const normalized: InvestmentPlan = {
     ...plan,
@@ -196,12 +197,14 @@ function payload(
     ctx.budgetIncomes,
     ctx.budgetExpenses,
   );
-  const monteCarlo = runIPlanMonteCarlo(
-    active,
-    ctx.initialCapital,
-    ctx.budgetIncomes,
-    ctx.budgetExpenses,
-  );
+  const monteCarlo = opts?.includeMonteCarlo
+    ? runIPlanMonteCarlo(
+        active,
+        ctx.initialCapital,
+        ctx.budgetIncomes,
+        ctx.budgetExpenses,
+      )
+    : null;
   const comparisons = normalized.variants.map((v) =>
     runIPlanProjection(v, ctx.initialCapital, ctx.budgetIncomes, ctx.budgetExpenses),
   );
@@ -223,9 +226,12 @@ function payload(
   };
 }
 
-export async function GET() {
+export async function GET(req: Request) {
   const userId = await requireUserId();
   if (isErrorResponse(userId)) return userId;
+
+  const includeMc =
+    new URL(req.url).searchParams.get("mc") === "1";
 
   const ctx = await loadContext(userId);
   let plan = ctx.plan;
@@ -238,7 +244,11 @@ export async function GET() {
     });
   }
 
-  return NextResponse.json(payload(ensurePlan(userId, { ...ctx, plan }), ctx));
+  return NextResponse.json(
+    payload(ensurePlan(userId, { ...ctx, plan }), ctx, {
+      includeMonteCarlo: includeMc,
+    }),
+  );
 }
 
 export async function PUT(req: Request) {
@@ -299,5 +309,5 @@ export async function PUT(req: Request) {
     after: saved,
   });
 
-  return NextResponse.json(payload(saved, ctx));
+  return NextResponse.json(payload(saved, ctx, { includeMonteCarlo: false }));
 }

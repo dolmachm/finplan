@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { FormField, HelpHint } from "@/components/ui/FormField";
@@ -31,12 +31,17 @@ import type {
   LiabilityType,
 } from "@/shared/types";
 import { readApiError, parsePositiveNumber } from "@/shared/api-client";
+import { apiFetch } from "@/shared/api-fetch";
+import { ensureOnlineForWrite } from "@/shared/offline";
 import { formatMoneyInput } from "@/shared/format-input";
 import { formatRub } from "@/shared/format";
 import { envelopeStatuses, budgetExpenseFloor } from "@/modules/budget/envelopes";
+import type { FinancialScore } from "@/modules/dashboard/scoring";
+import { useFinanceStore } from "@/modules/finance/finance-store";
 import { EnvelopeBars } from "@/components/finance/EnvelopeOverview";
 import { LoanCalculator } from "@/components/finance/LoanCalculator";
 import { DebtPayoffStrategies } from "@/components/finance/DebtPayoffStrategies";
+import { ScoreCard } from "@/components/finance/ScoreCard";
 import {
   PortfolioHoldingsEditor,
   draftsToHoldings,
@@ -74,112 +79,64 @@ export type FinanceDataStatus = {
 };
 
 export function FinanceDataPanel({
-  onRefresh,
-  onUnauthorized,
   onQuickAdd,
   addingAsset,
-  onStatusChange,
+  score = null,
   mode = "balance",
 }: {
-  onRefresh?: () => void;
-  onUnauthorized: (res: Response) => boolean;
   onQuickAdd: () => void | Promise<void>;
   addingAsset: boolean;
-  onStatusChange?: (status: FinanceDataStatus) => void;
+  score?: FinancialScore | null;
   mode?: "balance" | "cashflow";
 }) {
-  const [assets, setAssets] = useState<Asset[]>([]);
-  const [liabilities, setLiabilities] = useState<Liability[]>([]);
-  const [incomes, setIncomes] = useState<Income[]>([]);
-  const [expenses, setExpenses] = useState<Expense[]>([]);
-  const [categories, setCategories] = useState<BudgetCategory[]>([]);
+  const {
+    assets,
+    liabilities,
+    incomes,
+    expenses,
+    budgetCategories: categories,
+    entitiesLoading: loading,
+    remove: removeEntity,
+  } = useFinanceStore();
   const [editView, setEditView] = useState<EditView>(null);
-  const [loading, setLoading] = useState(true);
-
-  const statusRef = useRef(onStatusChange);
-  statusRef.current = onStatusChange;
-
-  const load = useCallback(async () => {
-    setLoading(true);
-    try {
-      const [aRes, lRes, iRes, eRes, cRes] = await Promise.all([
-        fetch("/api/assets", { cache: "no-store" }),
-        fetch("/api/liabilities", { cache: "no-store" }),
-        fetch("/api/incomes", { cache: "no-store" }),
-        fetch("/api/expenses", { cache: "no-store" }),
-        fetch("/api/budget-categories", { cache: "no-store" }),
-      ]);
-      if (
-        onUnauthorized(aRes) ||
-        onUnauthorized(lRes) ||
-        onUnauthorized(iRes) ||
-        onUnauthorized(eRes) ||
-        onUnauthorized(cRes)
-      )
-        return;
-      const nextAssets: Asset[] = aRes.ok ? await aRes.json() : [];
-      const nextLiabilities: Liability[] = lRes.ok ? await lRes.json() : [];
-      const nextIncomes: Income[] = iRes.ok ? await iRes.json() : [];
-      const nextExpenses: Expense[] = eRes.ok ? await eRes.json() : [];
-      const nextCategories: BudgetCategory[] = cRes.ok ? await cRes.json() : [];
-      setAssets(nextAssets);
-      setLiabilities(nextLiabilities);
-      setIncomes(nextIncomes);
-      setExpenses(nextExpenses);
-      setCategories(nextCategories);
-      statusRef.current?.({
-        assetCount: nextAssets.length,
-        liabilityCount: nextLiabilities.length,
-        incomeCount: nextIncomes.length,
-        expenseCount: nextExpenses.length,
-        netWorthApprox:
-          nextAssets.reduce((s, a) => s + a.currentValue, 0) -
-          nextLiabilities.reduce((s, l) => s + l.remainingBalance, 0),
-      });
-    } finally {
-      setLoading(false);
-    }
-  }, [onUnauthorized]);
-
-  useEffect(() => {
-    load();
-  }, [load]);
 
   useEffect(() => {
     setEditView(null);
   }, [mode]);
 
   const closeEditor = () => setEditView(null);
-  const onEditorSaved = async () => {
-    await load();
+  const onEditorSaved = () => {
     setEditView(null);
-    onRefresh?.();
   };
 
   async function handleQuickAdd() {
     await onQuickAdd();
-    await load();
   }
 
   async function remove(
     kind: "asset" | "income" | "expense" | "liability",
     id: string,
   ) {
+    if (!ensureOnlineForWrite()) return;
     try {
       const path =
         kind === "liability" ? `/api/liabilities/${id}` : `/api/${kind}s/${id}`;
-      const res = await fetch(path, {
-        method: "DELETE",
-        cache: "no-store",
-      });
-      if (onUnauthorized(res)) return;
+      const res = await apiFetch(path, { method: "DELETE" });
+      if (!res) return;
       if (!res.ok) {
         toast.error("Не удалось удалить");
         return;
       }
+      const key =
+        kind === "asset"
+          ? "assets"
+          : kind === "income"
+            ? "incomes"
+            : kind === "expense"
+              ? "expenses"
+              : "liabilities";
+      removeEntity(key, id);
       toast.success("Удалено");
-      await load();
-      onRefresh?.();
     } catch {
       toast.error("Не удалось удалить");
     }
@@ -190,10 +147,15 @@ export function FinanceDataPanel({
   const categoryName = (id: string) =>
     categories.find((c) => c.id === id)?.name ?? (id === "general" ? "Без категории" : id);
 
+  const tabScore = score;
+
   return (
     <section className="space-y-8">
       {mode === "balance" && (
       <div className="space-y-4">
+        {tabScore && (
+          <ScoreCard score={tabScore} mode="block" blockId="wealth" compact />
+        )}
         <Card>
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
@@ -291,6 +253,9 @@ export function FinanceDataPanel({
 
       {mode === "cashflow" && (
       <div className="space-y-4">
+        {tabScore && (
+          <ScoreCard score={tabScore} mode="block" blockId="budget" compact />
+        )}
         <Card>
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
@@ -359,11 +324,6 @@ export function FinanceDataPanel({
               categories={categories}
               expenses={expenses}
               incomes={incomes}
-              onUnauthorized={onUnauthorized}
-              onChanged={async () => {
-                await load();
-                onRefresh?.();
-              }}
             />
           </>
         )}
@@ -386,7 +346,6 @@ export function FinanceDataPanel({
             categories={categories}
             onBack={closeEditor}
             onSaved={onEditorSaved}
-            onUnauthorized={onUnauthorized}
           />
         </Modal>
       )}
@@ -490,7 +449,6 @@ function ItemEditor({
   categories,
   onBack,
   onSaved,
-  onUnauthorized,
 }: {
   view: NonNullable<EditView>;
   assets: Asset[];
@@ -500,17 +458,11 @@ function ItemEditor({
   categories: BudgetCategory[];
   onBack: () => void;
   onSaved: () => void | Promise<void>;
-  onUnauthorized: (res: Response) => boolean;
 }) {
   if (view.kind === "asset") {
     const existing = assets.find((a) => a.id === view.id);
     return (
-      <AssetEditor
-        existing={existing}
-        onBack={onBack}
-        onSaved={onSaved}
-        onUnauthorized={onUnauthorized}
-      />
+      <AssetEditor existing={existing} onBack={onBack} onSaved={onSaved} />
     );
   }
   if (view.kind === "liability") {
@@ -520,19 +472,13 @@ function ItemEditor({
         existing={existing}
         onBack={onBack}
         onSaved={onSaved}
-        onUnauthorized={onUnauthorized}
       />
     );
   }
   if (view.kind === "income") {
     const existing = incomes.find((i) => i.id === view.id);
     return (
-      <IncomeEditor
-        existing={existing}
-        onBack={onBack}
-        onSaved={onSaved}
-        onUnauthorized={onUnauthorized}
-      />
+      <IncomeEditor existing={existing} onBack={onBack} onSaved={onSaved} />
     );
   }
   const existing = expenses.find((e) => e.id === view.id);
@@ -542,7 +488,6 @@ function ItemEditor({
       categories={categories}
       onBack={onBack}
       onSaved={onSaved}
-      onUnauthorized={onUnauthorized}
     />
   );
 }
@@ -551,13 +496,12 @@ function AssetEditor({
   existing,
   onBack,
   onSaved,
-  onUnauthorized,
 }: {
   existing?: Asset;
   onBack: () => void;
   onSaved: () => void | Promise<void>;
-  onUnauthorized: (res: Response) => boolean;
 }) {
+  const { upsert } = useFinanceStore();
   const [name, setName] = useState(existing?.name ?? "");
   const [type, setType] = useState<AssetType>(existing?.type ?? "BROKERAGE");
   const [assetClass, setAssetClass] = useState<AssetClass>(
@@ -617,6 +561,7 @@ function AssetEditor({
   }
 
   async function save() {
+    if (!ensureOnlineForWrite()) return;
     const portfolioHoldings =
       assetClass === "INVESTMENT" ? draftsToHoldings(holdingDrafts) : [];
     const useRollup = portfolioHoldings.length > 0;
@@ -670,7 +615,7 @@ function AssetEditor({
         portfolioHoldings:
           assetClass === "INVESTMENT" ? portfolioHoldings : [],
       };
-      const res = await fetch(
+      const res = await apiFetch(
         existing ? `/api/assets/${existing.id}` : "/api/assets",
         {
           method: existing ? "PATCH" : "POST",
@@ -678,12 +623,14 @@ function AssetEditor({
           body: JSON.stringify(body),
         },
       );
-      if (onUnauthorized(res)) return;
+      if (!res) return;
       if (!res.ok) {
         const { message } = await readApiError(res);
         toast.error(message);
         return;
       }
+      const saved = (await res.json()) as Asset;
+      upsert("assets", saved);
       toast.success(existing ? "Актив обновлён" : "Актив добавлен");
       await onSaved();
     } catch {
@@ -825,13 +772,12 @@ function IncomeEditor({
   existing,
   onBack,
   onSaved,
-  onUnauthorized,
 }: {
   existing?: Income;
   onBack: () => void;
   onSaved: () => void | Promise<void>;
-  onUnauthorized: (res: Response) => boolean;
 }) {
+  const { upsert } = useFinanceStore();
   const [name, setName] = useState(existing?.name ?? "");
   const [source, setSource] = useState(existing?.source ?? "SALARY");
   const [amount, setAmount] = useState(
@@ -843,6 +789,7 @@ function IncomeEditor({
   const [saving, setSaving] = useState(false);
 
   async function save() {
+    if (!ensureOnlineForWrite()) return;
     const amountNum = parsePositiveNumber(amount, "Сумма");
     if (!name.trim()) {
       toast.error("Укажите название");
@@ -862,7 +809,7 @@ function IncomeEditor({
         isEssential,
         taxRatePct: Number(taxRatePct) || 0,
       };
-      const res = await fetch(
+      const res = await apiFetch(
         existing ? `/api/incomes/${existing.id}` : "/api/incomes",
         {
           method: existing ? "PATCH" : "POST",
@@ -870,12 +817,13 @@ function IncomeEditor({
           body: JSON.stringify(body),
         },
       );
-      if (onUnauthorized(res)) return;
+      if (!res) return;
       if (!res.ok) {
         const { message } = await readApiError(res);
         toast.error(message);
         return;
       }
+      upsert("incomes", (await res.json()) as Income);
       toast.success(existing ? "Доход обновлён" : "Доход добавлен");
       await onSaved();
     } catch {
@@ -942,14 +890,13 @@ function ExpenseEditor({
   categories,
   onBack,
   onSaved,
-  onUnauthorized,
 }: {
   existing?: Expense;
   categories: BudgetCategory[];
   onBack: () => void;
   onSaved: () => void | Promise<void>;
-  onUnauthorized: (res: Response) => boolean;
 }) {
+  const { upsert } = useFinanceStore();
   const expenseCategories = categories.filter((c) => c.kind === "expense");
   const defaultCat =
     (existing?.category &&
@@ -967,6 +914,7 @@ function ExpenseEditor({
   const [saving, setSaving] = useState(false);
 
   async function save() {
+    if (!ensureOnlineForWrite()) return;
     const amountNum = parsePositiveNumber(amount, "Сумма");
     if (!name.trim()) {
       toast.error("Укажите название");
@@ -985,7 +933,7 @@ function ExpenseEditor({
         frequency,
         isEssential,
       };
-      const res = await fetch(
+      const res = await apiFetch(
         existing ? `/api/expenses/${existing.id}` : "/api/expenses",
         {
           method: existing ? "PATCH" : "POST",
@@ -993,12 +941,13 @@ function ExpenseEditor({
           body: JSON.stringify(body),
         },
       );
-      if (onUnauthorized(res)) return;
+      if (!res) return;
       if (!res.ok) {
         const { message } = await readApiError(res);
         toast.error(message);
         return;
       }
+      upsert("expenses", (await res.json()) as Expense);
       toast.success(existing ? "Расход обновлён" : "Расход добавлен");
       await onSaved();
     } catch {
@@ -1072,13 +1021,12 @@ function LiabilityEditor({
   existing,
   onBack,
   onSaved,
-  onUnauthorized,
 }: {
   existing?: Liability;
   onBack: () => void;
   onSaved: () => void | Promise<void>;
-  onUnauthorized: (res: Response) => boolean;
 }) {
+  const { upsert } = useFinanceStore();
   const [name, setName] = useState(existing?.name ?? "");
   const [type, setType] = useState<LiabilityType>(existing?.type ?? "MORTGAGE");
   const [remainingBalance, setRemainingBalance] = useState(
@@ -1093,6 +1041,7 @@ function LiabilityEditor({
   const [saving, setSaving] = useState(false);
 
   async function save() {
+    if (!ensureOnlineForWrite()) return;
     const balance = parsePositiveNumber(remainingBalance, "Остаток долга");
     const payment = parsePositiveNumber(monthlyPayment, "Платёж");
     if (!name.trim()) {
@@ -1117,7 +1066,7 @@ function LiabilityEditor({
         monthlyPayment: payment.value,
         currency: "RUB",
       };
-      const res = await fetch(
+      const res = await apiFetch(
         existing ? `/api/liabilities/${existing.id}` : "/api/liabilities",
         {
           method: existing ? "PATCH" : "POST",
@@ -1125,12 +1074,13 @@ function LiabilityEditor({
           body: JSON.stringify(body),
         },
       );
-      if (onUnauthorized(res)) return;
+      if (!res) return;
       if (!res.ok) {
         const { message } = await readApiError(res);
         toast.error(message);
         return;
       }
+      upsert("liabilities", (await res.json()) as Liability);
       toast.success(existing ? "Пассив обновлён" : "Пассив добавлен");
       await onSaved();
     } catch {
@@ -1209,15 +1159,12 @@ function BudgetEnvelopesPanel({
   categories,
   expenses,
   incomes,
-  onUnauthorized,
-  onChanged,
 }: {
   categories: BudgetCategory[];
   expenses: Expense[];
   incomes: Income[];
-  onUnauthorized: (res: Response) => boolean;
-  onChanged: () => void | Promise<void>;
 }) {
+  const { upsert, remove: removeEntity } = useFinanceStore();
   const statuses = envelopeStatuses(expenses, categories);
   const [limitDrafts, setLimitDrafts] = useState<Record<string, string>>({});
   const [newName, setNewName] = useState("");
@@ -1250,6 +1197,7 @@ function BudgetEnvelopesPanel({
   }, [categories]);
 
   async function saveLimit(id: string) {
+    if (!ensureOnlineForWrite()) return;
     const raw = limitDrafts[id] ?? "";
     let monthlyLimit: number | null = null;
     if (raw.trim()) {
@@ -1262,19 +1210,19 @@ function BudgetEnvelopesPanel({
     }
     setBusyId(id);
     try {
-      const res = await fetch(`/api/budget-categories/${id}`, {
+      const res = await apiFetch(`/api/budget-categories/${id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ monthlyLimit }),
       });
-      if (onUnauthorized(res)) return;
+      if (!res) return;
       if (!res.ok) {
         const { message } = await readApiError(res);
         toast.error(message);
         return;
       }
+      upsert("budgetCategories", (await res.json()) as BudgetCategory);
       toast.success("Лимит сохранён");
-      await onChanged();
     } catch {
       toast.error("Не удалось сохранить лимит");
     } finally {
@@ -1283,13 +1231,14 @@ function BudgetEnvelopesPanel({
   }
 
   async function addCategory() {
+    if (!ensureOnlineForWrite()) return;
     if (!newName.trim()) {
       toast.error("Укажите название категории");
       return;
     }
     setBusyId("__new__");
     try {
-      const res = await fetch("/api/budget-categories", {
+      const res = await apiFetch("/api/budget-categories", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -1298,16 +1247,16 @@ function BudgetEnvelopesPanel({
           monthlyLimit: null,
         }),
       });
-      if (onUnauthorized(res)) return;
+      if (!res) return;
       if (!res.ok) {
         const { message } = await readApiError(res);
         toast.error(message);
         return;
       }
+      upsert("budgetCategories", (await res.json()) as BudgetCategory);
       setNewName("");
       setCatOpen(false);
       toast.success("Категория добавлена");
-      await onChanged();
     } catch {
       toast.error("Не удалось добавить категорию");
     } finally {
@@ -1316,19 +1265,19 @@ function BudgetEnvelopesPanel({
   }
 
   async function removeCategory(id: string) {
+    if (!ensureOnlineForWrite()) return;
     setBusyId(id);
     try {
-      const res = await fetch(`/api/budget-categories/${id}`, {
+      const res = await apiFetch(`/api/budget-categories/${id}`, {
         method: "DELETE",
-        cache: "no-store",
       });
-      if (onUnauthorized(res)) return;
+      if (!res) return;
       if (!res.ok) {
         toast.error("Не удалось удалить");
         return;
       }
+      removeEntity("budgetCategories", id);
       toast.success("Категория удалена");
-      await onChanged();
     } catch {
       toast.error("Не удалось удалить");
     } finally {

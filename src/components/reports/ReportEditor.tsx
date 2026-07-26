@@ -14,6 +14,8 @@ import {
   type ReportItemId,
   type ReportTextKey,
 } from "@/modules/reports/report-config";
+import { ensureOnlineForWrite } from "@/shared/offline";
+import { apiFetch } from "@/shared/api-fetch";
 
 const TEXT_FIELDS: Array<{ key: ReportTextKey; label: string }> = [
   { key: "title", label: "Заголовок отчёта" },
@@ -34,11 +36,7 @@ function loadStoredConfig(): ReportConfig {
   }
 }
 
-export function ReportEditor({
-  onUnauthorized,
-}: {
-  onUnauthorized?: (res: Response) => boolean;
-}) {
+export function ReportEditor() {
   const [config, setConfig] = useState<ReportConfig>(createDefaultReportConfig);
   const [hydrated, setHydrated] = useState(false);
   const [downloading, setDownloading] = useState(false);
@@ -93,15 +91,16 @@ export function ReportEditor({
   const enabledOutline = REPORT_BLOCK_DEFS.filter((b) => config.blocks[b.id]);
 
   async function downloadPdf() {
+    if (!ensureOnlineForWrite()) return;
     setDownloading(true);
     setError(null);
     try {
-      const res = await fetch("/api/export/pdf", {
+      const res = await apiFetch("/api/export/pdf", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(config),
       });
-      if (onUnauthorized?.(res)) return;
+      if (!res) return;
       if (!res.ok) {
         setError("Не удалось сформировать PDF");
         return;

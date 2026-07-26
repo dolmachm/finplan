@@ -1,4 +1,4 @@
-import { prisma } from "@/shared/db";
+import { loadUserFinanceSnapshot } from "@/modules/finance/finance-snapshot";
 import type { Asset, Expense, Goal, Income, Liability, MacroSettings } from "@/shared/types";
 import { differenceInMonths, startOfMonth } from "date-fns";
 import type { PlanInput } from "./types";
@@ -85,29 +85,13 @@ export function buildPlanInputFromEntities(
 }
 
 export async function loadPlanInputForUser(userId: string): Promise<PlanInput> {
-  const [macro, assets, liabilities, incomes, expenses, goals] =
-    await Promise.all([
-      prisma.macroSettings.findUnique({ where: { userId } }),
-      prisma.asset.findMany({ where: { userId } }),
-      prisma.liability.findMany({ where: { userId } }),
-      prisma.income.findMany({ where: { userId } }),
-      prisma.expense.findMany({ where: { userId } }),
-      prisma.goal.findMany({ where: { userId }, orderBy: { priority: "asc" } }),
-    ]) as [
-      MacroSettings | null,
-      Asset[],
-      Liability[],
-      Income[],
-      Expense[],
-      Goal[],
-    ];
-
+  const snap = await loadUserFinanceSnapshot(userId);
   return buildPlanInputFromEntities(userId, {
-    macro,
-    assets,
-    liabilities,
-    incomes,
-    expenses,
-    goals,
+    macro: snap.macro,
+    assets: snap.assets,
+    liabilities: snap.liabilities,
+    incomes: snap.incomes,
+    expenses: snap.expenses,
+    goals: snap.goals,
   });
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import type { ScenarioRule } from "@/modules/scenarios/rule.types";
 import { createEmptyRule, newRuleId } from "@/modules/scenarios/rule.types";
 import { parseRulesFromJson } from "@/modules/scenarios/rule-engine";
@@ -9,7 +9,10 @@ import { toast } from "@/components/ui/ToastProvider";
 import { FEATURE_HINTS } from "@/content/help";
 import { HelpHint } from "@/components/ui/FormField";
 import { readApiError, NETWORK_ERROR_MESSAGE } from "@/shared/api-client";
+import { apiFetch } from "@/shared/api-fetch";
+import { ensureOnlineForWrite } from "@/shared/offline";
 import type { RuleValidationIssue } from "@/modules/scenarios/rule-validation";
+import { useFinanceStore } from "@/modules/finance/finance-store";
 import { RuleCard } from "./RuleCard";
 
 interface ScenarioRow {
@@ -32,11 +35,11 @@ export function ScenarioRulesEditor({
   onActivate: (id: string) => void | Promise<void>;
   compact?: boolean;
 }) {
+  const { assets: storeAssets, upsert } = useFinanceStore();
   const [selectedId, setSelectedId] = useState<string | null>(
     scenarios[0]?.id ?? null,
   );
   const [rules, setRules] = useState<ScenarioRule[]>([]);
-  const [assets, setAssets] = useState<AssetOption[]>([]);
   const [issues, setIssues] = useState<RuleValidationIssue[]>([]);
   const [saving, setSaving] = useState(false);
   const [validating, setValidating] = useState(false);
@@ -45,23 +48,11 @@ export function ScenarioRulesEditor({
 
   const selected = scenarios.find((s) => s.id === selectedId);
 
-  const loadAssets = useCallback(async () => {
-    const res = await fetch("/api/assets");
-    if (res.ok) {
-      const data = await res.json();
-      setAssets(
-        data.map((a: { id: string; name: string; liquidityDays: number }) => ({
-          id: a.id,
-          name: a.name,
-          liquidityDays: a.liquidityDays ?? 0,
-        })),
-      );
-    }
-  }, []);
-
-  useEffect(() => {
-    loadAssets();
-  }, [loadAssets]);
+  const assets: AssetOption[] = storeAssets.map((a) => ({
+    id: a.id,
+    name: a.name,
+    liquidityDays: a.liquidityDays ?? 0,
+  }));
 
   useEffect(() => {
     if (!selected) return;
@@ -72,13 +63,15 @@ export function ScenarioRulesEditor({
 
   async function validate() {
     if (!selectedId) return false;
+    if (!ensureOnlineForWrite()) return false;
     setValidating(true);
     try {
-      const res = await fetch(`/api/scenarios/${selectedId}/validate-rules`, {
+      const res = await apiFetch(`/api/scenarios/${selectedId}/validate-rules`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ rules }),
       });
+      if (!res) return false;
       if (res.ok) {
         const data = await res.json();
         setIssues(data.issues ?? []);
@@ -90,7 +83,7 @@ export function ScenarioRulesEditor({
           ).length;
           toast.error(
             errors > 0
-              ? `Найдено ошибок: ${errors}. Исправьте их и проверьте снова.`
+              ? `Найдено ошибок: ${errors}. Исправьте их и попробуйте снова.`
               : "Есть предупреждения в правилах — можно сохранить, но лучше уточнить.",
           );
         }
@@ -110,17 +103,22 @@ export function ScenarioRulesEditor({
 
   async function save() {
     if (!selectedId) return;
+    if (!ensureOnlineForWrite()) return;
     setSaving(true);
     try {
       const valid = await validate();
       if (!valid) return;
 
-      const res = await fetch(`/api/scenarios/${selectedId}`, {
+      const res = await apiFetch(`/api/scenarios/${selectedId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ rules }),
       });
+      if (!res) return;
       if (res.ok) {
+        const data = await res.json();
+        const scenario = data.scenario ?? data;
+        upsert("scenarios", scenario);
         setDirty(false);
         onSaved();
         toast.success("Правила сохранены");
@@ -184,18 +182,21 @@ export function ScenarioRulesEditor({
           type="button"
           className="w-full rounded-lg border border-dashed border-zinc-300 px-3 py-2 text-left text-xs text-zinc-600 hover:bg-zinc-50"
           onClick={async () => {
+            if (!ensureOnlineForWrite()) return;
             const name = window.prompt("Название сценария", "Новый сценарий");
             if (!name?.trim()) return;
-            const res = await fetch("/api/scenarios", {
+            const res = await apiFetch("/api/scenarios", {
               method: "POST",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({ name: name.trim(), templateKey: "base" }),
             });
+            if (!res) return;
             if (!res.ok) {
               toast.error((await readApiError(res)).message);
               return;
             }
             const row = await res.json();
+            upsert("scenarios", row);
             toast.success("Сценарий создан");
             onSaved();
             setSelectedId(row.id);

@@ -3,9 +3,11 @@
 import Link from "next/link";
 import { useSession } from "next-auth/react";
 import { BrandLogo } from "@/components/brand/BrandLogo";
+import { PwaInstallButton } from "@/components/pwa/PwaInstall";
 import { HelpHint } from "@/components/ui/FormField";
 import { toast } from "@/components/ui/ToastProvider";
 import { TAB_HINTS } from "@/content/help";
+import { useOnlineStatus } from "@/shared/offline";
 import { signOut } from "next-auth/react";
 
 const navItems = [
@@ -79,6 +81,7 @@ export function DashboardShell({
   children: React.ReactNode;
 }) {
   const { data: session } = useSession();
+  const online = useOnlineStatus();
   const current = navItems.find((n) => n.id === tab);
   const firstName =
     session?.user?.name?.trim().split(/\s+/)[0] ||
@@ -99,6 +102,7 @@ export function DashboardShell({
                 <span className="font-medium text-foreground">{firstName}</span>
               </p>
             )}
+            <PwaInstallButton compact className="lg:hidden" />
             <button
               type="button"
               onClick={handleSignOut}
@@ -124,6 +128,7 @@ export function DashboardShell({
           ))}
         </nav>
         <div className="shrink-0 border-t border-border p-3">
+          <PwaInstallButton />
           <Link
             href="/faq"
             className="block w-full rounded-xl px-3 py-2.5 text-left text-sm text-muted hover:bg-sidebar-hover hover:text-foreground"
@@ -134,6 +139,14 @@ export function DashboardShell({
       </aside>
 
       <div className="flex min-h-screen min-w-0 flex-col pt-14 lg:pl-56">
+        {!online && (
+          <div
+            role="status"
+            className="border-b border-amber-200 bg-amber-50 px-4 py-2 text-center text-xs text-amber-950 sm:text-sm"
+          >
+            Нет сети — показаны сохранённые данные. Изменения недоступны.
+          </div>
+        )}
         <div className="border-b border-border bg-card px-4 py-3 sm:px-6 lg:px-8">
           <h1 className="text-base font-semibold tracking-tight text-foreground sm:text-lg">
             {current?.label}

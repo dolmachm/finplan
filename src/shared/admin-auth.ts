@@ -4,16 +4,53 @@ import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 
 export const ADMIN_COOKIE = "admin_session";
-const ADMIN_LOGIN = "admin";
-const ADMIN_PASSWORD = "12345";
 const SESSION_TTL_MS = 24 * 60 * 60 * 1000;
 
 function getSecret() {
-  return process.env.AUTH_SECRET ?? "dev-admin-secret";
+  const secret =
+    process.env.AUTH_SECRET?.trim() ||
+    process.env.NEXTAUTH_SECRET?.trim() ||
+    "";
+  if (secret) return secret;
+  if (process.env.NODE_ENV !== "production") {
+    return "dev-admin-secret";
+  }
+  throw new Error("AUTH_SECRET is required in production for admin sessions");
+}
+
+function getAdminLogin(): string {
+  const fromEnv = process.env.ADMIN_LOGIN?.trim();
+  if (fromEnv) return fromEnv;
+  if (process.env.NODE_ENV !== "production") return "admin";
+  return "";
+}
+
+function getAdminPassword(): string {
+  const fromEnv = process.env.ADMIN_PASSWORD?.trim();
+  if (fromEnv) return fromEnv;
+  if (process.env.NODE_ENV !== "production") return "12345";
+  return "";
 }
 
 export function verifyAdminCredentials(login: string, password: string) {
-  return login === ADMIN_LOGIN && password === ADMIN_PASSWORD;
+  const expectedLogin = getAdminLogin();
+  const expectedPassword = getAdminPassword();
+  if (!expectedLogin || !expectedPassword) return false;
+  if (login.length !== expectedLogin.length) return false;
+  if (password.length !== expectedPassword.length) return false;
+  try {
+    const loginOk = timingSafeEqual(
+      Buffer.from(login),
+      Buffer.from(expectedLogin),
+    );
+    const passOk = timingSafeEqual(
+      Buffer.from(password),
+      Buffer.from(expectedPassword),
+    );
+    return loginOk && passOk;
+  } catch {
+    return false;
+  }
 }
 
 function signPayload(payload: string) {
@@ -32,7 +69,12 @@ export function verifyAdminToken(token: string) {
 
   const payload = token.slice(0, dot);
   const sig = token.slice(dot + 1);
-  const expected = signPayload(payload);
+  let expected: string;
+  try {
+    expected = signPayload(payload);
+  } catch {
+    return false;
+  }
 
   try {
     const sigBuf = Buffer.from(sig, "hex");

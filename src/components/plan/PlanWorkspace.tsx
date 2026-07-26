@@ -9,25 +9,15 @@ import { Card } from "@/components/ui/card";
 import { FormError } from "@/components/ui/FormError";
 import { HelpHint } from "@/components/ui/FormField";
 import { PlanInsightsStrip } from "@/components/plan/PlanInsightsStrip";
+import { ScoreCard } from "@/components/finance/ScoreCard";
 import { selectClass } from "@/components/ui/form-controls";
 import { FEATURE_HINTS } from "@/content/help";
 import { formatRub } from "@/shared/format";
 import type { HomeDashboardInput } from "@/modules/dashboard/insights";
+import type { FinancialScore } from "@/modules/dashboard/scoring";
+import type { PlanProjection } from "@/modules/plan/projection-types";
 
 export type PlanSection = "overview" | "montecarlo" | "iplan" | "scenarios";
-
-type Projection = {
-  result: {
-    monthly: Array<{ month: number; netWorth: number; cashflow: number }>;
-    summary: {
-      finalNetWorth: number;
-      avgMonthlySurplus: number;
-      recommendedMonthlySaving: number;
-    };
-  };
-  scenario: string;
-  isActive: boolean;
-};
 
 type SimJob = {
   status: string;
@@ -47,6 +37,7 @@ type SimJob = {
 export function PlanWorkspace({
   section = "overview",
   insightsInput,
+  score = null,
   projection,
   projectionLoading,
   viewScenarioId,
@@ -58,11 +49,11 @@ export function PlanWorkspace({
   simBusy,
   simError,
   onRunSimulation,
-  onUnauthorized,
 }: {
   section?: PlanSection;
   insightsInput: HomeDashboardInput | null;
-  projection: Projection | null;
+  score?: FinancialScore | null;
+  projection: PlanProjection | null;
   projectionLoading: boolean;
   viewScenarioId: string;
   onViewScenarioChange: (id: string) => void;
@@ -73,18 +64,44 @@ export function PlanWorkspace({
   simBusy: boolean;
   simError: string;
   onRunSimulation: () => void;
-  onUnauthorized: (res: Response) => boolean;
 }) {
+  const activeScenario = scenarios.find((s) => s.id === viewScenarioId);
+  const planScore = score;
+
+  if (section === "iplan") {
+    return (
+      <InvestmentPlanPanel
+        compact
+        hideMcChart
+        hideHistory
+        insightsInput={insightsInput}
+        score={planScore}
+      />
+    );
+  }
+
+  if (section === "scenarios") {
+    return (
+      <ScenariosPanel
+        compact
+        scenarios={scenarios}
+        onRefresh={onScenariosRefresh}
+        onActivate={onActivateScenario}
+      />
+    );
+  }
+
   if (!projection) {
     return <p className="text-sm text-muted">Загрузка прогноза…</p>;
   }
-
-  const activeScenario = scenarios.find((s) => s.id === viewScenarioId);
 
   return (
     <div className="space-y-4">
       {section === "overview" && (
         <>
+          {planScore && (
+            <ScoreCard score={planScore} mode="block" blockId="planning" compact />
+          )}
           <PlanInsightsStrip input={insightsInput} />
 
           <div className="flex flex-wrap items-end justify-between gap-2">
@@ -179,25 +196,6 @@ export function PlanWorkspace({
             </>
           )}
         </Card>
-      )}
-
-      {section === "scenarios" && (
-        <ScenariosPanel
-          compact
-          scenarios={scenarios}
-          onRefresh={onScenariosRefresh}
-          onActivate={onActivateScenario}
-          onUnauthorized={onUnauthorized}
-        />
-      )}
-
-      {section === "iplan" && (
-        <InvestmentPlanPanel
-          compact
-          hideMcChart
-          hideHistory
-          onUnauthorized={onUnauthorized}
-        />
       )}
     </div>
   );
