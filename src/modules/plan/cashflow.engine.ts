@@ -59,7 +59,14 @@ export function runDeterministicPlan(
 
   const tracked: TrackedAsset[] = plan.assets.map((a) => ({ ...a, sold: false }));
   let cashFromSales = 0;
-  let debtTotal = plan.liabilities.reduce((s, l) => s + l.remainingBalance, 0);
+  const debts = plan.liabilities.map((l) => ({
+    balance: l.remainingBalance,
+    monthlyPayment: l.monthlyPayment,
+    interestRatePct: l.interestRatePct,
+    urgencyRank:
+      l.urgency === "HIGH" ? 3 : l.urgency === "LOW" ? 1 : 2,
+    endMonthIndex: l.endMonthIndex,
+  }));
 
   const monthly: MonthlyProjection[] = [];
   let surplusSum = 0;
@@ -115,15 +122,32 @@ export function runDeterministicPlan(
       if (!a.sold) expenses += a.maintenanceCostMonthly * inflationFactor;
     }
 
-    let debtPayments = 0;
-    for (const l of plan.liabilities) {
-      if (debtTotal > 0) {
-        const interest = (debtTotal * (l.interestRatePct / 100)) / 12;
-        const payment = Math.min(l.monthlyPayment, debtTotal + interest);
-        debtPayments += payment;
-        debtTotal = Math.max(0, debtTotal + interest - payment);
+    // Срок истёк — долг выбывает из платежей; срочные платим раньше
+    for (const d of debts) {
+      if (
+        d.endMonthIndex !== null &&
+        m > d.endMonthIndex &&
+        d.balance > 0
+      ) {
+        d.balance = 0;
       }
     }
+    const activeDebts = debts
+      .filter(
+        (d) =>
+          d.balance > 0.01 &&
+          (d.endMonthIndex === null || m <= d.endMonthIndex),
+      )
+      .sort((a, b) => b.urgencyRank - a.urgencyRank);
+
+    let debtPayments = 0;
+    for (const d of activeDebts) {
+      const interest = (d.balance * (d.interestRatePct / 100)) / 12;
+      const payment = Math.min(d.monthlyPayment, d.balance + interest);
+      debtPayments += payment;
+      d.balance = Math.max(0, d.balance + interest - payment);
+    }
+    const debtTotal = debts.reduce((s, d) => s + d.balance, 0);
 
     let investmentReturn = 0;
     const pool = activeValue(tracked);

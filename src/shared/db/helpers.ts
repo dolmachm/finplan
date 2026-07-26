@@ -11,6 +11,7 @@ export function now(): Date {
 const DATE_FIELDS = new Set([
   "createdAt", "updatedAt", "emailVerified", "deletedAt", "endDate", "startDate",
   "oneTimeDate", "targetDate", "computedAt", "startedAt", "completedAt", "expires",
+  "archivedAt",
 ]);
 
 export function reviveDates<T>(obj: T): T {

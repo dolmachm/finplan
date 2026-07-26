@@ -13,6 +13,7 @@ import {
   envelopeOverviewSummary,
   type EnvelopeStatus,
 } from "@/modules/budget/envelopes";
+import { activeLiabilities } from "@/modules/finance/liability-status";
 import type { FinancialScore } from "@/modules/dashboard/scoring";
 
 const LIQUID_TYPES = new Set(["CASH", "BANK_ACCOUNT", "DEPOSIT"]);
@@ -108,7 +109,8 @@ export function computeDashboardMetrics(
   } = input;
 
   const assetsTotal = assets.reduce((s, a) => s + a.currentValue, 0);
-  const liabilitiesTotal = liabilities.reduce(
+  const activeDebts = activeLiabilities(liabilities);
+  const liabilitiesTotal = activeDebts.reduce(
     (s, l) => s + l.remainingBalance,
     0,
   );
@@ -127,7 +129,7 @@ export function computeDashboardMetrics(
   const investTotal = assets
     .filter((a) => a.assetClass === "INVESTMENT")
     .reduce((s, a) => s + a.currentValue, 0);
-  const debtServiceMonthly = liabilities.reduce(
+  const debtServiceMonthly = activeDebts.reduce(
     (s, l) => s + l.monthlyPayment,
     0,
   );
@@ -177,7 +179,7 @@ export function computeDashboardMetrics(
       : null;
 
   const hasAssets = assets.length > 0;
-  const hasLiabilities = liabilities.length > 0;
+  const hasLiabilities = activeDebts.length > 0;
   const hasIncome = incomes.length > 0;
   const hasExpense = expenses.length > 0;
   const hasGoals = goals.length > 0;

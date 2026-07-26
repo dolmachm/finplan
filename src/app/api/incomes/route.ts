@@ -22,6 +22,12 @@ export async function POST(req: Request) {
   if (isDuplicateIncome(existing, parsed.data)) {
     return duplicateEntityResponse("Доход");
   }
-  const row = await prisma.income.create({ data: { ...parsed.data, userId } });
+  const row = await prisma.income.create({
+    data: {
+      ...parsed.data,
+      category: parsed.data.category ?? "general",
+      userId,
+    },
+  });
   return NextResponse.json(row, { status: 201 });
 }

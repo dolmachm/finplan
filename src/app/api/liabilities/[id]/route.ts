@@ -18,13 +18,16 @@ export async function PATCH(
   }
   const parsed = parseJsonBody(liabilityPatchSchema, await req.json());
   if (!parsed.ok) return parsed.response;
-  const { endDate, ...rest } = parsed.data;
+  const { endDate, archivedAt, ...rest } = parsed.data;
   const row = await prisma.liability.update({
     where: { id },
     data: {
       ...rest,
       ...(endDate !== undefined
         ? { endDate: endDate ? new Date(endDate) : null }
+        : {}),
+      ...(archivedAt !== undefined
+        ? { archivedAt: archivedAt ? new Date(archivedAt) : null }
         : {}),
     },
   });

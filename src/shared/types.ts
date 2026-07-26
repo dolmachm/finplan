@@ -6,6 +6,8 @@ export type AssetType =
   | "CROWDFUNDING" | "RENTAL_REAL_ESTATE" | "RENTAL_VEHICLE" | "OTHER";
 export type LiabilityType =
   | "MORTGAGE" | "CONSUMER_LOAN" | "CREDIT_CARD" | "AUTO_LOAN" | "STUDENT_LOAN" | "OTHER";
+/** Приоритет погашения: HIGH закрываем раньше при планировании. */
+export type LiabilityUrgency = "HIGH" | "MEDIUM" | "LOW";
 export type IncomeSource = "SALARY" | "FREELANCE" | "PASSIVE" | "BUSINESS" | "OTHER";
 export type Frequency = "MONTHLY" | "QUARTERLY" | "SEMI_ANNUAL" | "YEARLY" | "ONE_TIME";
 export type AssetClass = "PERSONAL" | "INVESTMENT";
@@ -117,7 +119,10 @@ export type Liability = {
   remainingBalance: number;
   interestRatePct: number;
   monthlyPayment: number;
+  urgency: LiabilityUrgency;
   endDate: Date | null;
+  /** После окончания срока кредит архивируется и не участвует в плане/расходах. */
+  archivedAt: Date | null;
   currency: string;
   createdAt: Date;
   updatedAt: Date;
@@ -128,6 +133,8 @@ export type Income = {
   userId: string;
   name: string;
   source: IncomeSource;
+  /** BudgetCategory id when linked; "general" = без категории */
+  category: string;
   amount: number;
   currency: string;
   frequency: Frequency;

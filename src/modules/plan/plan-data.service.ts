@@ -1,4 +1,5 @@
 import { loadUserFinanceSnapshot } from "@/modules/finance/finance-snapshot";
+import { activeLiabilities } from "@/modules/finance/liability-status";
 import type { Asset, Expense, Goal, Income, Liability, MacroSettings } from "@/shared/types";
 import { differenceInMonths, startOfMonth } from "date-fns";
 import type { PlanInput } from "./types";
@@ -36,10 +37,14 @@ export function buildPlanInputFromEntities(
       dividendIncomeMonthly: a.dividendIncomeMonthly,
       liquidityDays: a.liquidityDays,
     })),
-    liabilities: liabilities.map((l) => ({
+    liabilities: activeLiabilities(liabilities, now).map((l) => ({
       remainingBalance: l.remainingBalance,
       monthlyPayment: l.monthlyPayment,
       interestRatePct: l.interestRatePct,
+      urgency: l.urgency ?? "MEDIUM",
+      endMonthIndex: l.endDate
+        ? Math.max(0, differenceInMonths(startOfMonth(new Date(l.endDate)), now))
+        : null,
     })),
     incomes: incomes.map((i) => ({
       amount: i.amount,

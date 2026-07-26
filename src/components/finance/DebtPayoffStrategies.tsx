@@ -9,6 +9,7 @@ import {
   compareRepaymentStrategies,
   type PayoffStrategyKind,
 } from "@/modules/finance/loan-math";
+import { activeLiabilities } from "@/modules/finance/liability-status";
 import { formatMoneyInput } from "@/shared/format-input";
 import { formatRub } from "@/shared/format";
 import type { Liability } from "@/shared/types";
@@ -17,6 +18,7 @@ const KIND_HINT: Record<PayoffStrategyKind, string> = {
   minimum: "Только минимальные платежи без досрочки",
   avalanche: "Сначала закрываем долг с самой высокой ставкой",
   snowball: "Сначала закрываем долг с наименьшим остатком",
+  urgency: "Сначала закрываем долг с высокой срочностью",
 };
 
 export function DebtPayoffStrategies({
@@ -25,27 +27,29 @@ export function DebtPayoffStrategies({
   liabilities: Liability[];
 }) {
   const [extra, setExtra] = useState("");
+  const active = useMemo(() => activeLiabilities(liabilities), [liabilities]);
 
   const comparison = useMemo(() => {
-    const debts = liabilities.map((l) => ({
+    const debts = active.map((l) => ({
       id: l.id,
       name: l.name,
       remainingBalance: l.remainingBalance,
       interestRatePct: l.interestRatePct,
       monthlyPayment: l.monthlyPayment,
+      urgency: l.urgency ?? "MEDIUM",
     }));
     const extraN = Number(String(extra).replace(/\s/g, "").replace(",", "."));
     return compareRepaymentStrategies(
       debts,
       Number.isFinite(extraN) ? Math.max(0, extraN) : 0,
     );
-  }, [liabilities, extra]);
+  }, [active, extra]);
 
   const recommended = comparison.strategies.find(
     (s) => s.kind === comparison.recommendedKind,
   );
 
-  if (liabilities.length === 0) {
+  if (active.length === 0) {
     return (
       <Card>
         <div>
@@ -54,8 +58,8 @@ export function DebtPayoffStrategies({
           </p>
           <h3 className="mt-1 font-medium">Погашение обязательств</h3>
           <HelpHint className="mt-1">
-            Добавьте пассивы выше — здесь появится сравнение стратегий досрочного
-            погашения.
+            Добавьте активные пассивы выше — здесь появится сравнение стратегий
+            досрочного погашения.
           </HelpHint>
         </div>
       </Card>
@@ -88,9 +92,10 @@ export function DebtPayoffStrategies({
         </FormField>
       </div>
 
-      <div className="mt-6 grid gap-4 sm:grid-cols-3">
+      <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {comparison.strategies.map((s) => {
-          const isRec = s.kind === comparison.recommendedKind && s.kind !== "minimum";
+          const isRec =
+            s.kind === comparison.recommendedKind && s.kind !== "minimum";
           return (
             <div
               key={s.kind}

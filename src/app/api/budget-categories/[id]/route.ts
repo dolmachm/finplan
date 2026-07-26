@@ -65,6 +65,16 @@ export async function DELETE(
     }
   }
 
+  const incomes = await prisma.income.findMany({ where: { userId } });
+  for (const i of incomes) {
+    if (i.category === id) {
+      await prisma.income.update({
+        where: { id: i.id },
+        data: { category: "general" },
+      });
+    }
+  }
+
   await prisma.budgetCategory.delete({ where: { id } });
   return NextResponse.json({ ok: true });
 }

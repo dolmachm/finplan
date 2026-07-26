@@ -57,9 +57,10 @@ export type DebtInput = {
   remainingBalance: number;
   interestRatePct: number;
   monthlyPayment: number;
+  urgency?: "HIGH" | "MEDIUM" | "LOW";
 };
 
-export type PayoffStrategyKind = "minimum" | "avalanche" | "snowball";
+export type PayoffStrategyKind = "minimum" | "avalanche" | "snowball" | "urgency";
 
 export type StrategyResult = {
   kind: PayoffStrategyKind;
@@ -83,7 +84,12 @@ type SimDebt = {
   balance: number;
   rate: number;
   minPayment: number;
+  urgencyRank: number;
 };
+
+function urgencyRank(u?: "HIGH" | "MEDIUM" | "LOW") {
+  return u === "HIGH" ? 3 : u === "LOW" ? 1 : 2;
+}
 
 function cloneDebts(debts: DebtInput[]): SimDebt[] {
   return debts
@@ -94,6 +100,7 @@ function cloneDebts(debts: DebtInput[]): SimDebt[] {
       balance: d.remainingBalance,
       rate: d.interestRatePct / 100 / 12,
       minPayment: d.monthlyPayment,
+      urgencyRank: urgencyRank(d.urgency),
     }));
 }
 
@@ -108,6 +115,11 @@ function pickTarget(
   if (kind === "snowball") {
     return active.reduce((best, d) => (d.balance < best.balance ? d : best));
   }
+  if (kind === "urgency") {
+    return active.reduce((best, d) =>
+      d.urgencyRank > best.urgencyRank ? d : best,
+    );
+  }
   return null;
 }
 
@@ -121,7 +133,9 @@ function simulateStrategy(
       ? "Минимум"
       : kind === "avalanche"
         ? "Лавина"
-        : "Снежный ком";
+        : kind === "snowball"
+          ? "Снежный ком"
+          : "По срочности";
 
   const sim = cloneDebts(debts);
   if (sim.length === 0) {
@@ -176,7 +190,7 @@ function simulateStrategy(
   return { kind, label, months, totalInterest, payoffOrder };
 }
 
-/** Сравнение baseline / avalanche / snowball по текущим пассивам. */
+/** Сравнение baseline / avalanche / snowball / urgency по текущим пассивам. */
 export function compareRepaymentStrategies(
   debts: DebtInput[],
   extraMonthly: number,
@@ -185,6 +199,7 @@ export function compareRepaymentStrategies(
   const minimum = simulateStrategy(debts, "minimum", 0);
   const avalanche = simulateStrategy(debts, "avalanche", extra);
   const snowball = simulateStrategy(debts, "snowball", extra);
+  const urgency = simulateStrategy(debts, "urgency", extra);
 
   const strategies: StrategyResult[] = [
     { ...minimum, interestSaved: 0 },
@@ -196,10 +211,17 @@ export function compareRepaymentStrategies(
       ...snowball,
       interestSaved: Math.max(0, minimum.totalInterest - snowball.totalInterest),
     },
+    {
+      ...urgency,
+      interestSaved: Math.max(0, minimum.totalInterest - urgency.totalInterest),
+    },
   ];
 
-  const recommendedKind: PayoffStrategyKind =
-    avalanche.totalInterest <= snowball.totalInterest ? "avalanche" : "snowball";
+  const contenders = [avalanche, snowball, urgency];
+  const best = contenders.reduce((a, b) =>
+    a.totalInterest <= b.totalInterest ? a : b,
+  );
+  const recommendedKind: PayoffStrategyKind = best.kind;
 
   return { strategies, recommendedKind };
 }

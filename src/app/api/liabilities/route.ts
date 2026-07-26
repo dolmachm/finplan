@@ -1,16 +1,16 @@
-import { NextResponse } from "next/server";
+﻿import { NextResponse } from "next/server";
 import { parseJsonBody } from "@/shared/api-validation";
 import { liabilitySchema } from "@/shared/finance-schemas";
 import { prisma } from "@/shared/db";
 import { requireUserId, isErrorResponse } from "@/shared/session";
 import { recordRevision } from "@/shared/revision";
+import { archiveExpiredLiabilities } from "@/modules/finance/archive-liabilities";
 
 export async function GET() {
   const userId = await requireUserId();
   if (isErrorResponse(userId)) return userId;
-  return NextResponse.json(
-    await prisma.liability.findMany({ where: { userId } }),
-  );
+  const rows = await prisma.liability.findMany({ where: { userId } });
+  return NextResponse.json(await archiveExpiredLiabilities(rows));
 }
 
 export async function POST(req: Request) {
@@ -23,7 +23,9 @@ export async function POST(req: Request) {
     data: {
       ...data,
       userId,
+      urgency: data.urgency ?? "MEDIUM",
       endDate: data.endDate ? new Date(data.endDate) : null,
+      archivedAt: null,
     },
   });
   await recordRevision({

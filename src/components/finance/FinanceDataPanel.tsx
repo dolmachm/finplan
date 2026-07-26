@@ -18,7 +18,9 @@ import {
   frequencyLabel,
   INCOME_SOURCE_LABELS,
   LIABILITY_TYPE_OPTIONS,
+  LIABILITY_URGENCY_OPTIONS,
   liabilityTypeLabel,
+  liabilityUrgencyLabel,
 } from "@/shared/finance-catalog";
 import type {
   Asset,
@@ -29,6 +31,7 @@ import type {
   Income,
   Liability,
   LiabilityType,
+  LiabilityUrgency,
 } from "@/shared/types";
 import { readApiError, parsePositiveNumber } from "@/shared/api-client";
 import { apiFetch } from "@/shared/api-fetch";
@@ -38,7 +41,9 @@ import { formatRub } from "@/shared/format";
 import { envelopeStatuses, budgetExpenseFloor } from "@/modules/budget/envelopes";
 import type { FinancialScore } from "@/modules/dashboard/scoring";
 import { useFinanceStore } from "@/modules/finance/finance-store";
+import { activeLiabilities } from "@/modules/finance/liability-status";
 import { EnvelopeBars } from "@/components/finance/EnvelopeOverview";
+import { CategoryCatalogPicker } from "@/components/finance/CategoryCatalogPicker";
 import { LoanCalculator } from "@/components/finance/LoanCalculator";
 import { DebtPayoffStrategies } from "@/components/finance/DebtPayoffStrategies";
 import { ScoreCard } from "@/components/finance/ScoreCard";
@@ -143,7 +148,9 @@ export function FinanceDataPanel({
   }
 
   const assetsTotal = assets.reduce((s, a) => s + a.currentValue, 0);
-  const debtTotal = liabilities.reduce((s, l) => s + l.remainingBalance, 0);
+  const activeDebts = activeLiabilities(liabilities);
+  const archivedDebts = liabilities.filter((l) => !activeLiabilities([l]).length);
+  const debtTotal = activeDebts.reduce((s, l) => s + l.remainingBalance, 0);
   const categoryName = (id: string) =>
     categories.find((c) => c.id === id)?.name ?? (id === "general" ? "Без категории" : id);
 
@@ -230,12 +237,13 @@ export function FinanceDataPanel({
             <DataTable
               title="Пассивы"
               empty="Нет пассивов — добавьте ипотеку, кредит или карту при наличии"
-              columns={["Название", "Тип", "Остаток", "Ставка %", "Платёж/мес"]}
-              items={liabilities.map((l) => ({
+              columns={["Название", "Тип", "Срочность", "Остаток", "Ставка %", "Платёж/мес"]}
+              items={activeDebts.map((l) => ({
                 id: l.id,
                 cells: [
                   l.name,
                   liabilityTypeLabel(l.type),
+                  liabilityUrgencyLabel(l.urgency ?? "MEDIUM"),
                   formatRub(l.remainingBalance),
                   String(l.interestRatePct),
                   formatRub(l.monthlyPayment),
@@ -244,6 +252,26 @@ export function FinanceDataPanel({
               onEdit={(id) => setEditView({ kind: "liability", id })}
               onDelete={(id) => remove("liability", id)}
             />
+            {archivedDebts.length > 0 && (
+              <DataTable
+                title="Архив обязательств"
+                empty=""
+                columns={["Название", "Тип", "Остаток", "Окончание"]}
+                items={archivedDebts.map((l) => ({
+                  id: l.id,
+                  cells: [
+                    l.name,
+                    liabilityTypeLabel(l.type),
+                    formatRub(l.remainingBalance),
+                    l.endDate
+                      ? new Date(l.endDate).toLocaleDateString("ru-RU")
+                      : "—",
+                  ],
+                }))}
+                onEdit={(id) => setEditView({ kind: "liability", id })}
+                onDelete={(id) => remove("liability", id)}
+              />
+            )}
             <LoanCalculator />
             <DebtPayoffStrategies liabilities={liabilities} />
           </>
@@ -289,12 +317,12 @@ export function FinanceDataPanel({
             <DataTable
               title="Доходы"
               empty="Нет доходов"
-              columns={["Название", "Источник", "Сумма", "Период", "Тип"]}
+              columns={["Название", "Категория", "Сумма", "Период", "Тип"]}
               items={incomes.map((i) => ({
                 id: i.id,
                 cells: [
                   i.name,
-                  INCOME_SOURCE_LABELS[i.source] ?? i.source,
+                  categoryName(i.category ?? "general"),
                   formatRub(i.amount),
                   frequencyLabel(i.frequency),
                   essentialLabel(i.isEssential ?? true),
@@ -478,7 +506,12 @@ function ItemEditor({
   if (view.kind === "income") {
     const existing = incomes.find((i) => i.id === view.id);
     return (
-      <IncomeEditor existing={existing} onBack={onBack} onSaved={onSaved} />
+      <IncomeEditor
+        existing={existing}
+        categories={categories}
+        onBack={onBack}
+        onSaved={onSaved}
+      />
     );
   }
   const existing = expenses.find((e) => e.id === view.id);
@@ -770,16 +803,26 @@ function AssetEditor({
 
 function IncomeEditor({
   existing,
+  categories,
   onBack,
   onSaved,
 }: {
   existing?: Income;
+  categories: BudgetCategory[];
   onBack: () => void;
   onSaved: () => void | Promise<void>;
 }) {
   const { upsert } = useFinanceStore();
+  const incomeCategories = categories.filter((c) => c.kind === "income");
+  const defaultCat =
+    (existing?.category &&
+      incomeCategories.some((c) => c.id === existing.category) &&
+      existing.category) ||
+    incomeCategories[0]?.id ||
+    "general";
   const [name, setName] = useState(existing?.name ?? "");
   const [source, setSource] = useState(existing?.source ?? "SALARY");
+  const [category, setCategory] = useState(defaultCat);
   const [amount, setAmount] = useState(
     existing ? formatMoneyInput(String(existing.amount)) : "",
   );
@@ -804,6 +847,7 @@ function IncomeEditor({
       const body = {
         name: name.trim(),
         source,
+        category: category.trim() || "general",
         amount: amountNum.value,
         frequency,
         isEssential,
@@ -848,6 +892,27 @@ function IncomeEditor({
             {FREQUENCY_OPTIONS.map((o) => (
               <option key={o.value} value={o.value}>{o.label}</option>
             ))}
+          </select>
+        </FormField>
+        <FormField label="Категория" htmlFor="income-category" hint="Из каталога доходов">
+          <select
+            id="income-category"
+            className={selectClass}
+            value={category}
+            onChange={(e) => setCategory(e.target.value)}
+          >
+            {incomeCategories.length === 0 ? (
+              <option value="general">Без категории</option>
+            ) : (
+              <>
+                <option value="general">Без категории</option>
+                {incomeCategories.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name}
+                  </option>
+                ))}
+              </>
+            )}
           </select>
         </FormField>
       </div>
@@ -1038,6 +1103,14 @@ function LiabilityEditor({
   const [monthlyPayment, setMonthlyPayment] = useState(
     existing ? formatMoneyInput(String(existing.monthlyPayment)) : "",
   );
+  const [urgency, setUrgency] = useState<LiabilityUrgency>(
+    existing?.urgency ?? "MEDIUM",
+  );
+  const [endDate, setEndDate] = useState(
+    existing?.endDate
+      ? new Date(existing.endDate).toISOString().slice(0, 10)
+      : "",
+  );
   const [saving, setSaving] = useState(false);
 
   async function save() {
@@ -1064,7 +1137,18 @@ function LiabilityEditor({
         remainingBalance: balance.value,
         interestRatePct: Number(interestRatePct) || 0,
         monthlyPayment: payment.value,
+        urgency,
+        endDate: endDate
+          ? new Date(`${endDate}T23:59:59.000Z`).toISOString()
+          : null,
         currency: "RUB",
+        archivedAt:
+          endDate &&
+          new Date(`${endDate}T23:59:59.000Z`).getTime() < Date.now()
+            ? (existing?.archivedAt
+                ? new Date(existing.archivedAt).toISOString()
+                : new Date().toISOString())
+            : null,
       };
       const res = await apiFetch(
         existing ? `/api/liabilities/${existing.id}` : "/api/liabilities",
@@ -1143,6 +1227,36 @@ function LiabilityEditor({
             placeholder="45 000"
           />
         </FormField>
+        <FormField
+          label="Срочность"
+          hint="Высокая — закрываем раньше в плане и стратегиях"
+          htmlFor="liability-urgency"
+        >
+          <select
+            id="liability-urgency"
+            className={selectClass}
+            value={urgency}
+            onChange={(e) => setUrgency(e.target.value as LiabilityUrgency)}
+          >
+            {LIABILITY_URGENCY_OPTIONS.map((o) => (
+              <option key={o.value} value={o.value}>
+                {o.label}
+              </option>
+            ))}
+          </select>
+        </FormField>
+        <FormField
+          label="Окончание срока"
+          hint="После этой даты кредит уходит в архив и не учитывается в плане"
+          htmlFor="liability-end"
+        >
+          <Input
+            id="liability-end"
+            type="date"
+            value={endDate}
+            onChange={(e) => setEndDate(e.target.value)}
+          />
+        </FormField>
       </div>
     </ModalFormBox>
     <ModalFormActions
@@ -1167,9 +1281,8 @@ function BudgetEnvelopesPanel({
   const { upsert, remove: removeEntity } = useFinanceStore();
   const statuses = envelopeStatuses(expenses, categories);
   const [limitDrafts, setLimitDrafts] = useState<Record<string, string>>({});
-  const [newName, setNewName] = useState("");
-  const [catOpen, setCatOpen] = useState(false);
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [showCatalog, setShowCatalog] = useState(false);
 
   const incomeMonthly = incomes.reduce(
     (s, i) => s + monthlyEquivalent(i.amount, i.frequency as PlanFrequency),
@@ -1230,40 +1343,6 @@ function BudgetEnvelopesPanel({
     }
   }
 
-  async function addCategory() {
-    if (!ensureOnlineForWrite()) return;
-    if (!newName.trim()) {
-      toast.error("Укажите название категории");
-      return;
-    }
-    setBusyId("__new__");
-    try {
-      const res = await apiFetch("/api/budget-categories", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          name: newName.trim(),
-          kind: "expense",
-          monthlyLimit: null,
-        }),
-      });
-      if (!res) return;
-      if (!res.ok) {
-        const { message } = await readApiError(res);
-        toast.error(message);
-        return;
-      }
-      upsert("budgetCategories", (await res.json()) as BudgetCategory);
-      setNewName("");
-      setCatOpen(false);
-      toast.success("Категория добавлена");
-    } catch {
-      toast.error("Не удалось добавить категорию");
-    } finally {
-      setBusyId(null);
-    }
-  }
-
   async function removeCategory(id: string) {
     if (!ensureOnlineForWrite()) return;
     setBusyId(id);
@@ -1285,6 +1364,8 @@ function BudgetEnvelopesPanel({
     }
   }
 
+  const incomeCats = categories.filter((c) => c.kind === "income");
+
   return (
     <Card>
       <div>
@@ -1293,8 +1374,8 @@ function BudgetEnvelopesPanel({
         </p>
         <h3 className="mt-1 font-medium">Конверты по категориям</h3>
         <HelpHint className="mt-1">
-          Месячный лимит — потолок категории. Запланированные расходы
-          сравниваются с лимитом; в инвест-плане учитывается резерв конвертов.
+          Месячный лимит — потолок категории расходов. Добавляйте категории из
+          каталога; доходы — для группировки без лимитов.
         </HelpHint>
       </div>
 
@@ -1330,17 +1411,38 @@ function BudgetEnvelopesPanel({
         </p>
       )}
 
+      <div className="mt-4">
+        <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+          <p className="text-sm font-medium">Каталог категорий</p>
+          <Button
+            type="button"
+            variant="secondary"
+            onClick={() => setShowCatalog((v) => !v)}
+          >
+            {showCatalog ? "Скрыть" : "Открыть каталог"}
+          </Button>
+        </div>
+        {showCatalog && (
+          <CategoryCatalogPicker
+            userCategories={categories}
+            onAdded={(row) => upsert("budgetCategories", row)}
+          />
+        )}
+      </div>
+
       {statuses.length > 0 && (
         <div className="mt-4 rounded-xl border border-border bg-background p-4">
           <p className="mb-3 text-xs font-medium uppercase tracking-wide text-muted">
-            Сводка
+            Сводка расходов
           </p>
           <EnvelopeBars statuses={statuses} />
         </div>
       )}
 
       {statuses.length === 0 ? (
-        <p className="mt-4 text-sm text-muted">Категории пока не созданы</p>
+        <p className="mt-4 text-sm text-muted">
+          Категории расходов пока не созданы — откройте каталог
+        </p>
       ) : (
         <ul className="mt-4 space-y-3">
           {statuses.map((s) => (
@@ -1415,42 +1517,31 @@ function BudgetEnvelopesPanel({
         </ul>
       )}
 
-      <div className="mt-4 border-t border-border pt-4">
-        <Button
-          type="button"
-          variant="secondary"
-          onClick={() => {
-            setNewName("");
-            setCatOpen(true);
-          }}
-        >
-          + Категория
-        </Button>
-      </div>
-
-      <Modal
-        open={catOpen}
-        title="Добавить категорию"
-        onClose={() => setCatOpen(false)}
-      >
-        <ModalFormBox>
-          <FormField label="Название" htmlFor="new-cat">
-            <Input
-              id="new-cat"
-              value={newName}
-              onChange={(e) => setNewName(e.target.value)}
-              placeholder="Например, Дети"
-            />
-          </FormField>
-        </ModalFormBox>
-        <ModalFormActions
-          onCancel={() => setCatOpen(false)}
-          onSubmit={addCategory}
-          submitting={busyId === "__new__"}
-          submitLabel="Добавить"
-          submittingLabel="…"
-        />
-      </Modal>
+      {incomeCats.length > 0 && (
+        <div className="mt-4 rounded-xl border border-border bg-background p-4">
+          <p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted">
+            Категории доходов
+          </p>
+          <ul className="flex flex-wrap gap-2">
+            {incomeCats.map((c) => (
+              <li
+                key={c.id}
+                className="flex items-center gap-1 rounded-full border border-border px-3 py-1 text-sm"
+              >
+                <span>{c.name}</span>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  disabled={busyId === c.id}
+                  onClick={() => removeCategory(c.id)}
+                >
+                  ×
+                </Button>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
     </Card>
   );
 }

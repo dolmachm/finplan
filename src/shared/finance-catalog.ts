@@ -1,5 +1,6 @@
-import type { AssetType, LiabilityType, PortfolioSleeve } from "@/shared/types";
+import type { AssetType, LiabilityType, LiabilityUrgency, PortfolioSleeve } from "@/shared/types";
 import { FREQUENCY_VALUES } from "@/modules/plan/frequency";
+import { defaultExpenseSeed } from "@/shared/category-catalog";
 
 export const FREQUENCY_LABELS: Record<string, string> = {
   MONTHLY: "Ежемесячно",
@@ -83,6 +84,16 @@ export function liabilityTypeLabel(type: string): string {
   return LIABILITY_TYPE_OPTIONS.find((o) => o.value === type)?.label ?? type;
 }
 
+export const LIABILITY_URGENCY_OPTIONS: Array<{ value: LiabilityUrgency; label: string }> = [
+  { value: "HIGH", label: "Высокая" },
+  { value: "MEDIUM", label: "Средняя" },
+  { value: "LOW", label: "Низкая" },
+];
+
+export function liabilityUrgencyLabel(urgency: string): string {
+  return LIABILITY_URGENCY_OPTIONS.find((o) => o.value === urgency)?.label ?? urgency;
+}
+
 export function frequencyLabel(freq: string): string {
   return FREQUENCY_LABELS[freq] ?? freq;
 }
@@ -92,17 +103,7 @@ export function essentialLabel(isEssential: boolean): string {
 }
 
 /** Default expense envelopes seeded on first budget-categories GET */
-export const DEFAULT_EXPENSE_CATEGORIES: Array<{ name: string; sortOrder: number }> = [
-  { name: "Жильё", sortOrder: 0 },
-  { name: "Еда", sortOrder: 1 },
-  { name: "Транспорт", sortOrder: 2 },
-  { name: "Здоровье", sortOrder: 3 },
-  { name: "Связь", sortOrder: 4 },
-  { name: "Развлечения", sortOrder: 5 },
-  { name: "Одежда", sortOrder: 6 },
-  { name: "Подписки", sortOrder: 7 },
-  { name: "Прочее", sortOrder: 8 },
-];
+export const DEFAULT_EXPENSE_CATEGORIES = defaultExpenseSeed();
 
 export function resolveAssetClass(
   type: AssetType | undefined,

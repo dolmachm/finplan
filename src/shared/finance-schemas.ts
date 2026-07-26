@@ -59,6 +59,7 @@ export const assetSchema = z.object({
 export const incomeSchema = z.object({
   name: z.string().min(1),
   source: z.enum(["SALARY", "FREELANCE", "PASSIVE", "BUSINESS", "OTHER"]),
+  category: z.string().min(1).default("general"),
   amount: z.number().nonnegative(),
   currency: z.string().default("RUB"),
   frequency: z.enum(FREQUENCY_VALUES).default("MONTHLY"),
@@ -175,12 +176,15 @@ export const liabilityTypeEnum = z.enum([
   "OTHER",
 ]);
 
+const liabilityUrgencyEnum = z.enum(["HIGH", "MEDIUM", "LOW"]);
+
 export const liabilitySchema = z.object({
   name: z.string().min(1),
   type: liabilityTypeEnum,
   remainingBalance: z.number().nonnegative(),
   interestRatePct: z.number(),
   monthlyPayment: z.number().nonnegative(),
+  urgency: liabilityUrgencyEnum.default("MEDIUM"),
   endDate: z.string().datetime().optional(),
   currency: z.string().default("RUB"),
 });
@@ -192,7 +196,9 @@ export const liabilityPatchSchema = z
     remainingBalance: z.number().nonnegative(),
     interestRatePct: z.number(),
     monthlyPayment: z.number().nonnegative(),
+    urgency: liabilityUrgencyEnum,
     endDate: z.string().datetime().nullable().optional(),
+    archivedAt: z.string().datetime().nullable().optional(),
     currency: z.string(),
   })
   .partial();

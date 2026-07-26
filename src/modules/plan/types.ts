@@ -20,6 +20,10 @@ export interface PlanInput {
     remainingBalance: number;
     monthlyPayment: number;
     interestRatePct: number;
+    /** HIGH раньше в очереди платежей */
+    urgency: "HIGH" | "MEDIUM" | "LOW";
+    /** Месяц горизонта, после которого долг не учитывается; null — без срока */
+    endMonthIndex: number | null;
   }>;
   incomes: Array<{
     amount: number;

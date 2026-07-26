@@ -121,6 +121,7 @@ export async function POST(req: Request) {
           userId,
           name: row.data.name,
           source: "OTHER",
+          category: row.data.category ?? "general",
           amount: row.data.amount,
         },
       });
