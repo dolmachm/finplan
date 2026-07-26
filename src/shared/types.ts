@@ -260,4 +260,35 @@ export type EntityRevision = {
   createdAt: Date;
 };
 
+export type SupportTicketStatus = "OPEN" | "WAITING_USER" | "CLOSED";
+export type SupportMessageAuthor = "USER" | "ADMIN" | "SYSTEM";
+export type SupportLocationArea =
+  | "nav"
+  | "form"
+  | "chart"
+  | "export"
+  | "other";
+
+export type SupportTicket = {
+  id: string;
+  userId: string;
+  subject: string;
+  status: SupportTicketStatus;
+  page: string;
+  dashboardTab: string | null;
+  subTab: string | null;
+  locationArea: SupportLocationArea;
+  locationHint: string | null;
+  createdAt: Date;
+  updatedAt: Date;
+};
+
+export type SupportMessage = {
+  id: string;
+  ticketId: string;
+  author: SupportMessageAuthor;
+  body: string;
+  createdAt: Date;
+};
+
 export type JsonValue = string | number | boolean | null | JsonValue[] | { [key: string]: JsonValue };

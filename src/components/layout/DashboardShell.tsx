@@ -1,9 +1,11 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
 import { useSession } from "next-auth/react";
 import { BrandLogo } from "@/components/brand/BrandLogo";
 import { PwaInstallButton } from "@/components/pwa/PwaInstall";
+import { SupportPanel } from "@/components/support/SupportPanel";
 import { HelpHint } from "@/components/ui/FormField";
 import { toast } from "@/components/ui/ToastProvider";
 import { TAB_HINTS } from "@/content/help";
@@ -75,13 +77,17 @@ export function DashboardShell({
   tab,
   onTabChange,
   children,
+  supportSubTab = null,
 }: {
   tab: DashboardTab;
   onTabChange: (tab: DashboardTab) => void;
   children: React.ReactNode;
+  /** Optional assets/plan/export sub-tab for support context */
+  supportSubTab?: string | null;
 }) {
   const { data: session } = useSession();
   const online = useOnlineStatus();
+  const [supportOpen, setSupportOpen] = useState(false);
   const current = navItems.find((n) => n.id === tab);
   const firstName =
     session?.user?.name?.trim().split(/\s+/)[0] ||
@@ -105,6 +111,19 @@ export function DashboardShell({
             <PwaInstallButton compact className="lg:hidden" />
             <button
               type="button"
+              onClick={() => setSupportOpen(true)}
+              className="rounded-lg px-2 py-1.5 text-sm text-muted transition-colors hover:bg-brand-light hover:text-foreground"
+            >
+              Поддержка
+            </button>
+            <Link
+              href="/dashboard/account"
+              className="rounded-lg px-2 py-1.5 text-sm text-muted transition-colors hover:bg-brand-light hover:text-foreground"
+            >
+              Профиль
+            </Link>
+            <button
+              type="button"
               onClick={handleSignOut}
               className="rounded-lg px-2 py-1.5 text-sm text-muted transition-colors hover:bg-brand-light hover:text-foreground"
               aria-label="Выйти"
@@ -114,6 +133,13 @@ export function DashboardShell({
           </div>
         </div>
       </header>
+
+      <SupportPanel
+        open={supportOpen}
+        onClose={() => setSupportOpen(false)}
+        dashboardTab={tab}
+        subTab={supportSubTab}
+      />
 
       <aside className="fixed bottom-0 left-0 top-14 z-30 hidden w-56 flex-col border-r border-border bg-sidebar lg:flex">
         <nav className="flex flex-1 flex-col gap-0.5 overflow-y-auto px-3 py-4">

@@ -6,6 +6,11 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { toast } from "@/components/ui/ToastProvider";
+import {
+  ADMIN_QUICK_REPLIES,
+  SUPPORT_LOCATION_OPTIONS,
+  SUPPORT_STATUS_LABELS,
+} from "@/content/support";
 
 type UserRow = {
   id: string;
@@ -659,12 +664,295 @@ function JobsPanel() {
   );
 }
 
+function SupportPanel() {
+  type TicketRow = {
+    id: string;
+    userId: string;
+    subject: string;
+    status: string;
+    page: string;
+    dashboardTab: string | null;
+    subTab: string | null;
+    locationArea: string;
+    locationHint: string | null;
+    updatedAt: string;
+    createdAt: string;
+    userEmail?: string | null;
+    userName?: string | null;
+  };
+  type MessageRow = {
+    id: string;
+    author: string;
+    body: string;
+    createdAt: string;
+  };
+
+  const [statusFilter, setStatusFilter] = useState("OPEN");
+  const [tickets, setTickets] = useState<TicketRow[]>([]);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [detail, setDetail] = useState<{
+    ticket: TicketRow;
+    messages: MessageRow[];
+    userEmail: string | null;
+    userName: string | null;
+  } | null>(null);
+  const [reply, setReply] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [sending, setSending] = useState(false);
+
+  const loadList = useCallback(async () => {
+    setLoading(true);
+    try {
+      const q =
+        statusFilter === "ALL" ? "ALL" : statusFilter;
+      const res = await fetch(`/api/admin/support?status=${q}`);
+      if (!res.ok) throw new Error();
+      const data = await res.json();
+      setTickets(data.tickets ?? []);
+    } catch {
+      setTickets([]);
+      toast.error("Не удалось загрузить тикеты");
+    } finally {
+      setLoading(false);
+    }
+  }, [statusFilter]);
+
+  useEffect(() => {
+    void loadList();
+  }, [loadList]);
+
+  async function openTicket(id: string) {
+    setSelectedId(id);
+    try {
+      const res = await fetch(`/api/admin/support/${id}`);
+      if (!res.ok) throw new Error();
+      const data = await res.json();
+      setDetail({
+        ticket: data.ticket,
+        messages: data.messages ?? [],
+        userEmail: data.userEmail ?? null,
+        userName: data.userName ?? null,
+      });
+      setReply("");
+    } catch {
+      toast.error("Не удалось открыть тикет");
+      setDetail(null);
+    }
+  }
+
+  async function sendReply() {
+    if (!selectedId || !reply.trim()) return;
+    setSending(true);
+    try {
+      const res = await fetch(`/api/admin/support/${selectedId}/messages`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ body: reply }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        toast.error(err.error ?? "Ошибка отправки");
+        return;
+      }
+      toast.success("Ответ отправлен");
+      setReply("");
+      await openTicket(selectedId);
+      void loadList();
+    } finally {
+      setSending(false);
+    }
+  }
+
+  async function setStatus(status: string) {
+    if (!selectedId) return;
+    const res = await fetch(`/api/admin/support/${selectedId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ status }),
+    });
+    if (!res.ok) {
+      toast.error("Не удалось сменить статус");
+      return;
+    }
+    toast.success("Статус обновлён");
+    await openTicket(selectedId);
+    void loadList();
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-center gap-2">
+        {(
+          [
+            { id: "OPEN", label: "Открытые" },
+            { id: "WAITING_USER", label: "Ждут ответа" },
+            { id: "CLOSED", label: "Закрытые" },
+            { id: "ALL", label: "Все" },
+          ] as const
+        ).map((f) => (
+          <button
+            key={f.id}
+            type="button"
+            onClick={() => setStatusFilter(f.id)}
+            className={`rounded-lg px-3 py-1.5 text-sm ${
+              statusFilter === f.id
+                ? "bg-brand text-white"
+                : "bg-brand-light text-muted hover:text-foreground"
+            }`}
+          >
+            {f.label}
+          </button>
+        ))}
+        <Button variant="ghost" onClick={() => void loadList()}>
+          Обновить
+        </Button>
+      </div>
+
+      <div className="grid gap-4 lg:grid-cols-2">
+        <div className="overflow-hidden rounded-[var(--radius-card)] border border-border bg-card">
+          {loading ? (
+            <p className="px-4 py-8 text-sm text-muted">Загрузка…</p>
+          ) : tickets.length === 0 ? (
+            <p className="px-4 py-8 text-center text-sm text-muted">Нет тикетов</p>
+          ) : (
+            <ul className="divide-y divide-border">
+              {tickets.map((t) => (
+                <li key={t.id}>
+                  <button
+                    type="button"
+                    onClick={() => void openTicket(t.id)}
+                    className={`flex w-full flex-col gap-0.5 px-4 py-3 text-left hover:bg-brand-light ${
+                      selectedId === t.id ? "bg-brand-light" : ""
+                    }`}
+                  >
+                    <span className="flex items-center justify-between gap-2">
+                      <span className="truncate text-sm font-medium">
+                        {t.subject}
+                      </span>
+                      <span className="shrink-0 text-xs text-muted">
+                        {SUPPORT_STATUS_LABELS[t.status] ?? t.status}
+                      </span>
+                    </span>
+                    <span className="truncate text-xs text-muted">
+                      {t.userEmail ?? t.userId.slice(0, 8)}
+                      {" · "}
+                      {t.page}
+                      {t.dashboardTab ? ` / ${t.dashboardTab}` : ""}
+                    </span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+
+        <div className="rounded-[var(--radius-card)] border border-border bg-card p-4">
+          {!detail ? (
+            <p className="text-sm text-muted">Выберите тикет слева</p>
+          ) : (
+            <div className="space-y-3">
+              <div>
+                <h2 className="text-base font-semibold">{detail.ticket.subject}</h2>
+                <p className="mt-1 text-xs text-muted">
+                  {detail.userEmail ?? detail.ticket.userId}
+                  {detail.userName ? ` (${detail.userName})` : ""}
+                  {" · userId: "}
+                  <span className="font-mono">{detail.ticket.userId}</span>
+                </p>
+                <p className="mt-1 text-xs text-muted">
+                  {detail.ticket.page}
+                  {detail.ticket.dashboardTab
+                    ? ` · ${detail.ticket.dashboardTab}`
+                    : ""}
+                  {detail.ticket.subTab ? ` / ${detail.ticket.subTab}` : ""}
+                  {" · "}
+                  {
+                    SUPPORT_LOCATION_OPTIONS.find(
+                      (o) => o.value === detail.ticket.locationArea,
+                    )?.label
+                  }
+                  {detail.ticket.locationHint
+                    ? ` — ${detail.ticket.locationHint}`
+                    : ""}
+                </p>
+              </div>
+
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  variant="outline"
+                  onClick={() => void setStatus("WAITING_USER")}
+                >
+                  Ждёт пользователя
+                </Button>
+                <Button variant="outline" onClick={() => void setStatus("OPEN")}>
+                  Открыть
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={() => void setStatus("CLOSED")}
+                >
+                  Закрыть
+                </Button>
+              </div>
+
+              <ul className="max-h-64 space-y-2 overflow-y-auto rounded-lg border border-border p-2">
+                {detail.messages.map((m) => (
+                  <li key={m.id} className="rounded-lg bg-background px-2.5 py-2 text-sm">
+                    <p className="text-xs text-muted">
+                      {m.author === "USER"
+                        ? "Пользователь"
+                        : m.author === "ADMIN"
+                          ? "Админ"
+                          : "Система"}{" "}
+                      · {new Date(m.createdAt).toLocaleString("ru-RU")}
+                    </p>
+                    <p className="mt-1 whitespace-pre-wrap">{m.body}</p>
+                  </li>
+                ))}
+              </ul>
+
+              {detail.ticket.status !== "CLOSED" && (
+                <>
+                  <div className="flex flex-wrap gap-1.5">
+                    {ADMIN_QUICK_REPLIES.map((t) => (
+                      <button
+                        key={t.id}
+                        type="button"
+                        onClick={() => setReply(t.body)}
+                        className="rounded-full border border-border px-2.5 py-1 text-xs text-muted hover:bg-brand-light hover:text-foreground"
+                      >
+                        {t.label}
+                      </button>
+                    ))}
+                  </div>
+                  <textarea
+                    className="min-h-[100px] w-full rounded-lg border border-border bg-background px-3 py-2 text-sm"
+                    value={reply}
+                    onChange={(e) => setReply(e.target.value)}
+                    placeholder="Ответ пользователю…"
+                  />
+                  <Button
+                    disabled={sending || !reply.trim()}
+                    onClick={() => void sendReply()}
+                  >
+                    {sending ? "Отправка…" : "Ответить"}
+                  </Button>
+                </>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function AdminPanel() {
   const [users, setUsers] = useState<UserRow[]>([]);
   const [selected, setSelected] = useState<UserRow | null>(null);
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
-  const [view, setView] = useState<"users" | "logs" | "jobs">("users");
+  const [view, setView] = useState<"users" | "logs" | "jobs" | "support">("users");
   const [globalLogs, setGlobalLogs] = useState<LogItem[]>([]);
 
   const load = useCallback(async () => {
@@ -724,6 +1012,7 @@ function AdminPanel() {
           {(
             [
               { id: "users" as const, label: "Пользователи" },
+              { id: "support" as const, label: "Тикеты" },
               { id: "logs" as const, label: "Журнал" },
               { id: "jobs" as const, label: "Очередь" },
             ] as const
@@ -742,6 +1031,13 @@ function AdminPanel() {
             </button>
           ))}
         </div>
+
+        {view === "support" && (
+          <Card>
+            <h1 className="mb-3 text-lg font-semibold">Техподдержка</h1>
+            <SupportPanel />
+          </Card>
+        )}
 
         {view === "logs" && (
           <Card>

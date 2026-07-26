@@ -10,6 +10,8 @@ export type ValidationIssue = {
 const FIELD_LABELS: Record<string, string> = {
   email: "Email",
   password: "Пароль",
+  currentPassword: "Текущий пароль",
+  newPassword: "Новый пароль",
   name: "Название",
   amount: "Сумма",
   currentValue: "Стоимость",

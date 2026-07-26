@@ -383,7 +383,19 @@ function DashboardPageInner() {
   }
 
   return (
-    <DashboardShell tab={tab} onTabChange={setTab}>
+    <DashboardShell
+      tab={tab}
+      onTabChange={setTab}
+      supportSubTab={
+        tab === "assets"
+          ? dataSub
+          : tab === "plan"
+            ? planSub
+            : tab === "export"
+              ? exportSub
+              : null
+      }
+    >
       <Disclaimer className="mb-6" />
 
       {tab === "home" && (

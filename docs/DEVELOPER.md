@@ -82,6 +82,7 @@ flowchart LR
 ## 4. Данные и ownership
 
 - Хранилище: Upstash Redis через фасад в `src/shared/db` (коллекции вроде `user`, `asset`, …).
+- Тикеты поддержки: `supportTicket` / `supportMessage` + индексы по user и status; сервис `modules/support`.
 - Каждая финансовая сущность привязана к **`userId`**. API всегда фильтрует по текущему пользователю; чужие id → 404/403.
 - История изменений пишется при CRUD ключевых сущностей и доступна через `/api/history` (user) и admin history.
 
@@ -196,6 +197,14 @@ sequenceDiagram
 | GET, POST | `/api/export/pdf` | U | PDF (шаблон / с конфигом) |
 | GET | `/api/history` | U | История пользователя |
 
+### Support
+
+| Method | Path | Auth | Кратко |
+|--------|------|------|--------|
+| GET, POST | `/api/support/tickets` | U | Список / создать тикет (+ контекст страницы) |
+| GET | `/api/support/tickets/[id]` | U | Тикет + тред |
+| POST | `/api/support/tickets/[id]/messages` | U | Ответ пользователя |
+
 ### Admin
 
 | Method | Path | Auth | Кратко |
@@ -208,6 +217,10 @@ sequenceDiagram
 | GET | `/api/admin/users/[id]/history` | A | История |
 | GET | `/api/admin/jobs` | A | Очередь симуляций |
 | GET | `/api/admin/logs` | A | Audit log админа |
+| GET | `/api/admin/support` | A | Список тикетов (`?status=`) |
+| GET, PATCH | `/api/admin/support/[id]` | A | Тикет + смена статуса |
+| POST | `/api/admin/support/[id]/messages` | A | Ответ админа |
+| GET | `/api/admin/support/templates` | A | Быстрые ответы |
 
 ---
 
