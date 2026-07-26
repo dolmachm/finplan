@@ -7,10 +7,12 @@ import { BrandLogo } from "@/components/brand/BrandLogo";
 import { Button } from "@/components/ui/button";
 import { FormField } from "@/components/ui/FormField";
 import { Input } from "@/components/ui/input";
+import { Modal } from "@/components/ui/Modal";
 import { toast } from "@/components/ui/ToastProvider";
 import { issuesByField, type ValidationIssue } from "@/shared/api-client";
 import { apiFetchJson } from "@/shared/api-fetch";
 import { signOut } from "next-auth/react";
+import { useRouter } from "next/navigation";
 
 type AccountProfile = {
   id: string;
@@ -20,6 +22,7 @@ type AccountProfile = {
 
 export default function AccountPage() {
   const { update } = useSession();
+  const router = useRouter();
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [loading, setLoading] = useState(true);
@@ -36,6 +39,10 @@ export default function AccountPage() {
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  const [confirmAction, setConfirmAction] = useState<
+    null | "reset" | "delete"
+  >(null);
+  const [dangerBusy, setDangerBusy] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -136,6 +143,46 @@ export default function AccountPage() {
       toast.error(message);
     } finally {
       setSavingPassword(false);
+    }
+  }
+
+  async function onConfirmDanger() {
+    if (!confirmAction) return;
+    setDangerBusy(true);
+    try {
+      if (confirmAction === "reset") {
+        const result = await apiFetchJson<{ ok: true }>("/api/account/reset", {
+          method: "POST",
+        });
+        if (!result.ok) {
+          toast.error(result.message);
+          return;
+        }
+        toast.success("Данные сброшены");
+        setConfirmAction(null);
+        router.push("/dashboard");
+        router.refresh();
+        return;
+      }
+
+      const result = await apiFetchJson<{ ok: true }>("/api/account", {
+        method: "DELETE",
+      });
+      if (!result.ok) {
+        toast.error(result.message);
+        return;
+      }
+      toast.success("Профиль удалён");
+      setConfirmAction(null);
+      await signOut({ callbackUrl: "/" });
+    } catch {
+      toast.error(
+        confirmAction === "reset"
+          ? "Не удалось сбросить данные"
+          : "Не удалось удалить профиль",
+      );
+    } finally {
+      setDangerBusy(false);
     }
   }
 
@@ -269,9 +316,76 @@ export default function AccountPage() {
                 {savingPassword ? "Смена…" : "Сменить пароль"}
               </Button>
             </form>
+
+            <section className="space-y-4 border-t border-border pt-8">
+              <h2 className="text-sm font-semibold text-foreground">Опасная зона</h2>
+              <p className="text-sm text-muted">
+                Сброс очищает финансы и план. Удаление профиля убирает данные и
+                блокирует вход — запись пользователя сохраняется в базе как
+                удалённая.
+              </p>
+              <div className="flex flex-col gap-3 sm:flex-row">
+                <Button
+                  type="button"
+                  variant="secondary"
+                  onClick={() => setConfirmAction("reset")}
+                >
+                  Начать сначала
+                </Button>
+                <Button
+                  type="button"
+                  variant="danger"
+                  onClick={() => setConfirmAction("delete")}
+                >
+                  Удалить профиль
+                </Button>
+              </div>
+            </section>
           </div>
         )}
       </main>
+
+      <Modal
+        open={confirmAction !== null}
+        title={
+          confirmAction === "delete"
+            ? "Удалить профиль?"
+            : "Начать сначала?"
+        }
+        onClose={() => {
+          if (!dangerBusy) setConfirmAction(null);
+        }}
+      >
+        <p className="text-sm text-muted">
+          {confirmAction === "delete"
+            ? "Все финансовые данные будут удалены. Аккаунт нельзя будет использовать для входа; запись останется в базе как удалённый пользователь. Email можно будет зарегистрировать снова."
+            : "Все активы, долги, доходы, расходы, цели и план будут удалены. Аккаунт и пароль сохранятся — можно заполнить данные заново."}
+        </p>
+        <div className="mt-5 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+          <Button
+            type="button"
+            variant="outline"
+            disabled={dangerBusy}
+            onClick={() => setConfirmAction(null)}
+          >
+            Отмена
+          </Button>
+          <Button
+            type="button"
+            variant={confirmAction === "delete" ? "danger" : "primary"}
+            disabled={dangerBusy}
+            onClick={onConfirmDanger}
+          >
+            {dangerBusy
+              ? confirmAction === "delete"
+                ? "Удаление…"
+                : "Сброс…"
+              : confirmAction === "delete"
+                ? "Удалить"
+                : "Сбросить данные"}
+          </Button>
+        </div>
+      </Modal>
     </div>
   );
 }

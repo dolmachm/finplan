@@ -127,6 +127,7 @@ const userRepo = {
       balance: args.data.balance ?? 0,
       emailVerified: args.data.emailVerified ?? null,
       image: args.data.image ?? null,
+      deletedAt: args.data.deletedAt ?? null,
       createdAt: ts,
       updatedAt: ts,
     };

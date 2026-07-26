@@ -69,6 +69,8 @@ export type User = {
   balance: number;
   emailVerified: Date | null;
   image: string | null;
+  /** Soft-delete: запись сохраняется, вход запрещён */
+  deletedAt: Date | null;
   createdAt: Date;
   updatedAt: Date;
 };

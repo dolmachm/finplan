@@ -9,7 +9,7 @@ export function now(): Date {
 }
 
 const DATE_FIELDS = new Set([
-  "createdAt", "updatedAt", "emailVerified", "endDate", "startDate",
+  "createdAt", "updatedAt", "emailVerified", "deletedAt", "endDate", "startDate",
   "oneTimeDate", "targetDate", "computedAt", "startedAt", "completedAt", "expires",
 ]);
 

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import {
   getAccount,
+  softDeleteAccount,
   updateProfile,
   updateProfileSchema,
 } from "@/modules/account/account.service";
@@ -56,6 +57,25 @@ export async function PATCH(req: Request) {
     console.error("update profile failed", e);
     return NextResponse.json(
       { error: "Не удалось обновить профиль" },
+      { status: 500 },
+    );
+  }
+}
+
+export async function DELETE() {
+  const userId = await requireUserId();
+  if (isErrorResponse(userId)) return userId;
+
+  try {
+    await softDeleteAccount(userId);
+    return NextResponse.json({ ok: true });
+  } catch (e) {
+    if (e instanceof Error && e.message === "NOT_FOUND") {
+      return notFoundResponse();
+    }
+    console.error("delete account failed", e);
+    return NextResponse.json(
+      { error: "Не удалось удалить профиль" },
       { status: 500 },
     );
   }
