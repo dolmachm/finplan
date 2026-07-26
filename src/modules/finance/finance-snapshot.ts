@@ -10,6 +10,10 @@ import type {
   Scenario,
 } from "@/shared/types";
 
+/**
+ * Полный набор финансовых сущностей пользователя для CRUD и расчётов.
+ * Тяжелее summary: в ответе клиенту уходят массивы записей.
+ */
 export type FinanceSnapshot = {
   assets: Asset[];
   liabilities: Liability[];
@@ -21,6 +25,10 @@ export type FinanceSnapshot = {
   macro: MacroSettings | null;
 };
 
+/**
+ * Один параллельный batch Redis (8 findMany/findUnique) — канонический loader
+ * для snapshot API, summary и plan-input.
+ */
 export async function loadUserFinanceSnapshot(
   userId: string,
 ): Promise<FinanceSnapshot> {

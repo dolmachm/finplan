@@ -1,5 +1,10 @@
 "use client";
 
+/**
+ * Home: сразу Score + SummaryGrid из summary API;
+ * ниже fold — отложенный mount через IntersectionObserver (без второго fetch).
+ */
+
 import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -52,6 +57,7 @@ export function HomeDashboard({
   useEffect(() => {
     const el = sentinelRef.current;
     if (!el || belowFold) return;
+    // rootMargin подгружает блок чуть до появления во viewport.
     const obs = new IntersectionObserver(
       (entries) => {
         if (entries.some((e) => e.isIntersecting)) {

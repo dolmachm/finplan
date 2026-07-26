@@ -177,6 +177,10 @@ function ensurePlan(
   };
 }
 
+/**
+ * Ответ iplan: детерминированный projection всегда;
+ * Monte Carlo — только при opts.includeMonteCarlo (тяжёлый CPU).
+ */
 function payload(
   plan: InvestmentPlan,
   ctx: Awaited<ReturnType<typeof loadContext>>,
@@ -226,6 +230,7 @@ function payload(
   };
 }
 
+/** GET: план + projection. MC только при ?mc=1 (не на каждом открытии вкладки). */
 export async function GET(req: Request) {
   const userId = await requireUserId();
   if (isErrorResponse(userId)) return userId;
@@ -309,5 +314,6 @@ export async function PUT(req: Request) {
     after: saved,
   });
 
+  // PUT не гоняет MC — клиент пересчитывает локально / запрашивает ?mc=1 явно.
   return NextResponse.json(payload(saved, ctx, { includeMonteCarlo: false }));
 }

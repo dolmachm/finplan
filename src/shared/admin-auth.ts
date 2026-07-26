@@ -3,6 +3,12 @@ import { createHmac, timingSafeEqual } from "crypto";
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 
+/**
+ * Отдельная cookie-сессия админки (не NextAuth).
+ * Логин/пароль только из ADMIN_LOGIN / ADMIN_PASSWORD;
+ * в production без env вход закрыт (пустые строки → verify = false).
+ */
+
 export const ADMIN_COOKIE = "admin_session";
 const SESSION_TTL_MS = 24 * 60 * 60 * 1000;
 
@@ -15,6 +21,7 @@ function getSecret() {
   if (process.env.NODE_ENV !== "production") {
     return "dev-admin-secret";
   }
+  // Prod без секрета — не подписываем токены слабым дефолтом.
   throw new Error("AUTH_SECRET is required in production for admin sessions");
 }
 
@@ -32,6 +39,7 @@ function getAdminPassword(): string {
   return "";
 }
 
+/** Сравнение логина/пароля с timing-safe equal; без env в prod всегда false. */
 export function verifyAdminCredentials(login: string, password: string) {
   const expectedLogin = getAdminLogin();
   const expectedPassword = getAdminPassword();

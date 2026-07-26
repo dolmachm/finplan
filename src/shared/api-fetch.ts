@@ -3,7 +3,7 @@
 import { readApiError, NETWORK_ERROR_MESSAGE } from "@/shared/api-client";
 
 type ApiFetchOptions = RequestInit & {
-  /** When true (default), redirect to login on 401. */
+  /** По умолчанию true: при 401 уводим на /login (вместо prop-drilling onUnauthorized). */
   redirectOnUnauthorized?: boolean;
 };
 
@@ -11,6 +11,7 @@ let unauthorizedRedirecting = false;
 
 function redirectUnauthorized() {
   if (typeof window === "undefined") return;
+  // Один редирект за сессию страницы — без гонки параллельных 401.
   if (unauthorizedRedirecting) return;
   unauthorizedRedirecting = true;
   const next = `/login?session=expired`;
@@ -18,8 +19,8 @@ function redirectUnauthorized() {
 }
 
 /**
- * Client fetch with JSON-friendly error reading and optional 401 redirect.
- * Returns null when redirected on unauthorized.
+ * Клиентский fetch поверх нативного: cache no-store по умолчанию,
+ * при 401 — redirect на логин и null (вызывающий код просто выходит).
  */
 export async function apiFetch(
   input: string,
@@ -41,6 +42,7 @@ export async function apiFetch(
   }
 }
 
+/** apiFetch + разбор JSON и readApiError в единый { ok, data | message }. */
 export async function apiFetchJson<T>(
   input: string,
   init?: ApiFetchOptions,

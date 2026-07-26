@@ -3,6 +3,7 @@ import type { Asset, Expense, Goal, Income, Liability, MacroSettings } from "@/s
 import { differenceInMonths, startOfMonth } from "date-fns";
 import type { PlanInput } from "./types";
 
+/** Собирает PlanInput из уже загруженных сущностей (без повторных Redis-чтений). */
 export function buildPlanInputFromEntities(
   userId: string,
   data: {
@@ -84,6 +85,10 @@ export function buildPlanInputFromEntities(
   };
 }
 
+/**
+ * Каноническая загрузка входа плана: делегирует в loadUserFinanceSnapshot,
+ * чтобы projection/compare/sim не дублировали свой Promise.all по сущностям.
+ */
 export async function loadPlanInputForUser(userId: string): Promise<PlanInput> {
   const snap = await loadUserFinanceSnapshot(userId);
   return buildPlanInputFromEntities(userId, {

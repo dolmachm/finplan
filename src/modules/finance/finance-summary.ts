@@ -13,6 +13,7 @@ import {
   type FinanceSnapshot,
 } from "@/modules/finance/finance-snapshot";
 
+/** Счётчики для прогресса заполнения без передачи списков сущностей. */
 export type FinanceSummaryCounts = {
   assets: number;
   liabilities: number;
@@ -22,6 +23,11 @@ export type FinanceSummaryCounts = {
   scenarios: number;
 };
 
+/**
+ * Лёгкий ответ для первого paint Home: готовые цифры и скор.
+ * Без массивов assets/incomes/… — меньше JSON и быстрее TTI.
+ * Redis на сервере всё равно читается один batch (через snapshot).
+ */
 export type FinanceSummary = {
   metrics: DashboardMetrics;
   score: FinancialScore;
@@ -30,6 +36,10 @@ export type FinanceSummary = {
   scenarioCount: number;
 };
 
+/**
+ * Считает summary из уже загруженного snapshot (клиент после CRUD
+ * или сервер после loadUserFinanceSnapshot).
+ */
 export function buildFinanceSummaryFromSnapshot(
   snap: FinanceSnapshot,
   extras?: {
@@ -74,6 +84,7 @@ export function buildFinanceSummaryFromSnapshot(
   };
 }
 
+/** Загрузка snapshot + агрегация в summary для GET /api/finance/summary. */
 export async function loadUserFinanceSummary(
   userId: string,
 ): Promise<FinanceSummary> {

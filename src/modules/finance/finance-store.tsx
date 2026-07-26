@@ -1,5 +1,10 @@
 "use client";
 
+/**
+ * Клиентский стор финансов: сначала лёгкий summary (Home), затем полный
+ * snapshot по требованию вкладок. Мутации мержат ответ API локально.
+ */
+
 import {
   createContext,
   useCallback,
@@ -51,6 +56,7 @@ type EntityMap = {
   scenarios: Scenario;
 };
 
+/** Доп. поля скора с projection / Monte Carlo (не хранятся в snapshot). */
 export type FinanceEnrichment = {
   recommendedMonthlySaving?: number;
   goalProbabilities?: Array<{ probability: number }>;
@@ -117,6 +123,7 @@ export function FinanceStoreProvider({ children }: { children: ReactNode }) {
   const [scenarios, setScenarios] = useState<Scenario[]>([]);
   const [macro, setMacro] = useState<MacroSettings | null>(null);
   const [enrichment, setEnrichmentState] = useState<FinanceEnrichment>({});
+  // Ref нужен: ensureSnapshot в stale closure не должен снова бить API после refresh.
   const snapshotInflight = useRef<Promise<void> | null>(null);
   const entitiesReadyRef = useRef(false);
   const enrichmentRef = useRef(enrichment);
@@ -133,6 +140,7 @@ export function FinanceStoreProvider({ children }: { children: ReactNode }) {
     setMacro(snap.macro);
   }, []);
 
+  /** Первый запрос dashboard: только цифры для Home. */
   const loadSummary = useCallback(async () => {
     setSummaryLoading(true);
     setError(null);
@@ -148,6 +156,10 @@ export function FinanceStoreProvider({ children }: { children: ReactNode }) {
     setSummaryLoading(false);
   }, []);
 
+  /**
+   * Идемпотентная подгрузка полных сущностей (Данные/План/Цели).
+   * Параллельные вызовы ждут один inflight-promise.
+   */
   const ensureSnapshot = useCallback(async () => {
     if (entitiesReadyRef.current) return;
     if (snapshotInflight.current) return snapshotInflight.current;
@@ -179,6 +191,7 @@ export function FinanceStoreProvider({ children }: { children: ReactNode }) {
     return run;
   }, [applySnapshot]);
 
+  /** После CSV-импорта и т.п.: сброс кэша сущностей + summary + snapshot. */
   const refresh = useCallback(async () => {
     entitiesReadyRef.current = false;
     setEntitiesReady(false);
@@ -187,7 +200,7 @@ export function FinanceStoreProvider({ children }: { children: ReactNode }) {
     await ensureSnapshot();
   }, [loadSummary, ensureSnapshot]);
 
-  // Keep summary in sync after local CRUD when entities are loaded.
+  // Локальный upsert/remove → пересчитать цифры без повторного HTTP summary.
   useEffect(() => {
     if (!entitiesReady) return;
     setSummary(
@@ -312,6 +325,7 @@ export function FinanceStoreProvider({ children }: { children: ReactNode }) {
     });
   }, [homeInput, enrichment.projectionCashflowAvg]);
 
+  // Пока сущности не загружены — скор из summary; иначе пересчёт из списков.
   const score = scoreFromEntities ?? summary?.score ?? null;
 
   const value = useMemo<FinanceStoreValue>(
@@ -376,6 +390,7 @@ export function FinanceStoreProvider({ children }: { children: ReactNode }) {
   );
 }
 
+/** Доступ к FinanceStoreProvider; без провайдера — явная ошибка. */
 export function useFinanceStore(): FinanceStoreValue {
   const ctx = useContext(FinanceStoreContext);
   if (!ctx) {

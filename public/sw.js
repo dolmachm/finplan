@@ -1,4 +1,6 @@
-/* Finplan offline caching — pages/static only; APIs never cached. */
+/* Finplan offline: кэш только страниц и статики.
+ * /api/* намеренно не перехватываем — персональные finance JSON
+ * не должны оседать в Cache Storage (PWA view-only offline). */
 const STATIC_CACHE = "finplan-static-v2";
 const PAGES_CACHE = "finplan-pages-v2";
 const ALL_CACHES = [STATIC_CACHE, PAGES_CACHE];
@@ -40,7 +42,7 @@ self.addEventListener("fetch", (event) => {
   const url = new URL(request.url);
   if (url.origin !== self.location.origin) return;
 
-  // Never intercept authenticated API — always network, no Cache Storage.
+  // API: network only, без put в cache.
   if (url.pathname.startsWith("/api/")) return;
 
   if (isStaticAsset(url)) {

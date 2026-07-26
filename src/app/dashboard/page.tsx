@@ -1,5 +1,10 @@
 "use client";
 
+/**
+ * Dashboard: summary-first на Home; полный snapshot и projection — лениво
+ * по вкладкам. Тяжёлые панели через next/dynamic.
+ */
+
 import { useCallback, useEffect, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import { Disclaimer } from "@/components/Disclaimer";
@@ -155,6 +160,7 @@ function DashboardPageInner() {
   const needsEntities =
     tab === "assets" || tab === "plan" || tab === "export";
 
+  // Пока snapshot не загружен — прогресс из summary.counts; иначе из списков.
   const dataStatus: FinanceDataStatus = summary
     ? {
         assetCount: summary.counts.assets,
@@ -185,6 +191,7 @@ function DashboardPageInner() {
 
   useEffect(() => {
     if (viewScenarioId !== null) return;
+    // До snapshot достаточно "base"; после — активный сценарий пользователя.
     if (!entitiesReady) {
       if (summary) setViewScenarioId("base");
       return;
@@ -237,6 +244,7 @@ function DashboardPageInner() {
   }, [viewScenarioId]);
 
   useEffect(() => {
+    // iplan/scenarios не ждут projection — экономим Redis+CPU на вкладке.
     if (
       tab === "plan" &&
       viewScenarioId &&
@@ -247,6 +255,7 @@ function DashboardPageInner() {
   }, [tab, viewScenarioId, planSub, loadProjection]);
 
   useEffect(() => {
+    // Интервал опроса симуляции не должен жить после ухода со страницы.
     return () => {
       if (pollRef.current) clearInterval(pollRef.current);
     };

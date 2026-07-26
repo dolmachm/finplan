@@ -14,6 +14,10 @@ export function isAuthConfigured(): boolean {
   return getAuthSecret().length > 0;
 }
 
+/**
+ * Секрет JWT NextAuth. В production отсутствие AUTH_SECRET — жёсткая ошибка
+ * (пустая строка больше не допускается).
+ */
 export function getAuthSecret(): string {
   const secret = resolveAuthSecret();
   if (secret) return secret;
