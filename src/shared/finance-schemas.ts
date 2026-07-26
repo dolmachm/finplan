@@ -125,6 +125,7 @@ export const goalBaseSchema = z.object({
       loanRatePct: z.number().min(0).max(50).default(14),
       loanTermMonths: z.number().int().min(1).max(360).default(60),
       downPaymentPct: z.number().min(0).max(90).default(30),
+      loanTermCustom: z.boolean().optional().default(false),
     })
     .nullable()
     .optional(),

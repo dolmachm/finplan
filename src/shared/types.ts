@@ -203,6 +203,7 @@ export type Goal = {
     loanRatePct: number;
     loanTermMonths: number;
     downPaymentPct: number;
+    loanTermCustom?: boolean;
   } | null;
   createdAt: Date;
   updatedAt: Date;

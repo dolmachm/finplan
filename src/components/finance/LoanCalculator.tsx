@@ -1,13 +1,16 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Card } from "@/components/ui/card";
 import { FormField, HelpHint } from "@/components/ui/FormField";
 import { Input } from "@/components/ui/input";
 import { FEATURE_HINTS } from "@/content/help";
 import { amortizeLoan } from "@/modules/finance/loan-math";
+import { normalizePathSettings } from "@/modules/plan/goal-paths";
 import { formatMoneyInput } from "@/shared/format-input";
 import { formatRub } from "@/shared/format";
+import { useFinanceStore } from "@/modules/finance/finance-store";
+import { differenceInMonths, startOfMonth } from "date-fns";
 
 type ScenarioState = {
   amount: string;
@@ -33,6 +36,13 @@ const DEFAULT_B: ScenarioState = {
 function num(raw: string): number {
   const n = Number(String(raw).replace(/\s/g, "").replace(",", "."));
   return Number.isFinite(n) ? n : 0;
+}
+
+function monthsUntil(date: Date | string) {
+  return Math.max(
+    1,
+    differenceInMonths(startOfMonth(new Date(date)), startOfMonth(new Date())),
+  );
 }
 
 function ScenarioFields({
@@ -123,8 +133,30 @@ function ScenarioResult({
 }
 
 export function LoanCalculator() {
+  const { goals } = useFinanceStore();
   const [a, setA] = useState<ScenarioState>(DEFAULT_A);
   const [b, setB] = useState<ScenarioState>(DEFAULT_B);
+  const [seedId, setSeedId] = useState("");
+
+  useEffect(() => {
+    if (!seedId) return;
+    const g = goals.find((x) => x.id === seedId);
+    if (!g) return;
+    const goalMonths = monthsUntil(g.targetDate);
+    const ps = normalizePathSettings(g.pathSettings, goalMonths);
+    const next: ScenarioState = {
+      amount: formatMoneyInput(String(Math.round(g.targetAmountNominal))),
+      rate: String(ps.loanRatePct),
+      months: String(ps.loanTermMonths),
+      extra: "",
+    };
+    setA(next);
+    setB({
+      ...next,
+      rate: String(Math.min(50, ps.loanRatePct + 4)),
+      months: String(Math.max(1, Math.round(ps.loanTermMonths * 0.6))),
+    });
+  }, [seedId, goals]);
 
   const resultA = useMemo(
     () =>
@@ -164,6 +196,30 @@ export function LoanCalculator() {
         <h3 className="mt-1 font-medium">Сравнение вариантов кредита</h3>
         <HelpHint className="mt-1">{FEATURE_HINTS.loanCalculator}</HelpHint>
       </div>
+
+      {goals.length > 0 && (
+        <FormField
+          className="mt-3"
+          label="Заполнить из цели"
+          htmlFor="loan-seed-goal"
+          hint="Подставит сумму, срок и ставку из цели (срок = срок цели, если не задан вручную)"
+        >
+          <select
+            id="loan-seed-goal"
+            className="w-full rounded-lg border border-border bg-card px-3 py-2 text-sm"
+            value={seedId}
+            onChange={(e) => setSeedId(e.target.value)}
+          >
+            <option value="">— Не выбрано —</option>
+            {goals.map((g) => (
+              <option key={g.id} value={g.id}>
+                {g.name} · {formatRub(g.targetAmountNominal)} ·{" "}
+                {monthsUntil(g.targetDate)} мес.
+              </option>
+            ))}
+          </select>
+        </FormField>
+      )}
 
       <div className="mt-4 grid gap-6 sm:grid-cols-2">
         <ScenarioFields label="Вариант A" value={a} onChange={setA} />

@@ -24,6 +24,7 @@ import type { GoalFundingResult } from "@/modules/plan/types";
 import {
   analyzeGoalPaths,
   normalizePathSettings,
+  summarizeGoalsBudget,
   type GoalPathSettings,
 } from "@/modules/plan/goal-paths";
 import type { Asset, Goal, GoalStrategy, GoalType } from "@/shared/types";
@@ -177,21 +178,68 @@ export function GoalsPanel({
           <p className="text-sm text-muted">Нет целей — добавьте первую</p>
         </Card>
       ) : (
-        <div className="grid gap-3 md:grid-cols-2">
-          {goals.map((g) => (
-            <GoalCard
-              key={g.id}
-              goal={g}
-              funding={funding[g.id]}
-              avgSurplus={avgSurplus}
-              onEdit={() => setEditView({ id: g.id })}
-              onDelete={() => remove(g.id)}
-              onSavePaths={(ps) => savePathSettings(g.id, ps)}
-            />
-          ))}
-        </div>
+        <>
+          <GoalsBudgetBanner
+            goals={goals}
+            funding={funding}
+            avgSurplus={avgSurplus}
+          />
+          <div className="grid gap-3 md:grid-cols-2">
+            {goals.map((g) => (
+              <GoalCard
+                key={g.id}
+                goal={g}
+                funding={funding[g.id]}
+                avgSurplus={avgSurplus}
+                onEdit={() => setEditView({ id: g.id })}
+                onDelete={() => remove(g.id)}
+                onSavePaths={(ps) => savePathSettings(g.id, ps)}
+              />
+            ))}
+          </div>
+        </>
       )}
     </div>
+  );
+}
+
+function GoalsBudgetBanner({
+  goals,
+  funding,
+  avgSurplus,
+}: {
+  goals: Goal[];
+  funding: Record<string, GoalFundingResult>;
+  avgSurplus: number;
+}) {
+  const analyses = goals.map((g) =>
+    analyzeGoalPaths({
+      targetAmount: g.targetAmountNominal,
+      monthsToGoal: funding[g.id]?.monthsToGoal ?? 12,
+      avgMonthlySurplus: avgSurplus,
+      funding: funding[g.id],
+      settings: g.pathSettings,
+    }),
+  );
+  const summary = summarizeGoalsBudget(analyses, avgSurplus);
+  return (
+    <Card
+      className={
+        summary.budgetOk
+          ? "!p-3 border-emerald-200 bg-emerald-50/50"
+          : "!p-3 border-amber-200 bg-amber-50/50"
+      }
+    >
+      <p className="text-xs font-medium uppercase tracking-wide text-muted">
+        Бюджет и цели
+      </p>
+      <p className="mt-1 text-sm">{summary.advice}</p>
+      <p className="mt-1 text-xs text-muted">
+        Взносы по выбранным путям: {formatRub(summary.requiredMonthly)}/мес ·
+        профицит плана: {formatRub(summary.surplusMonthly)}/мес · остаток:{" "}
+        {formatRub(summary.remainingMonthly)}/мес
+      </p>
+    </Card>
   );
 }
 
@@ -212,18 +260,19 @@ function GoalCard({
 }) {
   const stages = goal.stages ?? [];
   const achieve = funding?.achievability;
+  const monthsToGoal = funding?.monthsToGoal ?? 12;
   const [draft, setDraft] = useState(() =>
-    normalizePathSettings(goal.pathSettings),
+    normalizePathSettings(goal.pathSettings, monthsToGoal),
   );
   const [savingPaths, setSavingPaths] = useState(false);
 
   useEffect(() => {
-    setDraft(normalizePathSettings(goal.pathSettings));
-  }, [goal.pathSettings, goal.id]);
+    setDraft(normalizePathSettings(goal.pathSettings, monthsToGoal));
+  }, [goal.pathSettings, goal.id, monthsToGoal]);
 
   const analysis = analyzeGoalPaths({
     targetAmount: goal.targetAmountNominal,
-    monthsToGoal: funding?.monthsToGoal ?? 12,
+    monthsToGoal,
     avgMonthlySurplus: avgSurplus,
     funding,
     settings: draft,
@@ -320,6 +369,25 @@ function GoalCard({
             {analysis.options.find((o) => o.kind === analysis.recommendedKind)?.label}
           </span>
         </div>
+
+        <div
+          className={
+            analysis.budget.budgetOk
+              ? "rounded-lg border border-emerald-200 bg-emerald-50/80 px-2.5 py-2 text-xs"
+              : "rounded-lg border border-amber-200 bg-amber-50/80 px-2.5 py-2 text-xs"
+          }
+        >
+          <p className="font-medium">{analysis.budget.contributionAdvice}</p>
+          <p className="mt-0.5 text-muted">
+            Профицит {formatRub(analysis.budget.surplusMonthly)}/мес → на путь{" "}
+            {formatRub(analysis.budget.requiredMonthly)}/мес → остаток{" "}
+            <span className={analysis.budget.budgetOk ? "text-emerald-700" : "text-amber-800"}>
+              {formatRub(analysis.budget.remainingMonthly)}/мес
+            </span>
+          </p>
+          <p className="mt-0.5">{analysis.budget.budgetAdvice}</p>
+        </div>
+
         <div className="grid gap-1.5">
           {analysis.options.map((o) => {
             const selected = analysis.selectedKind === o.kind;
@@ -378,7 +446,11 @@ function GoalCard({
               onBlur={() => persist(draft)}
             />
           </FormField>
-          <FormField label="Срок кр., мес" htmlFor={`term-${goal.id}`}>
+          <FormField
+            label="Срок кр., мес"
+            htmlFor={`term-${goal.id}`}
+            hint={!draft.loanTermCustom ? `из цели: ${monthsToGoal}` : undefined}
+          >
             <Input
               id={`term-${goal.id}`}
               inputMode="numeric"
@@ -388,9 +460,10 @@ function GoalCard({
                 setDraft((d) => ({
                   ...d,
                   loanTermMonths: Number(e.target.value.replace(/\D/g, "")) || 1,
+                  loanTermCustom: true,
                 }))
               }
-              onBlur={() => persist(draft)}
+              onBlur={() => persist({ ...draft, loanTermCustom: true })}
             />
           </FormField>
           <FormField label="Взнос, %" htmlFor={`down-${goal.id}`}>
@@ -409,16 +482,34 @@ function GoalCard({
             />
           </FormField>
         </div>
-        <button
-          type="button"
-          className="text-[11px] text-muted underline hover:text-foreground"
-          disabled={savingPaths}
-          onClick={() =>
-            persist({ ...draft, preferredKind: null })
-          }
-        >
-          Сбросить выбор → следовать рекомендации
-        </button>
+        <div className="flex flex-wrap gap-3">
+          <button
+            type="button"
+            className="text-[11px] text-muted underline hover:text-foreground"
+            disabled={savingPaths}
+            onClick={() =>
+              persist({ ...draft, preferredKind: null })
+            }
+          >
+            Сбросить выбор → рекомендация
+          </button>
+          {draft.loanTermCustom && (
+            <button
+              type="button"
+              className="text-[11px] text-muted underline hover:text-foreground"
+              disabled={savingPaths}
+              onClick={() =>
+                persist({
+                  ...draft,
+                  loanTermCustom: false,
+                  loanTermMonths: monthsToGoal,
+                })
+              }
+            >
+              Срок кредита = срок цели ({monthsToGoal} мес.)
+            </button>
+          )}
+        </div>
       </div>
 
       {funding && funding.requiredMonthlyDesired > funding.allocatedMonthlySaving + 1 && (
