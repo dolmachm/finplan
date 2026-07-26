@@ -4,6 +4,7 @@ import {
   type DashboardInsight,
   type DashboardMetrics,
 } from "@/modules/dashboard/insights";
+import { scoreFromHomeInput } from "@/modules/dashboard/scoring";
 import type { DeterministicPlanResult } from "@/modules/plan/types";
 import type { Asset, Expense, Goal, Income, Liability } from "@/shared/types";
 import {
@@ -118,7 +119,7 @@ function mapInsights(
 export function buildReportPayload(input: BuildInput): PdfReportData {
   const { config, det, goals, goalProbabilities, macro } = input;
 
-  const metrics = computeDashboardMetrics({
+  const homeInput = {
     assets: input.assets,
     liabilities: input.liabilities,
     incomes: input.incomes,
@@ -129,9 +130,9 @@ export function buildReportPayload(input: BuildInput): PdfReportData {
     goalProbabilities: goalProbabilities.map((p) => ({
       probability: p.probability,
     })),
-  });
-
-  const allInsights = buildInsights(metrics);
+  };
+  const metrics = computeDashboardMetrics(homeInput);
+  const allInsights = buildInsights(metrics, scoreFromHomeInput(homeInput));
   const fundingByGoal = new Map(
     det.goalFunding.map((f) => [f.goalId, f] as const),
   );

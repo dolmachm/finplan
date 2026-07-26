@@ -9,6 +9,7 @@ import {
   type HomeDashboardInput,
   type InsightSeverity,
 } from "@/modules/dashboard/insights";
+import type { FinancialScore } from "@/modules/dashboard/scoring";
 
 const severityClass: Record<InsightSeverity, string> = {
   critical: "border-l-4 border-l-red-500",
@@ -28,13 +29,15 @@ function InsightChip({ item }: { item: DashboardInsight }) {
 
 export function PlanInsightsStrip({
   input,
+  score = null,
 }: {
   input: HomeDashboardInput | null;
+  score?: FinancialScore | null;
 }) {
   if (!input) return null;
 
   const metrics = computeDashboardMetrics(input);
-  const all = buildInsights(metrics);
+  const all = buildInsights(metrics, score);
   const actions = topActions(all).slice(0, 2);
   const insights = all.filter((i) => i.kind === "insight").slice(0, 3);
   const recs = all.filter((i) => i.kind === "recommendation").slice(0, 3);

@@ -85,6 +85,7 @@ export function HomeDashboard({
       {belowFold ? (
         <BelowFold
           metrics={metrics}
+          score={score}
           corridor={corridor}
           onNavigate={onNavigate}
         />
@@ -97,17 +98,20 @@ export function HomeDashboard({
 
 function BelowFold({
   metrics,
+  score,
   corridor,
   onNavigate,
 }: {
   metrics: DashboardMetrics;
+  score: FinancialScore;
   corridor: SavingsCorridor | null;
   onNavigate: (tab: DashboardTab) => void;
 }) {
-  const all = buildInsights(metrics);
+  const all = buildInsights(metrics, score);
   const actions = topActions(all);
   const insights = all.filter((i) => i.kind === "insight").slice(0, 6);
   const recs = all.filter((i) => i.kind === "recommendation").slice(0, 6);
+  const showAdvice = score.status !== "empty";
 
   return (
     <>
@@ -123,7 +127,7 @@ function BelowFold({
         onNavigate={onNavigate}
       />
       <StageCard metrics={metrics} onNavigate={onNavigate} />
-      {actions.length > 0 && (
+      {showAdvice && actions.length > 0 && (
         <section className="space-y-3">
           <h2 className="font-medium">Сделать в первую очередь</h2>
           <div className="grid gap-3 md:grid-cols-3">
@@ -138,20 +142,22 @@ function BelowFold({
           </div>
         </section>
       )}
-      <div className="grid gap-6 lg:grid-cols-2">
-        <InsightList
-          title="Выводы"
-          empty="Пока мало данных для выводов — заполните «Данные»."
-          items={insights}
-          onNavigate={onNavigate}
-        />
-        <InsightList
-          title="Рекомендации"
-          empty="Рекомендации появятся после ввода баланса, доходов и расходов."
-          items={recs}
-          onNavigate={onNavigate}
-        />
-      </div>
+      {showAdvice && (
+        <div className="grid gap-6 lg:grid-cols-2">
+          <InsightList
+            title="Выводы"
+            empty="Пока мало данных для выводов."
+            items={insights}
+            onNavigate={onNavigate}
+          />
+          <InsightList
+            title="Рекомендации"
+            empty="Содержательные рекомендации появятся после заполнения профиля."
+            items={recs}
+            onNavigate={onNavigate}
+          />
+        </div>
+      )}
     </>
   );
 }

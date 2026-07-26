@@ -38,13 +38,23 @@ export type ScoreGrade = {
   meaning: string;
 };
 
+export type ScoreStatus = "empty" | "incomplete" | "stale" | "ready";
+
+export type ScoreMissingStep = "balance" | "cashflow" | "goals";
+
 export type FinancialScore = {
-  /** 0–100 */
-  total: number;
-  grade: ScoreGrade;
+  /** 0–100; null если данных нет (status empty) */
+  total: number | null;
+  grade: ScoreGrade | null;
   summary: string;
   debtHeavy: boolean;
   blocks: ScoreBlock[];
+  status: ScoreStatus;
+  missingSteps: ScoreMissingStep[];
+  /** Сколько дней с последнего обновления сущностей; null если дат нет */
+  staleDays: number | null;
+  /** Короткий призыв к действию */
+  cta: string;
 };
 
 export type ScoringExtras = {
@@ -52,6 +62,23 @@ export type ScoringExtras = {
   assets?: Pick<Asset, "type" | "assetClass" | "portfolioHoldings">[];
   /** Avg monthly cashflow from plan projection; null/undefined → neutral */
   projectionCashflowAvg?: number | null;
+  /** Latest entity update; if omitted, derived from entity updatedAt when available */
+  lastUpdated?: Date | string | null;
+};
+
+export const SCORE_STALE_AFTER_DAYS = 30;
+
+const STEP_LABEL: Record<ScoreMissingStep, string> = {
+  balance: "Баланс (активы/пассивы)",
+  cashflow: "Поток (доходы и расходы)",
+  goals: "Цели",
+};
+
+const BLOCK_CTA: Record<ScoreBlockId, string> = {
+  wealth: "Заполните активы и пассивы во вкладке «Баланс».",
+  budget: "Добавьте доходы и расходы во вкладке «Поток».",
+  planning: "Добавьте цели и заполните баланс с потоком.",
+  investments: "Добавьте инвестиционные активы и привяжите их к целям.",
 };
 
 function clamp(n: number, min = 0, max = 100) {
@@ -486,6 +513,109 @@ function computeInvestments(
   };
 }
 
+function toTime(value: Date | string | null | undefined): number | null {
+  if (value == null) return null;
+  const t = value instanceof Date ? value.getTime() : new Date(value).getTime();
+  return Number.isFinite(t) ? t : null;
+}
+
+/** Max updatedAt across finance entities. */
+export function latestEntityUpdate(
+  entities: Array<{ updatedAt?: Date | string | null }>,
+): Date | null {
+  let max = 0;
+  for (const e of entities) {
+    const t = toTime(e.updatedAt ?? null);
+    if (t != null && t > max) max = t;
+  }
+  return max > 0 ? new Date(max) : null;
+}
+
+export function resolveScoreReadiness(
+  metrics: DashboardMetrics,
+  lastUpdated: Date | string | null | undefined,
+  now = new Date(),
+): Pick<
+  FinancialScore,
+  "status" | "missingSteps" | "staleDays" | "cta"
+> {
+  const missingSteps: ScoreMissingStep[] = [];
+  if (!metrics.step1) missingSteps.push("balance");
+  if (!metrics.step2) missingSteps.push("cashflow");
+  if (!metrics.step3) missingSteps.push("goals");
+
+  if (missingSteps.length === 3) {
+    return {
+      status: "empty",
+      missingSteps,
+      staleDays: null,
+      cta: "Заполните Баланс, Поток и Цели — после этого появится финансовый скоринг.",
+    };
+  }
+
+  if (missingSteps.length > 0) {
+    const names = missingSteps.map((s) => STEP_LABEL[s]).join(", ");
+    return {
+      status: "incomplete",
+      missingSteps,
+      staleDays: null,
+      cta: `Данных недостаточно — внесите: ${names}. Иначе скоринг неверен.`,
+    };
+  }
+
+  const updatedMs = toTime(lastUpdated);
+  if (updatedMs == null) {
+    return {
+      status: "ready",
+      missingSteps: [],
+      staleDays: null,
+      cta: "",
+    };
+  }
+
+  const staleDays = Math.floor(
+    (now.getTime() - updatedMs) / (1000 * 60 * 60 * 24),
+  );
+  if (staleDays > SCORE_STALE_AFTER_DAYS) {
+    return {
+      status: "stale",
+      missingSteps: [],
+      staleDays,
+      cta: `Данные не обновлялись ${staleDays} дн. — обновите баланс и поток, иначе оценка занижена.`,
+    };
+  }
+
+  return {
+    status: "ready",
+    missingSteps: [],
+    staleDays,
+    cta: "",
+  };
+}
+
+/** Penalty multiplier for stale data: after 30d decays toward 0.4 over ~90d. */
+export function staleScoreMultiplier(staleDays: number): number {
+  if (staleDays <= SCORE_STALE_AFTER_DAYS) return 1;
+  return Math.max(0.4, 1 - (staleDays - SCORE_STALE_AFTER_DAYS) / 90);
+}
+
+export function blockCta(blockId: ScoreBlockId, score: FinancialScore): string {
+  if (score.status === "ready") return "";
+  if (score.status === "empty") return BLOCK_CTA[blockId];
+  if (score.status === "stale") return score.cta;
+  // incomplete: prefer step-specific + general
+  const stepForBlock: Partial<Record<ScoreBlockId, ScoreMissingStep>> = {
+    wealth: "balance",
+    budget: "cashflow",
+    planning: "goals",
+  };
+  const step = stepForBlock[blockId];
+  if (step && score.missingSteps.includes(step)) {
+    return BLOCK_CTA[blockId];
+  }
+  return score.cta;
+}
+
 export function computeFinancialScore(
   metrics: DashboardMetrics,
   extras: ScoringExtras = {},
@@ -494,13 +624,27 @@ export function computeFinancialScore(
   const budget = computeBudget(metrics, extras.projectionCashflowAvg);
   const planning = computePlanning(metrics, extras.goals);
   const investments = computeInvestments(metrics, extras);
+  const blocks = [wealth, budget, planning, investments];
 
   const debtHeavy = metrics.debtRatio > 0.5;
+  const readiness = resolveScoreReadiness(metrics, extras.lastUpdated ?? null);
+
+  if (readiness.status === "empty") {
+    return {
+      total: null,
+      grade: null,
+      summary: "Недостаточно данных для расчёта скоринга.",
+      debtHeavy: false,
+      blocks,
+      ...readiness,
+    };
+  }
+
   const w = debtHeavy
     ? { wealth: 0.3, budget: 0.25, planning: 0.3, investments: 0.15 }
     : { wealth: 0.25, budget: 0.25, planning: 0.3, investments: 0.2 };
 
-  const total = clamp(
+  let total = clamp(
     round1(
       wealth.score * w.wealth +
         budget.score * w.budget +
@@ -508,16 +652,27 @@ export function computeFinancialScore(
         investments.score * w.investments,
     ),
   );
-  const grade = scoreGrade(total);
+
+  let summary = debtHeavy
+    ? "Высокая долговая нагрузка: в общем балле усилен вес благосостояния, инвестиции ослаблены."
+    : "Общий балл — взвешенная сумма благосостояния, бюджета, планирования и инвестиций.";
+
+  if (readiness.status === "stale" && readiness.staleDays != null) {
+    total = clamp(
+      round1(total * staleScoreMultiplier(readiness.staleDays)),
+    );
+    summary = readiness.cta;
+  } else if (readiness.status === "incomplete") {
+    summary = readiness.cta;
+  }
 
   return {
     total,
-    grade,
-    summary: debtHeavy
-      ? "Высокая долговая нагрузка: в общем балле усилен вес благосостояния, инвестиции ослаблены."
-      : "Общий балл — взвешенная сумма благосостояния, бюджета, планирования и инвестиций.",
+    grade: scoreGrade(total),
+    summary,
     debtHeavy,
-    blocks: [wealth, budget, planning, investments],
+    blocks,
+    ...readiness,
   };
 }
 
@@ -527,10 +682,20 @@ export function scoreFromHomeInput(
   extras: ScoringExtras = {},
 ): FinancialScore {
   const metrics = computeDashboardMetrics(input);
+  const lastUpdated =
+    extras.lastUpdated ??
+    latestEntityUpdate([
+      ...input.assets,
+      ...input.liabilities,
+      ...input.incomes,
+      ...input.expenses,
+      ...input.goals,
+    ]);
   return computeFinancialScore(metrics, {
     goals: extras.goals ?? input.goals,
     assets: extras.assets ?? input.assets,
     projectionCashflowAvg: extras.projectionCashflowAvg,
+    lastUpdated,
   });
 }
 

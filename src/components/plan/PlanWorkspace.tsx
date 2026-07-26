@@ -102,7 +102,7 @@ export function PlanWorkspace({
           {planScore && (
             <ScoreCard score={planScore} mode="block" blockId="planning" compact />
           )}
-          <PlanInsightsStrip input={insightsInput} />
+          <PlanInsightsStrip input={insightsInput} score={planScore} />
 
           <div className="flex flex-wrap items-end justify-between gap-2">
             <label className="flex min-w-[200px] flex-1 items-center gap-2 text-xs sm:text-sm">

@@ -13,6 +13,7 @@ import {
   envelopeOverviewSummary,
   type EnvelopeStatus,
 } from "@/modules/budget/envelopes";
+import type { FinancialScore } from "@/modules/dashboard/scoring";
 
 const LIQUID_TYPES = new Set(["CASH", "BANK_ACCOUNT", "DEPOSIT"]);
 
@@ -249,44 +250,13 @@ function push(
 
 export function buildInsights(
   m: DashboardMetrics,
+  score?: Pick<FinancialScore, "status" | "missingSteps"> | null,
 ): DashboardInsight[] {
+  // Fill/stale CTAs live in ScoreCard — no insights when profile is empty.
+  if (score?.status === "empty") return [];
+
   const insights: DashboardInsight[] = [];
   const recs: DashboardInsight[] = [];
-
-  // ——— Onboarding / completeness ———
-  if (!m.step1) {
-    push(recs, {
-      id: "rec-point0",
-      kind: "recommendation",
-      severity: "critical",
-      title: "Зафиксируйте точку 0",
-      body: "Добавьте активы и пассивы — это стартовый баланс для всех расчётов.",
-      ctaTab: "assets",
-      ctaLabel: "К данным",
-    });
-  }
-  if (m.step1 && !m.step2) {
-    push(recs, {
-      id: "rec-cashflow",
-      kind: "recommendation",
-      severity: "warning",
-      title: "Добавьте доходы и расходы",
-      body: "Без денежного потока нельзя оценить профицит и посильность целей.",
-      ctaTab: "assets",
-      ctaLabel: "К данным",
-    });
-  }
-  if (m.step2 && !m.step3) {
-    push(recs, {
-      id: "rec-goals",
-      kind: "recommendation",
-      severity: "warning",
-      title: "Цели не заполнены",
-      body: "Укажите финансовые цели, чтобы план и прогноз риска были полезны.",
-      ctaTab: "assets",
-      ctaLabel: "К целям",
-    });
-  }
 
   if (m.envelopeOverspent.length > 0) {
     const top = m.envelopeOverspent[0]!;
@@ -304,7 +274,7 @@ export function buildInsights(
       ctaLabel: "К данным",
     });
   }
-  if (m.step1 && m.step2 && m.step3) {
+  if (score?.status === "ready" && m.step1 && m.step2 && m.step3) {
     push(recs, {
       id: "rec-profile-ok",
       kind: "recommendation",
