@@ -13,12 +13,11 @@ import {
 } from "@/modules/iplan/iplan.engine";
 import {
   baselineMonthlySurplus,
-  toBudgetLines,
+  buildIPlanBudget,
   validateContributionsVsBudget,
 } from "@/modules/iplan/budget";
-import { envelopeReserveBudgetLine } from "@/modules/budget/envelopes";
 import { loadUserFinanceSnapshot } from "@/modules/finance/finance-snapshot";
-import { activeLiabilities } from "@/modules/finance/liability-status";
+import { applyFinanceToVariant } from "@/modules/iplan/sync-from-finance";
 import type { IPlanVariant, InvestmentPlan } from "@/modules/iplan/types";
 import { recordRevision } from "@/shared/revision";
 import { newId } from "@/shared/db/helpers";
@@ -58,6 +57,8 @@ const variantSchema = z.object({
     .max(6),
   contributions: z.array(streamSchema).max(9),
   goals: z.array(streamSchema).max(9),
+  horizonCustom: z.boolean().optional(),
+  returnScheduleCustom: z.boolean().optional(),
 });
 
 const putSchema = z.object({
@@ -78,37 +79,13 @@ async function loadContext(userId: string) {
   const initialCapital = capitalAssets.reduce((s, a) => s + a.currentValue, 0);
   const wRet = weightedReturnPct(capitalAssets);
   const wVol = weightedVolatilityPct(capitalAssets);
-  const budgetIncomes = [
-    ...toBudgetLines(
-      incomes.map((i) => ({
-        ...i,
-        amount: i.amount * (1 - (i.taxRatePct ?? 0) / 100),
-      })),
-    ),
-    ...assets
-      .filter((a) => (a.dividendIncomeMonthly ?? 0) > 0)
-      .map((a) => ({
-        id: `div_${a.id}`,
-        name: a.name,
-        amount: a.dividendIncomeMonthly,
-        frequency: "MONTHLY" as const,
-        startYear: null,
-        endYear: null,
-      })),
-  ];
-  const reserve = envelopeReserveBudgetLine(expenses, budgetCategories);
-  const debtLines = toBudgetLines(
-    activeLiabilities(liabilities).map((l) => ({
-      id: l.id,
-      name: l.name,
-      amount: l.monthlyPayment,
-      frequency: "MONTHLY" as const,
-    })),
-  );
-  const budgetExpenses = [
-    ...toBudgetLines(reserve ? [...expenses, reserve] : expenses),
-    ...debtLines,
-  ];
+  const { budgetIncomes, budgetExpenses } = buildIPlanBudget({
+    incomes,
+    expenses,
+    assets,
+    liabilities,
+    budgetCategories,
+  });
   const surplusMonthly = baselineMonthlySurplus(budgetIncomes, budgetExpenses);
 
   return {
@@ -120,6 +97,7 @@ async function loadContext(userId: string) {
     wVol,
     incomes,
     expenses,
+    liabilities,
     budgetCategories,
     budgetIncomes,
     budgetExpenses,
@@ -152,6 +130,20 @@ function syncSurplusContribution(
   return { ...v, contributions: [surplusStream, ...others] };
 }
 
+function syncVariant(
+  variant: IPlanVariant,
+  ctx: Awaited<ReturnType<typeof loadContext>>,
+): IPlanVariant {
+  return applyFinanceToVariant(variant, {
+    surplusMonthly: ctx.surplusMonthly,
+    goals: ctx.goals,
+    horizonYears: ctx.macro?.planHorizonYears ?? 30,
+    weightedReturnPct: ctx.wRet,
+    weightedVolatilityPct: ctx.wVol,
+    syncSurplus: syncSurplusContribution,
+  });
+}
+
 function ensurePlan(
   userId: string,
   ctx: Awaited<ReturnType<typeof loadContext>>,
@@ -159,9 +151,7 @@ function ensurePlan(
   if (ctx.plan) {
     return {
       ...ctx.plan,
-      variants: ctx.plan.variants.map((v) =>
-        syncSurplusContribution(v, ctx.surplusMonthly),
-      ),
+      variants: ctx.plan.variants.map((v) => syncVariant(v, ctx)),
     };
   }
   const seeded = seedFromFinanceData({
@@ -176,9 +166,7 @@ function ensurePlan(
   });
   return {
     ...seeded,
-    variants: seeded.variants.map((v) =>
-      syncSurplusContribution(v, ctx.surplusMonthly),
-    ),
+    variants: seeded.variants.map((v) => syncVariant(v, ctx)),
   };
 }
 
@@ -193,9 +181,7 @@ function payload(
 ) {
   const normalized: InvestmentPlan = {
     ...plan,
-    variants: plan.variants.map((v) =>
-      syncSurplusContribution(normalizeVariant(v), ctx.surplusMonthly),
-    ),
+    variants: plan.variants.map((v) => syncVariant(v, ctx)),
   };
   const active =
     normalized.variants.find((v) => v.id === normalized.activeVariantId) ??
@@ -226,6 +212,7 @@ function payload(
     suggestedVolatilityPct: ctx.wVol,
     incomes: ctx.incomes,
     expenses: ctx.expenses,
+    liabilities: ctx.liabilities,
     budgetCategories: ctx.budgetCategories,
     surplusMonthly: ctx.surplusMonthly,
     surplusAnnual: ctx.surplusMonthly * 12,
@@ -273,7 +260,7 @@ export async function PUT(req: Request) {
   const base = existing ?? defaultInvestmentPlan(userId);
 
   const variants = parsed.data.variants.map((v) =>
-    syncSurplusContribution(normalizeVariant(v as IPlanVariant), ctx.surplusMonthly),
+    syncVariant(v as IPlanVariant, ctx),
   );
 
   for (const v of variants) {

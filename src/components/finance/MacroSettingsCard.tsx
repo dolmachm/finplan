@@ -15,7 +15,7 @@ import type { MacroSettings } from "@/shared/types";
 import { useFinanceStore } from "@/modules/finance/finance-store";
 
 export function MacroSettingsCard() {
-  const { macro, setMacro } = useFinanceStore();
+  const { macro, setMacro, refresh } = useFinanceStore();
   const [open, setOpen] = useState(false);
   const [inflation, setInflation] = useState("4");
   const [tax, setTax] = useState("13");
@@ -58,6 +58,7 @@ export function MacroSettingsCard() {
         return;
       }
       setMacro((await res.json()) as MacroSettings);
+      await refresh();
       toast.success("Макропараметры сохранены");
       setOpen(false);
     } finally {

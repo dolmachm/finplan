@@ -72,6 +72,7 @@ export function GoalsPanel({
     entitiesLoading: snapshotLoading,
     upsert,
     remove: removeEntity,
+    entitiesRevision,
   } = useFinanceStore();
   const [funding, setFunding] = useState<Record<string, GoalFundingResult>>({});
   const [avgSurplus, setAvgSurplus] = useState(0);
@@ -97,7 +98,7 @@ export function GoalsPanel({
 
   useEffect(() => {
     void loadProjection();
-  }, [loadProjection, goals.length]);
+  }, [loadProjection, entitiesRevision]);
 
   const loading = snapshotLoading || projectionLoading;
 
@@ -601,6 +602,10 @@ function GoalEditor({
     }));
   });
   const [saving, setSaving] = useState(false);
+  const stagesSumDisplay = stages.reduce((s, st) => {
+    const n = Number(String(st.amount).replace(/\s/g, "").replace(",", "."));
+    return s + (Number.isFinite(n) ? n : 0);
+  }, 0);
 
   function updateStage(id: string, patch: Partial<StageDraft>) {
     setStages((prev) => prev.map((s) => (s.id === id ? { ...s, ...patch } : s)));
@@ -610,49 +615,6 @@ function GoalEditor({
     if (!ensureOnlineForWrite()) return;
     if (!name.trim()) {
       toast.error("Укажите название цели");
-      return;
-    }
-    const desiredNum = parsePositiveNumber(desired, "Желаемая сумма");
-    if (!desiredNum.ok || desiredNum.value === 0) {
-      toast.error(desiredNum.ok ? "Сумма должна быть больше нуля" : desiredNum.message);
-      return;
-    }
-
-    let minVal: number | null = null;
-    if (minAmount.trim()) {
-      const m = parsePositiveNumber(minAmount, "Минимум");
-      if (!m.ok || m.value === 0) {
-        toast.error(m.ok ? "Минимум должен быть > 0" : m.message);
-        return;
-      }
-      minVal = m.value;
-    }
-    let maxVal: number | null = null;
-    if (maxAmount.trim()) {
-      const m = parsePositiveNumber(maxAmount, "Максимум");
-      if (!m.ok || m.value === 0) {
-        toast.error(m.ok ? "Максимум должен быть > 0" : m.message);
-        return;
-      }
-      maxVal = m.value;
-    }
-    if (minVal != null && minVal > desiredNum.value) {
-      toast.error("Минимум не может быть больше желаемой суммы");
-      return;
-    }
-    if (maxVal != null && maxVal < desiredNum.value) {
-      toast.error("Максимум не может быть меньше желаемой суммы");
-      return;
-    }
-
-    const yearsNum = parsePositiveNumber(years, "Срок");
-    if (!yearsNum.ok || yearsNum.value === 0) {
-      toast.error("Укажите срок в годах");
-      return;
-    }
-    const priorityNum = Number(priority);
-    if (!Number.isInteger(priorityNum) || priorityNum < 1) {
-      toast.error("Приоритет: целое число от 1");
       return;
     }
 
@@ -687,13 +649,66 @@ function GoalEditor({
       });
     }
 
+    const stagesSum = parsedStages.reduce((s, st) => s + st.amount, 0);
+    let desiredValue = 0;
+    if (parsedStages.length > 0) {
+      desiredValue = stagesSum;
+    } else {
+      const desiredNum = parsePositiveNumber(desired, "Желаемая сумма");
+      if (!desiredNum.ok || desiredNum.value === 0) {
+        toast.error(
+          desiredNum.ok ? "Сумма должна быть больше нуля" : desiredNum.message,
+        );
+        return;
+      }
+      desiredValue = desiredNum.value;
+    }
+
+    let minVal: number | null = null;
+    if (minAmount.trim()) {
+      const m = parsePositiveNumber(minAmount, "Минимум");
+      if (!m.ok || m.value === 0) {
+        toast.error(m.ok ? "Минимум должен быть > 0" : m.message);
+        return;
+      }
+      minVal = m.value;
+    }
+    let maxVal: number | null = null;
+    if (maxAmount.trim()) {
+      const m = parsePositiveNumber(maxAmount, "Максимум");
+      if (!m.ok || m.value === 0) {
+        toast.error(m.ok ? "Максимум должен быть > 0" : m.message);
+        return;
+      }
+      maxVal = m.value;
+    }
+    if (minVal != null && minVal > desiredValue) {
+      toast.error("Минимум не может быть больше желаемой суммы");
+      return;
+    }
+    if (maxVal != null && maxVal < desiredValue) {
+      toast.error("Максимум не может быть меньше желаемой суммы");
+      return;
+    }
+
+    const yearsNum = parsePositiveNumber(years, "Срок");
+    if (parsedStages.length === 0 && (!yearsNum.ok || yearsNum.value === 0)) {
+      toast.error("Укажите срок в годах");
+      return;
+    }
+    const priorityNum = Number(priority);
+    if (!Number.isInteger(priorityNum) || priorityNum < 1) {
+      toast.error("Приоритет: целое число от 1");
+      return;
+    }
+
     const targetDate = new Date();
     if (parsedStages.length > 0) {
       const last = parsedStages.reduce((a, b) =>
         a.targetDate > b.targetDate ? a : b,
       );
       targetDate.setTime(new Date(last.targetDate).getTime());
-    } else {
+    } else if (yearsNum.ok) {
       targetDate.setFullYear(targetDate.getFullYear() + yearsNum.value);
     }
 
@@ -702,7 +717,7 @@ function GoalEditor({
       const body = {
         name: name.trim(),
         goalType,
-        targetAmountNominal: desiredNum.value,
+        targetAmountNominal: desiredValue,
         targetDate: targetDate.toISOString(),
         minAmount: minVal,
         maxAmount: maxVal,
@@ -762,13 +777,26 @@ function GoalEditor({
             ))}
           </select>
         </FormField>
-        <FormField label="Желаемая сумма, ₽" htmlFor="goal-desired" hint={FIELD_HINTS.goalAmount}>
+        <FormField
+          label="Желаемая сумма, ₽"
+          htmlFor="goal-desired"
+          hint={
+            stages.length > 0
+              ? "Сумма считается по этапам — отдельно вводить не нужно."
+              : FIELD_HINTS.goalAmount
+          }
+        >
           <Input
             id="goal-desired"
             inputMode="numeric"
-            value={desired}
+            value={
+              stages.length > 0
+                ? formatMoneyInput(String(Math.round(stagesSumDisplay)))
+                : desired
+            }
             onChange={(e) => setDesired(formatMoneyInput(e.target.value))}
             placeholder="6 000 000"
+            disabled={stages.length > 0}
           />
         </FormField>
         <FormField label="Срок, лет" htmlFor="goal-years" hint={FIELD_HINTS.goalYears}>

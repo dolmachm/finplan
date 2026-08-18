@@ -15,6 +15,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { HomeDashboard } from "@/components/finance/HomeDashboard";
+import { StageLearningCard } from "@/components/onboarding/StageLearningCard";
 import { StepContinueBar } from "@/components/onboarding/StepContinueBar";
 import { FormError } from "@/components/ui/FormError";
 import { HelpHint } from "@/components/ui/FormField";
@@ -127,6 +128,7 @@ function DashboardPageInner() {
     setScenarios,
     setEnrichment,
     upsert,
+    entitiesRevision,
   } = store;
 
   const [tab, setTab] = useState<DashboardTab>("home");
@@ -257,7 +259,7 @@ function DashboardPageInner() {
     ) {
       void loadProjection(viewScenarioId);
     }
-  }, [tab, viewScenarioId, planSub, loadProjection]);
+  }, [tab, viewScenarioId, planSub, loadProjection, entitiesRevision]);
 
   useEffect(() => {
     // Интервал опроса симуляции не должен жить после ухода со страницы.
@@ -490,22 +492,25 @@ function DashboardPageInner() {
           {!entitiesReady || entitiesLoading ? (
             <p className="text-muted">Загрузка плана…</p>
           ) : viewScenarioId ? (
-            <PlanWorkspace
-              section={planSub}
-              insightsInput={homeInput}
-              score={score}
-              projection={projection}
-              projectionLoading={projectionLoading}
-              viewScenarioId={viewScenarioId}
-              onViewScenarioChange={setViewScenarioId}
-              scenarios={scenarios}
-              onActivateScenario={activateScenario}
-              onScenariosRefresh={refreshScenarios}
-              simJob={simJob}
-              simBusy={simBusy}
-              simError={simError}
-              onRunSimulation={runSimulation}
-            />
+            <div className="space-y-4">
+              <StageLearningCard stage="plan" compact />
+              <PlanWorkspace
+                section={planSub}
+                insightsInput={homeInput}
+                score={score}
+                projection={projection}
+                projectionLoading={projectionLoading}
+                viewScenarioId={viewScenarioId}
+                onViewScenarioChange={setViewScenarioId}
+                scenarios={scenarios}
+                onActivateScenario={activateScenario}
+                onScenariosRefresh={refreshScenarios}
+                simJob={simJob}
+                simBusy={simBusy}
+                simError={simError}
+                onRunSimulation={runSimulation}
+              />
+            </div>
           ) : null}
         </div>
       )}
@@ -536,15 +541,19 @@ function DashboardPageInner() {
           ) : (
             <>
               {(dataSub === "balance" || dataSub === "cashflow") && (
-                <FinanceDataPanel
-                  mode={dataSub}
-                  onQuickAdd={quickAddAsset}
-                  addingAsset={addingAsset}
-                  score={score}
-                />
+                <div className="space-y-6">
+                  <StageLearningCard stage={dataSub} compact />
+                  <FinanceDataPanel
+                    mode={dataSub}
+                    onQuickAdd={quickAddAsset}
+                    addingAsset={addingAsset}
+                    score={score}
+                  />
+                </div>
               )}
               {dataSub === "goals" && (
                 <div className="space-y-6">
+                  <StageLearningCard stage="goals" compact />
                   <div>
                     <p className="text-xs font-medium uppercase tracking-wide text-muted">
                       Шаг 3 · Цели и горизонт

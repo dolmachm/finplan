@@ -1,13 +1,5 @@
 import { unauthorizedResponse } from "@/shared/api-validation";
-import type {
-  Asset,
-  Expense,
-  Goal,
-  Income,
-  Liability,
-  MacroSettings,
-  User,
-} from "@/shared/types";
+import type { User } from "@/shared/types";
 import { NextResponse } from "next/server";
 import { auth } from "@/shared/auth";
 import { prisma } from "@/shared/db";
@@ -18,45 +10,22 @@ import {
   mergeReportConfig,
   type ReportConfig,
 } from "@/modules/reports/report-config";
+import { loadUserFinanceSnapshot } from "@/modules/finance/finance-snapshot";
 import { buildPlanInputFromEntities } from "@/modules/plan/plan-data.service";
 import { runDeterministicPlan } from "@/modules/plan/cashflow.engine";
 
 async function generateForUser(userId: string, config: ReportConfig) {
-  const [
-    user,
-    macro,
-    assets,
-    liabilities,
-    incomes,
-    expenses,
-    goals,
-    scenarioCount,
-    lastSim,
-  ] = await Promise.all([
+  const [user, snap, lastSim] = await Promise.all([
     prisma.user.findUnique({ where: { id: userId } }),
-    prisma.macroSettings.findUnique({ where: { userId } }),
-    prisma.asset.findMany({ where: { userId } }),
-    prisma.liability.findMany({ where: { userId } }),
-    prisma.income.findMany({ where: { userId } }),
-    prisma.expense.findMany({ where: { userId } }),
-    prisma.goal.findMany({ where: { userId }, orderBy: { priority: "asc" } }),
-    prisma.scenario.count({ where: { userId } }),
+    loadUserFinanceSnapshot(userId),
     prisma.simulationJob.findFirst({
       where: { userId, status: "COMPLETED" },
       orderBy: { completedAt: "desc" },
       include: { result: true },
     }),
-  ]) as [
-    User | null,
-    MacroSettings | null,
-    Asset[],
-    Liability[],
-    Income[],
-    Expense[],
-    Goal[],
-    number,
-    Awaited<ReturnType<typeof prisma.simulationJob.findFirst>>,
-  ];
+  ]);
+  const account = user as User | null;
+  const { macro, assets, liabilities, incomes, expenses, goals, scenarios } = snap;
 
   const planInput = buildPlanInputFromEntities(userId, {
     macro,
@@ -74,13 +43,13 @@ async function generateForUser(userId: string, config: ReportConfig) {
 
   const payload = buildReportPayload({
     config,
-    userName: user?.name ?? user?.email ?? "User",
+    userName: account?.name || account?.email || "User",
     assets,
     liabilities,
     incomes,
     expenses,
     goals,
-    scenarioCount,
+    scenarioCount: scenarios.length,
     macro: {
       baseInflationPct: macro?.baseInflationPct ?? 4,
       planHorizonYears: macro?.planHorizonYears ?? 30,

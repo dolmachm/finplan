@@ -32,6 +32,23 @@ export async function PATCH(req: Request) {
     create: { userId, ...data },
     update: data,
   });
+  if (
+    before &&
+    data.incomeTaxPct != null &&
+    before.incomeTaxPct !== data.incomeTaxPct
+  ) {
+    const incomes = await prisma.income.findMany({ where: { userId } });
+    await Promise.all(
+      incomes
+        .filter((i) => i.taxRatePct === before.incomeTaxPct)
+        .map((i) =>
+          prisma.income.update({
+            where: { id: i.id },
+            data: { taxRatePct: data.incomeTaxPct },
+          }),
+        ),
+    );
+  }
   await recordRevision({
     userId,
     entityType: "macro",

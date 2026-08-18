@@ -1,7 +1,16 @@
 import { monthlyEquivalent } from "@/modules/plan/frequency";
-import type { Frequency } from "@/shared/types";
+import type {
+  Asset,
+  BudgetCategory,
+  Expense,
+  Frequency,
+  Income,
+  Liability,
+} from "@/shared/types";
 import type { IPlanStreamFrequency } from "./types";
 import { annualAmount, periodYears } from "./stream-math";
+import { envelopeReserveBudgetLine } from "@/modules/budget/envelopes";
+import { activeLiabilities } from "@/modules/finance/liability-status";
 
 export type BudgetLine = {
   id: string;
@@ -140,4 +149,51 @@ export function toBudgetLines(
     startYear: r.startDate ? r.startDate.getFullYear() : null,
     endYear: r.endDate ? r.endDate.getFullYear() : null,
   }));
+}
+
+/** Тот же бюджет, что на сервере iPlan: налог, дивиденды, долг, конверты. */
+export function buildIPlanBudget(input: {
+  incomes: Income[];
+  expenses: Expense[];
+  assets: Asset[];
+  liabilities: Liability[];
+  budgetCategories?: BudgetCategory[];
+}): { budgetIncomes: BudgetLine[]; budgetExpenses: BudgetLine[] } {
+  const budgetIncomes: BudgetLine[] = [
+    ...toBudgetLines(
+      input.incomes.map((i) => ({
+        ...i,
+        amount: i.amount * (1 - (i.taxRatePct ?? 0) / 100),
+      })),
+    ),
+    ...input.assets
+      .filter((a) => (a.dividendIncomeMonthly ?? 0) > 0)
+      .map((a) => ({
+        id: `div_${a.id}`,
+        name: a.name,
+        amount: a.dividendIncomeMonthly,
+        frequency: "MONTHLY" as const,
+        startYear: null,
+        endYear: null,
+      })),
+  ];
+  const reserve = envelopeReserveBudgetLine(
+    input.expenses,
+    input.budgetCategories ?? [],
+  );
+  const debtLines = toBudgetLines(
+    activeLiabilities(input.liabilities).map((l) => ({
+      id: l.id,
+      name: l.name,
+      amount: l.monthlyPayment,
+      frequency: "MONTHLY" as const,
+    })),
+  );
+  return {
+    budgetIncomes,
+    budgetExpenses: [
+      ...toBudgetLines(reserve ? [...input.expenses, reserve] : input.expenses),
+      ...debtLines,
+    ],
+  };
 }

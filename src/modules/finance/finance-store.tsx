@@ -89,6 +89,7 @@ type FinanceStoreValue = {
   upsert: <K extends EntityKey>(key: K, entity: EntityMap[K]) => void;
   remove: (key: EntityKey, id: string) => void;
   setEnrichment: (patch: Partial<FinanceEnrichment>) => void;
+  entitiesRevision: number;
 };
 
 const FinanceStoreContext = createContext<FinanceStoreValue | null>(null);
@@ -121,8 +122,12 @@ export function FinanceStoreProvider({ children }: { children: ReactNode }) {
     [],
   );
   const [scenarios, setScenarios] = useState<Scenario[]>([]);
-  const [macro, setMacro] = useState<MacroSettings | null>(null);
+  const [macro, setMacroState] = useState<MacroSettings | null>(null);
   const [enrichment, setEnrichmentState] = useState<FinanceEnrichment>({});
+  const [entitiesRevision, setEntitiesRevision] = useState(0);
+  const bumpRevision = useCallback(() => {
+    setEntitiesRevision((n) => n + 1);
+  }, []);
   // Ref нужен: ensureSnapshot в stale closure не должен снова бить API после refresh.
   const snapshotInflight = useRef<Promise<void> | null>(null);
   const entitiesReadyRef = useRef(false);
@@ -140,8 +145,9 @@ export function FinanceStoreProvider({ children }: { children: ReactNode }) {
     setGoals(snap.goals);
     setBudgetCategories(snap.budgetCategories);
     setScenarios(snap.scenarios);
-    setMacro(snap.macro);
-  }, []);
+    setMacroState(snap.macro);
+    bumpRevision();
+  }, [bumpRevision]);
 
   /** Первый запрос dashboard: только цифры для Home. */
   const loadSummary = useCallback(async () => {
@@ -265,8 +271,9 @@ export function FinanceStoreProvider({ children }: { children: ReactNode }) {
           setScenarios((prev) => upsertInList(prev, entity as Scenario));
           break;
       }
+      bumpRevision();
     },
-    [],
+    [bumpRevision],
   );
 
   const remove = useCallback((key: EntityKey, id: string) => {
@@ -293,7 +300,8 @@ export function FinanceStoreProvider({ children }: { children: ReactNode }) {
         setScenarios((prev) => removeFromList(prev, id));
         break;
     }
-  }, []);
+    bumpRevision();
+  }, [bumpRevision]);
 
   const homeInput: HomeDashboardInput | null = useMemo(() => {
     if (!entitiesReady) return null;
@@ -331,6 +339,14 @@ export function FinanceStoreProvider({ children }: { children: ReactNode }) {
   // Пока сущности не загружены — скор из summary; иначе пересчёт из списков.
   const score = scoreFromEntities ?? summary?.score ?? null;
 
+  const setMacro = useCallback(
+    (next: MacroSettings | null) => {
+      setMacroState(next);
+      bumpRevision();
+    },
+    [bumpRevision],
+  );
+
   const value = useMemo<FinanceStoreValue>(
     () => ({
       summaryLoading,
@@ -350,6 +366,7 @@ export function FinanceStoreProvider({ children }: { children: ReactNode }) {
       homeInput,
       score,
       enrichment,
+      entitiesRevision,
       loadSummary,
       ensureSnapshot,
       refresh,
@@ -377,9 +394,11 @@ export function FinanceStoreProvider({ children }: { children: ReactNode }) {
       homeInput,
       score,
       enrichment,
+      entitiesRevision,
       loadSummary,
       ensureSnapshot,
       refresh,
+      setMacro,
       upsert,
       remove,
       setEnrichment,

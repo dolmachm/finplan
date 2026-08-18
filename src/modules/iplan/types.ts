@@ -36,6 +36,10 @@ export type IPlanVariant = {
   returnSchedule: IPlanReturnStep[];
   contributions: IPlanStream[];
   goals: IPlanStream[];
+  /** true — горизонт задан вручную, не брать из макро */
+  horizonCustom?: boolean;
+  /** true — доходность задана вручную, не брать из активов */
+  returnScheduleCustom?: boolean;
 };
 
 export type InvestmentPlan = {

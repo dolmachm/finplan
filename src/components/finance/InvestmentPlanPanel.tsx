@@ -31,11 +31,7 @@ import {
   runIPlanMonteCarlo,
   runIPlanProjection,
 } from "@/modules/iplan/iplan.engine";
-import {
-  toBudgetLines,
-  validateContributionsVsBudget,
-} from "@/modules/iplan/budget";
-import { envelopeReserveBudgetLine } from "@/modules/budget/envelopes";
+import { buildIPlanBudget, validateContributionsVsBudget } from "@/modules/iplan/budget";
 import type {
   IPlanDistribution,
   IPlanMcResult,
@@ -44,7 +40,7 @@ import type {
   IPlanVariant,
   InvestmentPlan,
 } from "@/modules/iplan/types";
-import type { Asset, BudgetCategory, Expense, Income } from "@/shared/types";
+import type { Asset, BudgetCategory, Expense, Income, Liability } from "@/shared/types";
 import { ChangeHistoryPanel } from "@/components/finance/ChangeHistoryPanel";
 import { ScoreCard } from "@/components/finance/ScoreCard";
 import type { HomeDashboardInput } from "@/modules/dashboard/insights";
@@ -80,6 +76,7 @@ type ApiPayload = {
   suggestedVolatilityPct: number;
   incomes: Income[];
   expenses: Expense[];
+  liabilities?: Liability[];
   budgetCategories?: BudgetCategory[];
   surplusMonthly: number;
   surplusAnnual: number;
@@ -132,6 +129,7 @@ export function InvestmentPlanPanel({
         suggestedVolatilityPct: json.suggestedVolatilityPct ?? 15,
         incomes: json.incomes ?? [],
         expenses: json.expenses ?? [],
+        liabilities: json.liabilities ?? [],
         budgetCategories: json.budgetCategories,
         surplusMonthly: json.surplusMonthly ?? 0,
         surplusAnnual: json.surplusAnnual ?? 0,
@@ -150,18 +148,19 @@ export function InvestmentPlanPanel({
   const activeRaw = plan?.variants.find((v) => v.id === plan.activeVariantId);
   const active = activeRaw ? normalizeVariant(activeRaw) : null;
 
-  const budgetIncomes = useMemo(
-    () => (data ? toBudgetLines(data.incomes) : []),
+  const { budgetIncomes, budgetExpenses } = useMemo(
+    () =>
+      data
+        ? buildIPlanBudget({
+            incomes: data.incomes,
+            expenses: data.expenses,
+            assets: data.assets,
+            liabilities: data.liabilities ?? [],
+            budgetCategories: data.budgetCategories,
+          })
+        : { budgetIncomes: [], budgetExpenses: [] },
     [data],
   );
-  const budgetExpenses = useMemo(() => {
-    if (!data) return [];
-    const reserve = envelopeReserveBudgetLine(
-      data.expenses,
-      data.budgetCategories ?? [],
-    );
-    return toBudgetLines(reserve ? [...data.expenses, reserve] : data.expenses);
-  }, [data]);
 
   const projection = useMemo(() => {
     if (!active || !data) return null;
@@ -246,6 +245,8 @@ export function InvestmentPlanPanel({
         suggestedVolatilityPct: json.suggestedVolatilityPct ?? 15,
         incomes: json.incomes ?? [],
         expenses: json.expenses ?? [],
+        liabilities: json.liabilities ?? [],
+        budgetCategories: json.budgetCategories,
         surplusMonthly: json.surplusMonthly ?? 0,
         surplusAnnual: json.surplusAnnual ?? 0,
       });
@@ -386,6 +387,7 @@ export function InvestmentPlanPanel({
       if (v.returnSchedule.length >= 6) return v;
       return {
         ...v,
+        returnScheduleCustom: true,
         returnSchedule: [
           ...v.returnSchedule,
           {
@@ -649,6 +651,7 @@ export function InvestmentPlanPanel({
                 updateActive((v) => ({
                   ...v,
                   horizonYears: Math.min(100, Math.max(1, Number(e.target.value) || 1)),
+                  horizonCustom: true,
                 }))
               }
             />
@@ -747,6 +750,7 @@ export function InvestmentPlanPanel({
               onClick={() =>
                 updateActive((v) => ({
                   ...v,
+                  returnScheduleCustom: false,
                   returnSchedule: [
                     {
                       fromYear: null,
@@ -774,7 +778,11 @@ export function InvestmentPlanPanel({
                       ...step,
                       fromYear: raw === "" ? null : Number(raw) || null,
                     };
-                    return { ...v, returnSchedule: next };
+                    return {
+                      ...v,
+                      returnScheduleCustom: true,
+                      returnSchedule: next,
+                    };
                   });
                 }}
               />
@@ -786,7 +794,11 @@ export function InvestmentPlanPanel({
                   updateActive((v) => {
                     const next = [...v.returnSchedule];
                     next[idx] = { ...step, ratePct };
-                    return { ...v, returnSchedule: next };
+                    return {
+                      ...v,
+                      returnScheduleCustom: true,
+                      returnSchedule: next,
+                    };
                   });
                 }}
               />
@@ -799,7 +811,11 @@ export function InvestmentPlanPanel({
                   updateActive((v) => {
                     const next = [...v.returnSchedule];
                     next[idx] = { ...step, volatilityPct };
-                    return { ...v, returnSchedule: next };
+                    return {
+                      ...v,
+                      returnScheduleCustom: true,
+                      returnSchedule: next,
+                    };
                   });
                 }}
               />
@@ -809,6 +825,7 @@ export function InvestmentPlanPanel({
                 onClick={() =>
                   updateActive((v) => ({
                     ...v,
+                    returnScheduleCustom: true,
                     returnSchedule: v.returnSchedule.filter((_, i) => i !== idx),
                   }))
                 }
@@ -905,14 +922,14 @@ export function InvestmentPlanPanel({
       </Card>
 
       <StreamsEditor
-        title="Инвестиционные ресурсы (взносы ≤ профицит)"
+        title="Взносы из профицита (данные не дублируются)"
         streams={active.contributions}
         surplusMonthly={data.surplusMonthly}
         onChange={(contributions) => updateActive((v) => ({ ...v, contributions }))}
         onAdd={() => addStream("contributions")}
       />
       <StreamsEditor
-        title="Инвестиционные цели (до 9)"
+        title="Цели — как на вкладке «Цели»"
         streams={active.goals}
         onChange={(goals) => updateActive((v) => ({ ...v, goals }))}
         onAdd={() => addStream("goals")}
@@ -1124,7 +1141,12 @@ function StreamsEditor({
   return (
     <Card className="space-y-4">
       <div className="flex items-center justify-between">
-        <h2 className="font-medium">{title}</h2>
+        <div>
+          <h2 className="font-medium">{title}</h2>
+          <p className="mt-1 text-xs text-muted">
+            Суммы и сроки связанных строк берутся из «Данных» и «Целей».
+          </p>
+        </div>
         {streams.length < 9 && (
           <Button type="button" variant="secondary" onClick={onAdd}>
             + Строка
@@ -1132,7 +1154,8 @@ function StreamsEditor({
         )}
       </div>
       {streams.map((s, idx) => {
-        const locked = s.linkedEntityId === "__surplus__";
+        const locked = Boolean(s.linkedEntityId);
+        const fromGoals = locked && s.linkedEntityId !== "__surplus__";
         return (
           <div
             key={s.id}
@@ -1144,7 +1167,12 @@ function StreamsEditor({
                 checked={s.enabled}
                 onChange={(e) => patch(s.id, { enabled: e.target.checked })}
               />
-              {idx + 1}. {locked ? "из профицита (сквозной)" : "активна"}
+              {idx + 1}.{" "}
+              {s.linkedEntityId === "__surplus__"
+                ? "из профицита (сквозной)"
+                : fromGoals
+                  ? "из цели (сквозной)"
+                  : "активна"}
             </label>
             <Input
               className="sm:col-span-2"
@@ -1186,6 +1214,7 @@ function StreamsEditor({
             <Input
               type="number"
               value={s.startYear}
+              disabled={locked}
               onChange={(e) =>
                 patch(s.id, { startYear: Number(e.target.value) || s.startYear })
               }
@@ -1193,6 +1222,7 @@ function StreamsEditor({
             <Input
               type="number"
               value={s.endYear}
+              disabled={locked}
               onChange={(e) =>
                 patch(s.id, { endYear: Number(e.target.value) || s.endYear })
               }

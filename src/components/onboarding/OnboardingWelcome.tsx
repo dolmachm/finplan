@@ -1,8 +1,10 @@
 "use client";
 
+import Link from "next/link";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { StageLearningCard } from "@/components/onboarding/StageLearningCard";
 
 const PATH = [
   {
@@ -81,59 +83,74 @@ export function OnboardingWelcome({
             Пропустить
           </Button>
         </div>
+        <p className="mt-4 text-xs text-muted">
+          Быстро разобраться:{" "}
+          <Link href="/faq#stage-welcome" className="font-medium text-brand hover:underline">
+            FAQ для старта
+          </Link>{" "}
+          и{" "}
+          <Link href="/how-it-works" className="font-medium text-brand hover:underline">
+            как считаются результаты
+          </Link>
+          .
+        </p>
       </Card>
     );
   }
 
   return (
-    <Card className="overflow-hidden border-brand/20">
-      <p className="text-xs font-medium uppercase tracking-wide text-brand">
+    <div className="space-y-4">
+      <Card className="overflow-hidden border-brand/20">
+        <p className="text-xs font-medium uppercase tracking-wide text-brand">
           Шаг за шагом
-      </p>
-      <h2 className="mt-2 text-xl font-semibold tracking-tight sm:text-2xl">
-        Сначала заполним данные, затем откроем план
-      </h2>
-      <p className="mt-2 max-w-xl text-sm text-muted">
-        Идите по порядку — после каждого блока подскажем, куда дальше.
-      </p>
+        </p>
+        <h2 className="mt-2 text-xl font-semibold tracking-tight sm:text-2xl">
+          Сначала заполним данные, затем откроем план
+        </h2>
+        <p className="mt-2 max-w-xl text-sm text-muted">
+          Идите по порядку — после каждого блока подскажем, куда дальше.
+        </p>
 
-      <ol className="mt-6 grid gap-3 sm:grid-cols-2">
-        {PATH.map((step) => (
-          <li
-            key={step.n}
-            className="flex gap-3 rounded-xl border border-border bg-background/60 p-3"
-          >
-            <span
-              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-brand text-sm font-semibold text-white"
-              aria-hidden
+        <ol className="mt-6 grid gap-3 sm:grid-cols-2">
+          {PATH.map((step) => (
+            <li
+              key={step.n}
+              className="flex gap-3 rounded-xl border border-border bg-background/60 p-3"
             >
-              {step.n}
-            </span>
-            <div>
-              <p className="text-sm font-medium">{step.title}</p>
-              <p className="mt-0.5 text-xs leading-relaxed text-muted">
-                {step.text}
-              </p>
-            </div>
-          </li>
-        ))}
-      </ol>
+              <span
+                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-brand text-sm font-semibold text-white"
+                aria-hidden
+              >
+                {step.n}
+              </span>
+              <div>
+                <p className="text-sm font-medium">{step.title}</p>
+                <p className="mt-0.5 text-xs leading-relaxed text-muted">
+                  {step.text}
+                </p>
+              </div>
+            </li>
+          ))}
+        </ol>
 
-      <div className="mt-8 flex flex-wrap items-center gap-3">
-        <Button type="button" onClick={onStart}>
-          Начать с точки 0
-        </Button>
-        <Button type="button" variant="secondary" onClick={() => setScreen("why")}>
-          Назад
-        </Button>
-        <button
-          type="button"
-          onClick={onSkip}
-          className="text-sm text-muted underline-offset-2 hover:text-foreground hover:underline"
-        >
-          Уже знаком — к главной
-        </button>
-      </div>
-    </Card>
+        <div className="mt-8 flex flex-wrap items-center gap-3">
+          <Button type="button" onClick={onStart}>
+            Начать с точки 0
+          </Button>
+          <Button type="button" variant="secondary" onClick={() => setScreen("why")}>
+            Назад
+          </Button>
+          <button
+            type="button"
+            onClick={onSkip}
+            className="text-sm text-muted underline-offset-2 hover:text-foreground hover:underline"
+          >
+            Уже знаком — к главной
+          </button>
+        </div>
+      </Card>
+
+      <StageLearningCard stage="welcome" />
+    </div>
   );
 }

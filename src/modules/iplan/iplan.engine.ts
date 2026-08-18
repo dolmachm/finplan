@@ -120,6 +120,8 @@ export function normalizeVariant(v: IPlanVariant): IPlanVariant {
     })),
     contributions: v.contributions ?? [],
     goals: v.goals ?? [],
+    horizonCustom: v.horizonCustom,
+    returnScheduleCustom: v.returnScheduleCustom,
   };
 }
 
