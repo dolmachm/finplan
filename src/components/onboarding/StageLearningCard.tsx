@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { Card } from "@/components/ui/card";
+import { CollapsibleSection } from "@/components/ui/CollapsibleSection";
 import type { LearningStageId } from "@/content/help";
 import { STAGE_LEARNING } from "@/content/help";
 
@@ -14,20 +15,26 @@ const HOW_IT_WORKS_TARGET: Partial<Record<LearningStageId, string>> = {
 export function StageLearningCard({
   stage,
   compact = false,
+  bare = false,
 }: {
   stage: LearningStageId;
   compact?: boolean;
+  bare?: boolean;
 }) {
   const content = STAGE_LEARNING[stage];
   const faqHref = `/faq#stage-${stage}`;
   const howItWorksHref = HOW_IT_WORKS_TARGET[stage] ?? "/how-it-works";
 
-  return (
-    <Card className={compact ? "!p-4" : ""}>
-      <p className="text-xs font-medium uppercase tracking-wide text-brand">
-        {content.eyebrow}
-      </p>
-      <h3 className="mt-1 font-medium text-foreground">{content.title}</h3>
+  const inner = (
+    <>
+      {!bare && (
+        <p className="text-xs font-medium uppercase tracking-wide text-brand">
+          {content.eyebrow}
+        </p>
+      )}
+      <h3 className={bare ? "font-medium text-foreground" : "mt-1 font-medium text-foreground"}>
+        {content.title}
+      </h3>
       <p className="mt-2 text-sm leading-relaxed text-muted">{content.summary}</p>
 
       <div className="mt-4 grid gap-4 lg:grid-cols-[1.2fr_1fr]">
@@ -87,6 +94,30 @@ export function StageLearningCard({
           Как это считается
         </Link>
       </div>
-    </Card>
+    </>
+  );
+
+  if (bare) return inner;
+  return <Card className={compact ? "!p-4" : ""}>{inner}</Card>;
+}
+
+/** Полный блок сверху только на первом проходе; иначе — свёрнутый раздел внизу. */
+export function StageHelp({
+  stage,
+  prominent,
+}: {
+  stage: LearningStageId;
+  prominent: boolean;
+}) {
+  if (prominent) return <StageLearningCard stage={stage} compact />;
+
+  return (
+    <CollapsibleSection
+      title="Обучение и FAQ"
+      subtitle="Подсказки по этапу, частые вопросы и сноски"
+      defaultOpen={false}
+    >
+      <StageLearningCard stage={stage} bare />
+    </CollapsibleSection>
   );
 }

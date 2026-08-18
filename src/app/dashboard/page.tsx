@@ -15,7 +15,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { HomeDashboard } from "@/components/finance/HomeDashboard";
-import { StageLearningCard } from "@/components/onboarding/StageLearningCard";
+import { StageHelp } from "@/components/onboarding/StageLearningCard";
 import { StepContinueBar } from "@/components/onboarding/StepContinueBar";
 import { FormError } from "@/components/ui/FormError";
 import { HelpHint } from "@/components/ui/FormField";
@@ -27,6 +27,7 @@ import { apiFetch, apiFetchJson } from "@/shared/api-fetch";
 import { ensureOnlineForWrite } from "@/shared/offline";
 import {
   nextIncompleteStep,
+  stepDoneForSub,
   type DataSub,
 } from "@/modules/dashboard/journey";
 import {
@@ -447,6 +448,9 @@ function DashboardPageInner() {
     setTab("plan");
   }
 
+  const dataHelpProminent = !stepDoneForSub(dataSub, journeySteps);
+  const planHelpProminent = journeySteps.completenessPct === 0;
+
   return (
     <DashboardShell
       tab={tab}
@@ -493,7 +497,7 @@ function DashboardPageInner() {
             <p className="text-muted">Загрузка плана…</p>
           ) : viewScenarioId ? (
             <div className="space-y-4">
-              <StageLearningCard stage="plan" compact />
+              {planHelpProminent ? <StageHelp stage="plan" prominent /> : null}
               <PlanWorkspace
                 section={planSub}
                 insightsInput={homeInput}
@@ -510,6 +514,9 @@ function DashboardPageInner() {
                 simError={simError}
                 onRunSimulation={runSimulation}
               />
+              {!planHelpProminent ? (
+                <StageHelp stage="plan" prominent={false} />
+              ) : null}
             </div>
           ) : null}
         </div>
@@ -540,20 +547,19 @@ function DashboardPageInner() {
             <p className="text-muted">Загрузка данных…</p>
           ) : (
             <>
+              {dataHelpProminent ? (
+                <StageHelp stage={dataSub} prominent />
+              ) : null}
               {(dataSub === "balance" || dataSub === "cashflow") && (
-                <div className="space-y-6">
-                  <StageLearningCard stage={dataSub} compact />
-                  <FinanceDataPanel
-                    mode={dataSub}
-                    onQuickAdd={quickAddAsset}
-                    addingAsset={addingAsset}
-                    score={score}
-                  />
-                </div>
+                <FinanceDataPanel
+                  mode={dataSub}
+                  onQuickAdd={quickAddAsset}
+                  addingAsset={addingAsset}
+                  score={score}
+                />
               )}
               {dataSub === "goals" && (
                 <div className="space-y-6">
-                  <StageLearningCard stage="goals" compact />
                   <div>
                     <p className="text-xs font-medium uppercase tracking-wide text-muted">
                       Шаг 3 · Цели и горизонт
@@ -572,6 +578,9 @@ function DashboardPageInner() {
                 onGoSub={setDataSub}
                 onGoPlan={goPlan}
               />
+              {!dataHelpProminent ? (
+                <StageHelp stage={dataSub} prominent={false} />
+              ) : null}
             </>
           )}
         </div>
