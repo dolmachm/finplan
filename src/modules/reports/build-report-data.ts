@@ -59,10 +59,10 @@ export type PdfReportData = {
 };
 
 const ACHIEVABILITY_LABEL: Record<string, string> = {
-  max: "макс.",
-  desired: "желаемая",
-  min: "мин.",
-  none: "недостижима",
+  max: "с запасом",
+  desired: "хватит к сроку",
+  min: "только минимум",
+  none: "пока не хватит",
 };
 
 type BuildInput = {

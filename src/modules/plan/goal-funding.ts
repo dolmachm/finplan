@@ -49,6 +49,7 @@ export function analyzeGoalFunding(
   const inflation = plan.baseInflationPct;
   const sorted = [...plan.goals].sort((a, b) => a.priority - b.priority);
   const reservations: Array<{ monthIndex: number; amount: number }> = [];
+  const planDeficit = avgMonthlySurplus < -1;
   let remainingSurplus = Math.max(0, avgMonthlySurplus);
   const results: GoalFundingResult[] = [];
 
@@ -113,8 +114,10 @@ export function analyzeGoalFunding(
       remainingSurplus = Math.max(0, remainingSurplus - allocated);
 
       const fundedWealth = availableAtTarget + allocated * monthsToGoal;
-      const achievability =
-        fundedWealth >= inflationAdjustedMax - 1
+      const cashShort = planDeficit || allocated + 1 < requiredMonthlyMin;
+      const achievability = cashShort
+        ? "none"
+        : fundedWealth >= inflationAdjustedMax - 1
           ? "max"
           : fundedWealth >= inflationAdjustedDesired - 1
             ? "desired"
@@ -176,16 +179,14 @@ export function analyzeGoalFunding(
       });
     }
 
-    const fundedWealth =
-      availableAtTarget + allocated * monthsToGoal;
-    const achievability =
-      coverRatio >= 0.999 && totalInflatedStages >= inflationAdjustedMax * 0.99
-        ? "max"
-        : coverRatio >= 0.999
-          ? "desired"
-          : fundedWealth >= inflationAdjustedMin - 1 || coverRatio >= 0.8
-            ? "min"
-            : "none";
+    const cashShort = planDeficit || coverRatio < 0.8;
+    const achievability = cashShort
+      ? "none"
+      : coverRatio < 0.999
+        ? "min"
+        : totalInflatedStages >= inflationAdjustedMax * 0.99
+          ? "max"
+          : "desired";
 
     results.push({
       goalId: g.id,

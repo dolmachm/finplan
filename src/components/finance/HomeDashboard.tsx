@@ -123,7 +123,7 @@ export function HomeDashboard({
         <ReadyBanner onNavigate={onNavigate} />
       )}
 
-      <ScoreCard score={score} mode="overall" />
+      <ScoreCard score={score} mode="overall" onNavigate={onNavigate} />
       <SummaryGrid metrics={metrics} />
 
       <div ref={sentinelRef} aria-hidden className="h-px" />
@@ -217,7 +217,7 @@ function BelowFold({
   const actions = topActions(all);
   const insights = all.filter((i) => i.kind === "insight").slice(0, 6);
   const recs = all.filter((i) => i.kind === "recommendation").slice(0, 6);
-  const showAdvice = score.status !== "empty";
+  const showAdvice = score.status === "ready" || score.status === "stale";
 
   return (
     <>

@@ -254,8 +254,10 @@ export function buildInsights(
   m: DashboardMetrics,
   score?: Pick<FinancialScore, "status" | "missingSteps"> | null,
 ): DashboardInsight[] {
-  // Fill/stale CTAs live in ScoreCard — no insights when profile is empty.
-  if (score?.status === "empty") return [];
+  // Fill/stale CTAs live in ScoreCard — no insights until the profile is complete.
+  if (!score || score.status === "empty" || score.status === "incomplete") {
+    return [];
+  }
 
   const insights: DashboardInsight[] = [];
   const recs: DashboardInsight[] = [];

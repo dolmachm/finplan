@@ -27,6 +27,7 @@ import type {
   AssetClass,
   AssetType,
   BudgetCategory,
+  BudgetCategoryKind,
   Expense,
   Income,
   Liability,
@@ -44,9 +45,11 @@ import { useFinanceStore } from "@/modules/finance/finance-store";
 import { activeLiabilities } from "@/modules/finance/liability-status";
 import { EnvelopeBars } from "@/components/finance/EnvelopeOverview";
 import { CategoryCatalogPicker } from "@/components/finance/CategoryCatalogPicker";
+import { topFrequentCategories } from "@/shared/category-catalog";
 import { LoanCalculator } from "@/components/finance/LoanCalculator";
 import { DebtPayoffStrategies } from "@/components/finance/DebtPayoffStrategies";
 import { ScoreCard } from "@/components/finance/ScoreCard";
+import { SubNav } from "@/components/ui/SubNav";
 import {
   PortfolioHoldingsEditor,
   draftsToHoldings,
@@ -61,6 +64,8 @@ type EditView =
   | { kind: "asset" | "income" | "expense" | "liability"; id?: string }
   | null;
 
+type WealthSubPage = "accounts" | "assets" | "liabilities";
+
 function editModalTitle(view: NonNullable<EditView>): string {
   const isNew = !view.id;
   switch (view.kind) {
@@ -73,6 +78,55 @@ function editModalTitle(view: NonNullable<EditView>): string {
     case "expense":
       return isNew ? "Добавить расход" : "Редактировать расход";
   }
+}
+
+function CategorySelect({
+  id,
+  kind,
+  value,
+  onChange,
+  categories,
+  lines,
+}: {
+  id: string;
+  kind: BudgetCategoryKind;
+  value: string;
+  onChange: (v: string) => void;
+  categories: BudgetCategory[];
+  lines: Array<{ category?: string | null }>;
+}) {
+  const ofKind = categories.filter((c) => c.kind === kind);
+  const top = topFrequentCategories(kind, ofKind, lines);
+  const topIds = new Set(top.map((c) => c.id));
+  const rest = ofKind.filter((c) => !topIds.has(c.id));
+  return (
+    <select
+      id={id}
+      className={selectClass}
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+    >
+      <option value="general">Без категории</option>
+      {top.length > 0 && (
+        <optgroup label="Ваш топ-5">
+          {top.map((c) => (
+            <option key={c.id} value={c.id}>
+              {c.name}
+            </option>
+          ))}
+        </optgroup>
+      )}
+      {rest.length > 0 && (
+        <optgroup label="Все категории">
+          {rest.map((c) => (
+            <option key={c.id} value={c.id}>
+              {c.name}
+            </option>
+          ))}
+        </optgroup>
+      )}
+    </select>
+  );
 }
 
 export type FinanceDataStatus = {
@@ -104,6 +158,7 @@ export function FinanceDataPanel({
     remove: removeEntity,
   } = useFinanceStore();
   const [editView, setEditView] = useState<EditView>(null);
+  const [wealthSubPage, setWealthSubPage] = useState<WealthSubPage>("accounts");
 
   useEffect(() => {
     setEditView(null);
@@ -151,6 +206,11 @@ export function FinanceDataPanel({
   const activeDebts = activeLiabilities(liabilities);
   const archivedDebts = liabilities.filter((l) => !activeLiabilities([l]).length);
   const debtTotal = activeDebts.reduce((s, l) => s + l.remainingBalance, 0);
+  const accountAssetTypes = new Set<AssetType>(["CASH", "BANK_ACCOUNT", "DEPOSIT"]);
+  const accountAssets = assets.filter((a) => accountAssetTypes.has(a.type));
+  const investmentAssets = assets.filter((a) => !accountAssetTypes.has(a.type));
+  const accountAssetsTotal = accountAssets.reduce((s, a) => s + a.currentValue, 0);
+  const investmentAssetsTotal = investmentAssets.reduce((s, a) => s + a.currentValue, 0);
   const categoryName = (id: string) =>
     categories.find((c) => c.id === id)?.name ?? (id === "general" ? "Без категории" : id);
 
@@ -194,7 +254,7 @@ export function FinanceDataPanel({
               Активы: <strong>{formatRub(assetsTotal)}</strong>
             </span>
             <span>
-              Пассивы: <strong>{formatRub(debtTotal)}</strong>
+              Обязательства: <strong>{formatRub(debtTotal)}</strong>
             </span>
             <span>
               Чистые активы: <strong>{formatRub(assetsTotal - debtTotal)}</strong>
@@ -213,46 +273,156 @@ export function FinanceDataPanel({
           </div>
         </Card>
 
+        <SubNav
+          items={[
+            { id: "accounts", label: "Счета" },
+            { id: "assets", label: "Активы" },
+            { id: "liabilities", label: "Обязательства" },
+          ]}
+          value={wealthSubPage}
+          onChange={setWealthSubPage}
+        />
+
         {loading ? (
           <p className="text-muted">Загрузка…</p>
         ) : (
           <>
-            <DataTable
-              title="Активы и счета"
-              empty="Нет активов — добавьте счёт, брокерский портфель или другое"
-              columns={["Название", "Тип", "Класс", "Стоимость", "Доход/мес"]}
-              items={assets.map((a) => ({
-                id: a.id,
-                cells: [
-                  a.name,
-                  assetTypeLabel(a.type),
-                  ASSET_CLASS_LABELS[(a.assetClass as AssetClass) ?? "PERSONAL"],
-                  formatRub(a.currentValue),
-                  a.dividendIncomeMonthly ? formatRub(a.dividendIncomeMonthly) : "—",
-                ],
-              }))}
-              onEdit={(id) => setEditView({ kind: "asset", id })}
-              onDelete={(id) => remove("asset", id)}
-            />
-            <DataTable
-              title="Пассивы"
-              empty="Нет пассивов — добавьте ипотеку, кредит или карту при наличии"
-              columns={["Название", "Тип", "Срочность", "Остаток", "Ставка %", "Платёж/мес"]}
-              items={activeDebts.map((l) => ({
-                id: l.id,
-                cells: [
-                  l.name,
-                  liabilityTypeLabel(l.type),
-                  liabilityUrgencyLabel(l.urgency ?? "MEDIUM"),
-                  formatRub(l.remainingBalance),
-                  String(l.interestRatePct),
-                  formatRub(l.monthlyPayment),
-                ],
-              }))}
-              onEdit={(id) => setEditView({ kind: "liability", id })}
-              onDelete={(id) => remove("liability", id)}
-            />
-            {archivedDebts.length > 0 && (
+            {wealthSubPage === "accounts" && (
+              <>
+                <Card>
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div>
+                      <p className="text-xs font-medium uppercase tracking-wide text-muted">
+                        Подстраница · Счета
+                      </p>
+                      <h3 className="mt-1 font-medium">Ликвидные счета и резервы</h3>
+                      <HelpHint className="mt-1">
+                        Наличные, банковские счета и вклады для оперативного доступа к деньгам.
+                      </HelpHint>
+                    </div>
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      onClick={() => setEditView({ kind: "asset" })}
+                    >
+                      + Счёт
+                    </Button>
+                  </div>
+                  <div className="mt-4 text-sm">
+                    На счетах: <strong>{formatRub(accountAssetsTotal)}</strong>
+                  </div>
+                </Card>
+                <DataTable
+                  title="Счета"
+                  empty="Нет счетов — добавьте наличные, банковский счёт или вклад"
+                  columns={["Название", "Тип", "Класс", "Стоимость", "Доход/мес"]}
+                  items={accountAssets.map((a) => ({
+                    id: a.id,
+                    cells: [
+                      a.name,
+                      assetTypeLabel(a.type),
+                      ASSET_CLASS_LABELS[(a.assetClass as AssetClass) ?? "PERSONAL"],
+                      formatRub(a.currentValue),
+                      a.dividendIncomeMonthly ? formatRub(a.dividendIncomeMonthly) : "—",
+                    ],
+                  }))}
+                  onEdit={(id) => setEditView({ kind: "asset", id })}
+                  onDelete={(id) => remove("asset", id)}
+                />
+              </>
+            )}
+            {wealthSubPage === "assets" && (
+              <>
+                <Card>
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div>
+                      <p className="text-xs font-medium uppercase tracking-wide text-muted">
+                        Подстраница · Активы
+                      </p>
+                      <h3 className="mt-1 font-medium">Инвестиции и имущество</h3>
+                      <HelpHint className="mt-1">
+                        Портфели, недвижимость, авто и другие активы, влияющие на капитал.
+                      </HelpHint>
+                    </div>
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      onClick={() => setEditView({ kind: "asset" })}
+                    >
+                      + Актив
+                    </Button>
+                  </div>
+                  <div className="mt-4 text-sm">
+                    Стоимость активов: <strong>{formatRub(investmentAssetsTotal)}</strong>
+                  </div>
+                </Card>
+                <DataTable
+                  title="Активы"
+                  empty="Нет активов — добавьте брокерский счёт, недвижимость или другое имущество"
+                  columns={["Название", "Тип", "Класс", "Стоимость", "Доход/мес"]}
+                  items={investmentAssets.map((a) => ({
+                    id: a.id,
+                    cells: [
+                      a.name,
+                      assetTypeLabel(a.type),
+                      ASSET_CLASS_LABELS[(a.assetClass as AssetClass) ?? "PERSONAL"],
+                      formatRub(a.currentValue),
+                      a.dividendIncomeMonthly ? formatRub(a.dividendIncomeMonthly) : "—",
+                    ],
+                  }))}
+                  onEdit={(id) => setEditView({ kind: "asset", id })}
+                  onDelete={(id) => remove("asset", id)}
+                />
+              </>
+            )}
+            {wealthSubPage === "liabilities" && (
+              <>
+                <Card>
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div>
+                      <p className="text-xs font-medium uppercase tracking-wide text-muted">
+                        Подстраница · Обязательства
+                      </p>
+                      <h3 className="mt-1 font-medium">Кредиты, ипотека и долги</h3>
+                      <HelpHint className="mt-1">
+                        Ведите обязательства отдельно и сразу оценивайте платёж и стратегию погашения.
+                      </HelpHint>
+                    </div>
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      onClick={() => setEditView({ kind: "liability" })}
+                    >
+                      + Обязательство
+                    </Button>
+                  </div>
+                  <div className="mt-4 text-sm">
+                    Остаток обязательств: <strong>{formatRub(debtTotal)}</strong>
+                  </div>
+                </Card>
+                <DataTable
+                  title="Обязательства"
+                  empty="Нет обязательств — добавьте ипотеку, кредит или карту при наличии"
+                  columns={["Название", "Тип", "Срочность", "Остаток", "Ставка %", "Платёж/мес"]}
+                  items={activeDebts.map((l) => ({
+                    id: l.id,
+                    cells: [
+                      l.name,
+                      liabilityTypeLabel(l.type),
+                      liabilityUrgencyLabel(l.urgency ?? "MEDIUM"),
+                      formatRub(l.remainingBalance),
+                      String(l.interestRatePct),
+                      formatRub(l.monthlyPayment),
+                    ],
+                  }))}
+                  onEdit={(id) => setEditView({ kind: "liability", id })}
+                  onDelete={(id) => remove("liability", id)}
+                />
+                <LoanCalculator />
+                <DebtPayoffStrategies liabilities={liabilities} />
+              </>
+            )}
+            {wealthSubPage === "liabilities" && archivedDebts.length > 0 && (
               <DataTable
                 title="Архив обязательств"
                 empty=""
@@ -272,8 +442,6 @@ export function FinanceDataPanel({
                 onDelete={(id) => remove("liability", id)}
               />
             )}
-            <LoanCalculator />
-            <DebtPayoffStrategies liabilities={liabilities} />
           </>
         )}
       </div>
@@ -509,6 +677,7 @@ function ItemEditor({
       <IncomeEditor
         existing={existing}
         categories={categories}
+        incomes={incomes}
         onBack={onBack}
         onSaved={onSaved}
       />
@@ -519,6 +688,7 @@ function ItemEditor({
     <ExpenseEditor
       existing={existing}
       categories={categories}
+      expenses={expenses}
       onBack={onBack}
       onSaved={onSaved}
     />
@@ -804,11 +974,13 @@ function AssetEditor({
 function IncomeEditor({
   existing,
   categories,
+  incomes,
   onBack,
   onSaved,
 }: {
   existing?: Income;
   categories: BudgetCategory[];
+  incomes: Income[];
   onBack: () => void;
   onSaved: () => void | Promise<void>;
 }) {
@@ -895,25 +1067,14 @@ function IncomeEditor({
           </select>
         </FormField>
         <FormField label="Категория" htmlFor="income-category" hint="Из каталога доходов">
-          <select
+          <CategorySelect
             id="income-category"
-            className={selectClass}
+            kind="income"
             value={category}
-            onChange={(e) => setCategory(e.target.value)}
-          >
-            {incomeCategories.length === 0 ? (
-              <option value="general">Без категории</option>
-            ) : (
-              <>
-                <option value="general">Без категории</option>
-                {incomeCategories.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.name}
-                  </option>
-                ))}
-              </>
-            )}
-          </select>
+            onChange={setCategory}
+            categories={categories}
+            lines={incomes}
+          />
         </FormField>
       </div>
       <details className="mt-4">
@@ -953,11 +1114,13 @@ function IncomeEditor({
 function ExpenseEditor({
   existing,
   categories,
+  expenses,
   onBack,
   onSaved,
 }: {
   existing?: Expense;
   categories: BudgetCategory[];
+  expenses: Expense[];
   onBack: () => void;
   onSaved: () => void | Promise<void>;
 }) {
@@ -1040,22 +1203,14 @@ function ExpenseEditor({
           </select>
         </FormField>
         <FormField label="Категория" htmlFor="expense-category" hint="Для конверта бюджета">
-          <select
+          <CategorySelect
             id="expense-category"
-            className={selectClass}
+            kind="expense"
             value={category}
-            onChange={(e) => setCategory(e.target.value)}
-          >
-            {expenseCategories.length === 0 ? (
-              <option value="general">Без категории</option>
-            ) : (
-              expenseCategories.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.name}
-                </option>
-              ))
-            )}
-          </select>
+            onChange={setCategory}
+            categories={categories}
+            lines={expenses}
+          />
         </FormField>
       </div>
       <details className="mt-4">
@@ -1425,6 +1580,8 @@ function BudgetEnvelopesPanel({
         {showCatalog && (
           <CategoryCatalogPicker
             userCategories={categories}
+            expenses={expenses}
+            incomes={incomes}
             onAdded={(row) => upsert("budgetCategories", row)}
           />
         )}

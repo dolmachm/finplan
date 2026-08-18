@@ -43,10 +43,10 @@ type StageDraft = {
 };
 
 const ACHIEVE_LABEL: Record<GoalFundingResult["achievability"], string> = {
-  max: "Максимум достижим",
-  desired: "Желаемая достижима",
-  min: "Только минимум",
-  none: "Недостижима при текущем плане",
+  max: "С запасом — даже больше цели",
+  desired: "Цели хватит к сроку",
+  min: "Хватит только на минимум",
+  none: "Нет денег на цель",
 };
 
 const ACHIEVE_CLASS: Record<GoalFundingResult["achievability"], string> = {
@@ -143,8 +143,9 @@ export function GoalsPanel({
           <div>
             <h3 className="font-medium">Финансовые цели</h3>
             <HelpHint className="mt-1">
-              {FEATURE_HINTS.goalsStep} Приоритет 1 финансируется первым; взносы и
-              достижимость считаются с учётом профицита и других целей.
+              {FEATURE_HINTS.goalsStep} Для каждой цели можно выбрать: копить
+              полностью, взять кредит или сначала накопить часть суммы, а потом
+              взять кредит. Приоритет 1 финансируется первым.
             </HelpHint>
           </div>
           <Button type="button" variant="secondary" onClick={() => setEditView({})}>
@@ -222,22 +223,27 @@ function GoalsBudgetBanner({
     }),
   );
   const summary = summarizeGoalsBudget(analyses, avgSurplus);
+  const inMinus = !summary.budgetOk;
   return (
     <Card
       className={
-        summary.budgetOk
-          ? "!p-3 border-emerald-200 bg-emerald-50/50"
-          : "!p-3 border-amber-200 bg-amber-50/50"
+        inMinus
+          ? "!p-3 border-red-300 bg-red-50"
+          : " !p-3 border-emerald-200 bg-emerald-50/50"
       }
     >
-      <p className="text-xs font-medium uppercase tracking-wide text-muted">
-        Бюджет и цели
+      <p className={`text-xs font-medium uppercase tracking-wide ${inMinus ? "text-red-700" : "text-muted"}`}>
+        {inMinus ? "План в минусе" : "Бюджет и цели"}
       </p>
-      <p className="mt-1 text-sm">{summary.advice}</p>
-      <p className="mt-1 text-xs text-muted">
-        Взносы по выбранным путям: {formatRub(summary.requiredMonthly)}/мес ·
-        профицит плана: {formatRub(summary.surplusMonthly)}/мес · остаток:{" "}
-        {formatRub(summary.remainingMonthly)}/мес
+      <p className={`mt-1 text-sm ${inMinus ? "font-medium text-red-800" : ""}`}>
+        {summary.advice}
+      </p>
+      <p className={`mt-1 text-xs ${inMinus ? "text-red-700" : "text-muted"}`}>
+        Взносы: {formatRub(summary.requiredMonthly)}/мес · свободно:{" "}
+        {formatRub(summary.surplusMonthly)}/мес · остаток:{" "}
+        <span className={inMinus ? "font-semibold" : ""}>
+          {formatRub(summary.remainingMonthly)}/мес
+        </span>
       </p>
     </Card>
   );
@@ -259,7 +265,6 @@ function GoalCard({
   onSavePaths: (ps: GoalPathSettings) => void | Promise<void>;
 }) {
   const stages = goal.stages ?? [];
-  const achieve = funding?.achievability;
   const monthsToGoal = funding?.monthsToGoal ?? 12;
   const [draft, setDraft] = useState(() =>
     normalizePathSettings(goal.pathSettings, monthsToGoal),
@@ -277,6 +282,8 @@ function GoalCard({
     funding,
     settings: draft,
   });
+  const inMinus = !analysis.budget.budgetOk;
+  const achieve = inMinus ? "none" : funding?.achievability;
 
   async function persist(next: GoalPathSettings) {
     setDraft(next);
@@ -289,7 +296,7 @@ function GoalCard({
   }
 
   return (
-    <Card className="!p-4 space-y-3">
+    <Card className={`!p-4 space-y-3 ${inMinus ? "border-red-300" : ""}`}>
       <div className="flex items-start justify-between gap-2">
         <div>
           <p className="text-xs text-muted">

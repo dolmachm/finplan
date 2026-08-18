@@ -1,15 +1,22 @@
 "use client";
 
 import { useState } from "react";
+import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { HelpHint } from "@/components/ui/FormField";
+import type { DashboardTab } from "@/components/layout/DashboardShell";
+import type { DataSub } from "@/modules/dashboard/journey";
 import type {
   FinancialScore,
   ScoreBlock,
   ScoreBlockId,
   ScoreGradeId,
 } from "@/modules/dashboard/scoring";
-import { blockCta, getScoreBlock } from "@/modules/dashboard/scoring";
+import {
+  blockCta,
+  getScoreBlock,
+  scoreIsPending,
+} from "@/modules/dashboard/scoring";
 
 const gradeAccent: Record<ScoreGradeId, string> = {
   perfect: "text-emerald-700",
@@ -20,24 +27,39 @@ const gradeAccent: Record<ScoreGradeId, string> = {
   critical: "text-red-700",
 };
 
-function StatusBanner({
+function ScoreCta({
   score,
   blockId,
+  onNavigate,
 }: {
   score: FinancialScore;
   blockId?: ScoreBlockId;
+  onNavigate?: (tab: DashboardTab, opts?: { dataSub?: DataSub }) => void;
 }) {
   if (score.status === "ready") return null;
   const text = blockId ? blockCta(blockId, score) || score.cta : score.cta;
   if (!text) return null;
   const tone =
-    score.status === "empty"
-      ? "border-border bg-muted/40 text-muted"
-      : score.status === "stale"
-        ? "border-amber-300 bg-amber-50 text-amber-900"
-        : "border-amber-200 bg-amber-50/80 text-amber-900";
+    score.status === "empty" || score.status === "incomplete"
+      ? "border-amber-200 bg-amber-50/80 text-amber-900"
+      : "border-amber-300 bg-amber-50 text-amber-900";
   return (
-    <p className={`mt-2 rounded-md border px-3 py-2 text-xs ${tone}`}>{text}</p>
+    <div className={`mt-3 rounded-md border px-3 py-2 ${tone}`}>
+      <p className="text-xs">{text}</p>
+      {onNavigate && score.ctaLabel && (
+        <Button
+          type="button"
+          className="mt-2 !px-3 !py-1.5 !text-xs"
+          onClick={() =>
+            onNavigate("assets", {
+              dataSub: score.ctaSub ?? "balance",
+            })
+          }
+        >
+          {score.ctaLabel}
+        </Button>
+      )}
+    </div>
   );
 }
 
@@ -80,7 +102,7 @@ function BlockMini({
       : "border-border bg-card hover:bg-muted/30"
   } ${onClick ? "cursor-pointer" : ""}`;
 
-  const value = hideValue ? "—" : block.score.toFixed(0);
+  const value = hideValue ? "0" : block.score.toFixed(0);
 
   if (onClick) {
     return (
@@ -104,14 +126,16 @@ export function ScoreCard({
   mode = "overall",
   blockId = "wealth",
   compact = false,
+  onNavigate,
 }: {
   score: FinancialScore;
   mode?: "overall" | "block";
   blockId?: ScoreBlockId;
   compact?: boolean;
+  onNavigate?: (tab: DashboardTab, opts?: { dataSub?: DataSub }) => void;
 }) {
-  const empty = score.status === "empty" || score.total == null;
-  const [open, setOpen] = useState(!compact && !empty);
+  const pending = scoreIsPending(score);
+  const [open, setOpen] = useState(!compact && !pending);
   const [focus, setFocus] = useState<ScoreBlockId>(blockId);
   const block = getScoreBlock(score, mode === "block" ? blockId : focus);
   const accent = score.grade ? gradeAccent[score.grade.id] : "text-muted";
@@ -122,10 +146,11 @@ export function ScoreCard({
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
             <p className="text-xs text-muted">Скоринг · {block.label}</p>
-            {empty ? (
+            {pending ? (
               <>
                 <p className="mt-0.5 text-2xl font-semibold tabular-nums text-muted">
-                  —
+                  0
+                  <span className="ml-2 text-sm font-normal">/ 100</span>
                 </p>
                 <HelpHint className="mt-1">{block.description}</HelpHint>
               </>
@@ -141,7 +166,7 @@ export function ScoreCard({
               </>
             )}
           </div>
-          {!empty && (
+          {!pending && (
             <button
               type="button"
               className="text-xs text-muted underline-offset-2 hover:underline"
@@ -151,8 +176,8 @@ export function ScoreCard({
             </button>
           )}
         </div>
-        <StatusBanner score={score} blockId={blockId} />
-        {!empty && open && <FactorList block={block} />}
+        <ScoreCta score={score} blockId={blockId} onNavigate={onNavigate} />
+        {!pending && open && <FactorList block={block} />}
       </Card>
     );
   }
@@ -162,16 +187,17 @@ export function ScoreCard({
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <p className="text-xs text-muted">
-            {empty ? "Скоринг недоступен" : "Финансовый скоринг"}
+            {pending ? "Скоринг недоступен" : "Финансовый скоринг"}
           </p>
-          {empty ? (
+          {pending ? (
             <p className="mt-0.5 text-3xl font-semibold tabular-nums text-muted">
-              —
+              0
+              <span className="ml-2 text-sm font-normal">/ 100</span>
             </p>
           ) : (
             <>
               <p className="mt-0.5 text-3xl font-semibold tabular-nums">
-                {score.total!.toFixed(0)}
+                {score.total.toFixed(0)}
                 <span className="ml-2 text-sm font-normal text-muted">
                   / 100
                 </span>
@@ -196,7 +222,7 @@ export function ScoreCard({
             <p className="mt-1 text-[11px] text-muted/80">{score.summary}</p>
           )}
         </div>
-        {!empty && (
+        {!pending && (
           <button
             type="button"
             className="text-xs text-muted underline-offset-2 hover:underline"
@@ -207,17 +233,17 @@ export function ScoreCard({
         )}
       </div>
 
-      <StatusBanner score={score} />
+      <ScoreCta score={score} onNavigate={onNavigate} />
 
       <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
         {score.blocks.map((b) => (
           <BlockMini
             key={b.id}
             block={b}
-            hideValue={empty}
-            active={!empty && focus === b.id}
+            hideValue={pending}
+            active={!pending && focus === b.id}
             onClick={
-              empty
+              pending
                 ? undefined
                 : () => {
                     setFocus(b.id);
@@ -228,7 +254,7 @@ export function ScoreCard({
         ))}
       </div>
 
-      {!empty && open && (
+      {!pending && open && (
         <div className="mt-3">
           <p className="text-xs font-medium">{block.label}</p>
           <HelpHint className="mt-0.5">{block.description}</HelpHint>

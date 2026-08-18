@@ -10,18 +10,28 @@ import {
   groupCatalogEntries,
   isCatalogNameAdded,
   popularNotAdded,
+  topFrequentCategories,
   type CategoryCatalogEntry,
 } from "@/shared/category-catalog";
-import type { BudgetCategory, BudgetCategoryKind } from "@/shared/types";
+import type {
+  BudgetCategory,
+  BudgetCategoryKind,
+  Expense,
+  Income,
+} from "@/shared/types";
 import { readApiError } from "@/shared/api-client";
 import { apiFetch } from "@/shared/api-fetch";
 import { ensureOnlineForWrite } from "@/shared/offline";
 
 export function CategoryCatalogPicker({
   userCategories,
+  expenses = [],
+  incomes = [],
   onAdded,
 }: {
   userCategories: BudgetCategory[];
+  expenses?: Expense[];
+  incomes?: Income[];
   onAdded: (row: BudgetCategory) => void;
 }) {
   const [kind, setKind] = useState<BudgetCategoryKind>("expense");
@@ -32,6 +42,15 @@ export function CategoryCatalogPicker({
   const popular = useMemo(
     () => popularNotAdded(kind, userCategories),
     [kind, userCategories],
+  );
+  const userTop = useMemo(
+    () =>
+      topFrequentCategories(
+        kind,
+        userCategories,
+        kind === "expense" ? expenses : incomes,
+      ),
+    [kind, userCategories, expenses, incomes],
   );
   const filtered = useMemo(
     () => filterCatalog(query, kind),
@@ -114,14 +133,32 @@ export function CategoryCatalogPicker({
           id="cat-search"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder="Жильё, зарплата, транспорт…"
+          placeholder="Продукты, зарплата, транспорт…"
         />
       </FormField>
+
+      {userTop.length > 0 && !query.trim() && (
+        <div>
+          <p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted">
+            Ваш топ-5
+          </p>
+          <div className="flex flex-wrap gap-2">
+            {userTop.map((c) => (
+              <span
+                key={c.id}
+                className="rounded-full border border-border bg-card px-3 py-1 text-sm"
+              >
+                {c.name}
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
 
       {popular.length > 0 && !query.trim() && (
         <div>
           <p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted">
-            Популярные
+            Часто добавляют
           </p>
           <div className="flex flex-wrap gap-2">
             {popular.map((e) => (

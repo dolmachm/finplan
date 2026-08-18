@@ -96,9 +96,12 @@ function buildBudgetAdvice(
   recommended: GoalPathKind,
 ): GoalPathBudget {
   const remaining = surplus - required;
-  const budgetOk = remaining >= -1;
+  const inMinus = remaining < -1 || surplus < -1;
+  const budgetOk = !inMinus;
   let contributionAdvice = "";
-  if (selected.kind === "CAPITAL") {
+  if (inMinus) {
+    contributionAdvice = "На цель нет денег: план уходит в минус.";
+  } else if (selected.kind === "CAPITAL") {
     contributionAdvice = "Дополнительный взнос не нужен — цель покрывается капиталом.";
   } else if (required <= 0) {
     contributionAdvice = "Взнос ≈ 0 ₽/мес при текущих параметрах.";
@@ -110,14 +113,15 @@ function buildBudgetAdvice(
   }
 
   let budgetAdvice = "";
-  if (budgetOk) {
+  if (inMinus) {
     budgetAdvice =
-      remaining > 100
-        ? `Бюджета хватает: после цели останется ≈ ${Math.round(remaining).toLocaleString("ru-RU")} ₽/мес профицита.`
-        : "Бюджет на грани: профицит почти целиком уходит на эту цель.";
+      surplus < -1
+        ? `Доходы меньше расходов на ≈ ${Math.round(Math.abs(surplus)).toLocaleString("ru-RU")} ₽/мес. Пока бюджет в минусе, копить на цель нельзя.`
+        : `Не хватает ≈ ${Math.round(Math.abs(remaining)).toLocaleString("ru-RU")} ₽/мес. Увеличьте доход, сократите расходы или снизьте сумму цели.`;
+  } else if (remaining > 100) {
+    budgetAdvice = `Бюджета хватает: после цели останется ≈ ${Math.round(remaining).toLocaleString("ru-RU")} ₽/мес.`;
   } else {
-    const gap = Math.abs(remaining);
-    budgetAdvice = `Бюджета не хватает ≈ ${Math.round(gap).toLocaleString("ru-RU")} ₽/мес. Увеличьте доход/сократите расходы, смягчите цель или выберите другой путь.`;
+    budgetAdvice = "Бюджет на грани: почти всё свободное уходит на эту цель.";
   }
 
   return {
@@ -144,7 +148,7 @@ export function analyzeGoalPaths(args: {
   const months = Math.max(1, args.monthsToGoal);
   const settings = normalizePathSettings(args.settings, months);
   const amount = Math.max(0, args.targetAmount);
-  const surplus = Math.max(0, args.avgMonthlySurplus);
+  const surplus = args.avgMonthlySurplus;
   const available = args.funding?.availableAtTarget ?? 0;
   const saveMonthly =
     args.funding?.requiredMonthlyDesired ?? amount / months;
@@ -157,14 +161,14 @@ export function analyzeGoalPaths(args: {
     const totalCost = monthly * months;
     options.push({
       kind: "SAVE",
-      label: "Накопления",
+      label: "Копить полностью",
       monthlyOutflow: monthly,
       totalCost,
       months,
       feasible,
       score: feasible ? totalCost : totalCost + 1e12,
       note: feasible
-        ? `Копите ${months} мес. (срок цели)`
+        ? `Откладывайте всю сумму ${months} мес. до срока цели`
         : "Профицита не хватает на нужный взнос",
     });
   }
@@ -176,14 +180,14 @@ export function analyzeGoalPaths(args: {
     const feasible = surplus + 1 >= monthly || monthly <= 0;
     options.push({
       kind: "LOAN",
-      label: "Кредит",
+      label: "Взять кредит",
       monthlyOutflow: monthly,
       totalCost,
       months: n,
       feasible,
       score: feasible ? totalCost : totalCost + 1e12,
       note: feasible
-        ? `Аннуитет ${settings.loanRatePct}% · ${n} мес.${settings.loanTermCustom ? "" : " (= срок цели)"}`
+        ? `Платёж по кредиту: ${settings.loanRatePct}% · ${n} мес.${settings.loanTermCustom ? "" : " (= срок цели)"}`
         : "Платёж выше доступного профицита",
     });
   }
@@ -198,18 +202,18 @@ export function analyzeGoalPaths(args: {
     const feasible = surplus + 1 >= monthly || monthly <= 0;
     options.push({
       kind: "HYBRID",
-      label: "Взнос + кредит",
+      label: "Часть копить, часть в кредит",
       monthlyOutflow: monthly,
       totalCost,
       months: Math.max(months, settings.loanTermMonths),
       feasible,
       score: feasible ? totalCost : totalCost + 1e12,
-      note: `Первый взнос ${settings.downPaymentPct}% за ${months} мес. + кредит`,
+      note: `Сначала копите ${settings.downPaymentPct}% за ${months} мес., затем берёте кредит на остаток`,
     });
   }
 
   {
-    const feasible = available + 1 >= amount;
+    const feasible = available + 1 >= amount && surplus >= -1;
     options.push({
       kind: "CAPITAL",
       label: "Из капитала",
@@ -250,14 +254,16 @@ export function summarizeGoalsBudget(
     0,
   );
   const remaining = surplusMonthly - requiredMonthly;
+  const inMinus = remaining < -1 || surplusMonthly < -1;
   return {
     surplusMonthly,
     requiredMonthly,
     remainingMonthly: remaining,
-    budgetOk: remaining >= -1,
-    advice:
-      remaining >= -1
-        ? `На все выбранные пути нужно ≈ ${Math.round(requiredMonthly).toLocaleString("ru-RU")} ₽/мес при профиците ${Math.round(surplusMonthly).toLocaleString("ru-RU")} ₽ — бюджета хватает (остаток ≈ ${Math.round(remaining).toLocaleString("ru-RU")} ₽/мес).`
-        : `На цели нужно ≈ ${Math.round(requiredMonthly).toLocaleString("ru-RU")} ₽/мес, профицит ${Math.round(surplusMonthly).toLocaleString("ru-RU")} ₽ — нехватка ≈ ${Math.round(Math.abs(remaining)).toLocaleString("ru-RU")} ₽/мес.`,
+    budgetOk: !inMinus,
+    advice: inMinus
+      ? surplusMonthly < -1
+        ? `План в минусе: расходы выше доходов на ≈ ${Math.round(Math.abs(surplusMonthly)).toLocaleString("ru-RU")} ₽/мес. На цели нет свободных денег.`
+        : `План в минусе: на цели нужно ≈ ${Math.round(requiredMonthly).toLocaleString("ru-RU")} ₽/мес, свободно ${Math.round(surplusMonthly).toLocaleString("ru-RU")} ₽ — нехватка ≈ ${Math.round(Math.abs(remaining)).toLocaleString("ru-RU")} ₽/мес.`
+      : `На все выбранные пути нужно ≈ ${Math.round(requiredMonthly).toLocaleString("ru-RU")} ₽/мес при профиците ${Math.round(surplusMonthly).toLocaleString("ru-RU")} ₽ — бюджета хватает (остаток ≈ ${Math.round(remaining).toLocaleString("ru-RU")} ₽/мес).`,
   };
 }

@@ -472,7 +472,11 @@ function UserEditor({
     <Card className="mt-4">
       <div className="flex items-center justify-between">
         <h2 className="font-semibold">{user.email}</h2>
-        <button onClick={onClose} className="text-sm text-muted hover:text-foreground">
+        <button
+          type="button"
+          onClick={onClose}
+          className="text-sm text-muted hover:text-foreground"
+        >
           ✕
         </button>
       </div>

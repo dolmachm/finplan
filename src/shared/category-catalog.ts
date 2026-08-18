@@ -8,119 +8,87 @@ export type CategoryCatalogEntry = {
   popular: boolean;
 };
 
-/** Исчерпывающий статический каталог; в Redis попадают только выбранные пользователем. */
+function e(
+  id: string,
+  kind: BudgetCategoryKind,
+  name: string,
+  group: string,
+  popular = false,
+): CategoryCatalogEntry {
+  return { id, kind, name, group, popular };
+}
+
+/** Статический каталог; в Redis только выбранные пользователем. */
 export const CATEGORY_CATALOG: CategoryCatalogEntry[] = [
-  // ——— Расходы ———
-  { id: "exp-rent", kind: "expense", name: "Аренда жилья", group: "Жильё", popular: true },
-  { id: "exp-mortgage", kind: "expense", name: "Ипотека", group: "Жильё", popular: true },
-  { id: "exp-utilities", kind: "expense", name: "ЖКУ", group: "Жильё", popular: true },
-  { id: "exp-internet-home", kind: "expense", name: "Интернет дома", group: "Жильё", popular: false },
-  { id: "exp-repair", kind: "expense", name: "Ремонт и мебель", group: "Жильё", popular: false },
-  { id: "exp-property-tax", kind: "expense", name: "Налог на имущество", group: "Жильё", popular: false },
-  { id: "exp-hoa", kind: "expense", name: "ТСЖ / охрана", group: "Жильё", popular: false },
+  // Расходы — Авто
+  e("exp-auto", "expense", "🚗 Авто", "Авто", true),
+  e("exp-auto-parts", "expense", "🔧 Автозапчасти", "Авто"),
+  e("exp-auto-service", "expense", "🛠️ Автоуслуги", "Авто"),
+  e("exp-gas", "expense", "⛽ АЗС", "Авто", true),
+  e("exp-car-rental", "expense", "🔑 Аренда авто", "Авто"),
+  // Еда
+  e("exp-alcohol", "expense", "🍷 Алкоголь", "Еда"),
+  e("exp-cafes", "expense", "🍽️ Кафе и рестораны", "Еда", true),
+  e("exp-groceries", "expense", "🥦 Продукты", "Еда", true),
+  e("exp-supermarket", "expense", "🛍️ Супермаркеты", "Еда"),
+  e("exp-fastfood", "expense", "🍔 Фастфуд", "Еда"),
+  e("exp-tobacco", "expense", "🚬 Табак", "Еда"),
+  // Жильё
+  e("exp-home", "expense", "🏡 Дом и ремонт", "Жильё"),
+  e("exp-utilities", "expense", "💡 Коммунальные услуги", "Жильё", true),
+  // Транспорт
+  e("exp-public-transport", "expense", "🚌 Общественный транспорт", "Транспорт"),
+  e("exp-taxi", "expense", "🚕 Такси", "Транспорт"),
+  e("exp-transport", "expense", "🚇 Транспорт", "Транспорт", true),
+  // Здоровье
+  e("exp-pharmacy", "expense", "💊 Аптеки", "Здоровье"),
+  e("exp-health", "expense", "🏥 Здоровье", "Здоровье", true),
+  e("exp-med-services", "expense", "🩺 Медицинские услуги", "Здоровье"),
+  e("exp-health-goods", "expense", "💪 Товары для здоровья", "Здоровье"),
+  // Покупки
+  e("exp-accessories", "expense", "🎒 Аксессуары", "Покупки"),
+  e("exp-marketplace", "expense", "🛒 Маркетплейсы", "Покупки"),
+  e("exp-clothes", "expense", "👗 Одежда и обувь", "Покупки", true),
+  e("exp-tech", "expense", "💻 Техника", "Покупки"),
+  e("exp-digital", "expense", "🖥️ Цифровые товары", "Покупки"),
+  e("exp-jewelry", "expense", "💍 Ювелирные изделия", "Покупки"),
+  // Досуг
+  e("exp-outdoor", "expense", "🏄 Активный отдых", "Досуг"),
+  e("exp-books", "expense", "📚 Книги", "Досуг"),
+  e("exp-culture", "expense", "🎨 Культура и искусство", "Досуг"),
+  e("exp-travel", "expense", "✈️ Путешествия", "Досуг"),
+  e("exp-fun", "expense", "🎮 Развлечения", "Досуг"),
+  e("exp-sport-goods", "expense", "⚽ Спортивные товары", "Досуг"),
+  e("exp-hobby", "expense", "🧵 Хобби", "Досуг"),
+  // Семья
+  e("exp-kids", "expense", "🧸 Детские товары", "Семья"),
+  e("exp-pets", "expense", "🐾 Животные", "Семья"),
+  e("exp-pet-goods", "expense", "🐶 Товары для животных", "Семья"),
+  // Услуги
+  e("exp-charity", "expense", "❤️ Благотворительность", "Услуги"),
+  e("exp-beauty", "expense", "💄 Красота", "Услуги"),
+  e("exp-education", "expense", "🎓 Образование", "Услуги"),
+  e("exp-comms", "expense", "📶 Связь, интернет и ТВ", "Услуги", true),
+  // Прочее
+  e("exp-fines", "expense", "📃 Штрафы и налоги", "Прочее"),
+  e("exp-unknown", "expense", "🤔 Я не помню", "Прочее"),
+  e("exp-other", "expense", "📦 Прочее", "Прочее", true),
 
-  { id: "exp-groceries", kind: "expense", name: "Продукты", group: "Еда", popular: true },
-  { id: "exp-cafes", kind: "expense", name: "Кафе и рестораны", group: "Еда", popular: true },
-  { id: "exp-delivery", kind: "expense", name: "Доставка еды", group: "Еда", popular: false },
-  { id: "exp-coffee", kind: "expense", name: "Кофе и перекусы", group: "Еда", popular: false },
-
-  { id: "exp-fuel", kind: "expense", name: "Бензин / зарядка", group: "Транспорт", popular: true },
-  { id: "exp-public-transport", kind: "expense", name: "Общественный транспорт", group: "Транспорт", popular: true },
-  { id: "exp-taxi", kind: "expense", name: "Такси / каршеринг", group: "Транспорт", popular: false },
-  { id: "exp-car-loan", kind: "expense", name: "Автокредит", group: "Транспорт", popular: false },
-  { id: "exp-car-service", kind: "expense", name: "ТО и ремонт авто", group: "Транспорт", popular: false },
-  { id: "exp-parking", kind: "expense", name: "Парковка", group: "Транспорт", popular: false },
-  { id: "exp-osago", kind: "expense", name: "ОСАГО / КАСКО", group: "Транспорт", popular: false },
-
-  { id: "exp-medicine", kind: "expense", name: "Лекарства", group: "Здоровье", popular: true },
-  { id: "exp-doctors", kind: "expense", name: "Врачи и анализы", group: "Здоровье", popular: false },
-  { id: "exp-dms", kind: "expense", name: "ДМС / страховка здоровья", group: "Здоровье", popular: false },
-  { id: "exp-dental", kind: "expense", name: "Стоматология", group: "Здоровье", popular: false },
-  { id: "exp-psychology", kind: "expense", name: "Психология", group: "Здоровье", popular: false },
-
-  { id: "exp-mobile", kind: "expense", name: "Мобильная связь", group: "Связь", popular: true },
-  { id: "exp-cloud", kind: "expense", name: "Облако и сервисы", group: "Связь", popular: false },
-
-  { id: "exp-clothes", kind: "expense", name: "Одежда и обувь", group: "Одежда", popular: true },
-  { id: "exp-accessories", kind: "expense", name: "Аксессуары", group: "Одежда", popular: false },
-  { id: "exp-laundry", kind: "expense", name: "Химчистка", group: "Одежда", popular: false },
-
-  { id: "exp-kids-food", kind: "expense", name: "Детское питание", group: "Дети", popular: false },
-  { id: "exp-kids-clothes", kind: "expense", name: "Детская одежда", group: "Дети", popular: false },
-  { id: "exp-kindergarten", kind: "expense", name: "Садик / няня", group: "Дети", popular: false },
-  { id: "exp-kids-activities", kind: "expense", name: "Кружки и секции", group: "Дети", popular: false },
-  { id: "exp-kids-toys", kind: "expense", name: "Игрушки", group: "Дети", popular: false },
-
-  { id: "exp-courses", kind: "expense", name: "Курсы и обучение", group: "Образование", popular: false },
-  { id: "exp-books", kind: "expense", name: "Книги", group: "Образование", popular: false },
-  { id: "exp-school", kind: "expense", name: "Школа / вуз", group: "Образование", popular: false },
-
-  { id: "exp-streaming", kind: "expense", name: "Стриминг", group: "Подписки", popular: true },
-  { id: "exp-software", kind: "expense", name: "ПО и приложения", group: "Подписки", popular: false },
-  { id: "exp-news", kind: "expense", name: "Медиа и новости", group: "Подписки", popular: false },
-  { id: "exp-games-sub", kind: "expense", name: "Игровые подписки", group: "Подписки", popular: false },
-
-  { id: "exp-entertainment", kind: "expense", name: "Развлечения", group: "Досуг", popular: true },
-  { id: "exp-hobbies", kind: "expense", name: "Хобби", group: "Досуг", popular: false },
-  { id: "exp-events", kind: "expense", name: "Концерты и события", group: "Досуг", popular: false },
-  { id: "exp-games", kind: "expense", name: "Игры", group: "Досуг", popular: false },
-
-  { id: "exp-travel", kind: "expense", name: "Путешествия", group: "Путешествия", popular: false },
-  { id: "exp-hotels", kind: "expense", name: "Отели", group: "Путешествия", popular: false },
-  { id: "exp-flights", kind: "expense", name: "Авиа и ж/д", group: "Путешествия", popular: false },
-  { id: "exp-visa", kind: "expense", name: "Визы и сборы", group: "Путешествия", popular: false },
-
-  { id: "exp-life-insurance", kind: "expense", name: "Страхование жизни", group: "Страхование", popular: false },
-  { id: "exp-property-ins", kind: "expense", name: "Страхование имущества", group: "Страхование", popular: false },
-
-  { id: "exp-taxes", kind: "expense", name: "Налоги", group: "Налоги и штрафы", popular: false },
-  { id: "exp-fines", kind: "expense", name: "Штрафы", group: "Налоги и штрафы", popular: false },
-  { id: "exp-fees", kind: "expense", name: "Госпошлины", group: "Налоги и штрафы", popular: false },
-
-  { id: "exp-loan-payment", kind: "expense", name: "Платежи по кредитам", group: "Долги", popular: false },
-  { id: "exp-credit-card", kind: "expense", name: "Кредитная карта", group: "Долги", popular: false },
-  { id: "exp-microloan", kind: "expense", name: "Микрозаймы", group: "Долги", popular: false },
-
-  { id: "exp-gifts", kind: "expense", name: "Подарки", group: "Подарки", popular: false },
-  { id: "exp-charity", kind: "expense", name: "Благотворительность", group: "Подарки", popular: false },
-  { id: "exp-celebrations", kind: "expense", name: "Праздники", group: "Подарки", popular: false },
-
-  { id: "exp-pet-food", kind: "expense", name: "Корм питомцам", group: "Питомцы", popular: false },
-  { id: "exp-vet", kind: "expense", name: "Ветеринар", group: "Питомцы", popular: false },
-  { id: "exp-pet-care", kind: "expense", name: "Уход за питомцами", group: "Питомцы", popular: false },
-
-  { id: "exp-gym", kind: "expense", name: "Спортзал", group: "Спорт", popular: false },
-  { id: "exp-sport-gear", kind: "expense", name: "Спорттовары", group: "Спорт", popular: false },
-  { id: "exp-fitness", kind: "expense", name: "Тренер / занятия", group: "Спорт", popular: false },
-
-  { id: "exp-cosmetics", kind: "expense", name: "Косметика", group: "Красота", popular: false },
-  { id: "exp-salon", kind: "expense", name: "Салон красоты", group: "Красота", popular: false },
-  { id: "exp-barber", kind: "expense", name: "Парикмахерская", group: "Красота", popular: false },
-
-  { id: "exp-household", kind: "expense", name: "Бытовые товары", group: "Прочее", popular: false },
-  { id: "exp-electronics", kind: "expense", name: "Электроника", group: "Прочее", popular: false },
-  { id: "exp-cash", kind: "expense", name: "Наличные / разное", group: "Прочее", popular: true },
-  { id: "exp-other", kind: "expense", name: "Прочие расходы", group: "Прочее", popular: true },
-
-  // ——— Доходы ———
-  { id: "inc-salary", kind: "income", name: "Зарплата", group: "Работа", popular: true },
-  { id: "inc-bonus", kind: "income", name: "Премия", group: "Работа", popular: true },
-  { id: "inc-freelance", kind: "income", name: "Фриланс", group: "Работа", popular: true },
-  { id: "inc-side", kind: "income", name: "Подработка", group: "Работа", popular: false },
-  { id: "inc-business", kind: "income", name: "Бизнес", group: "Бизнес", popular: true },
-  { id: "inc-dividends", kind: "income", name: "Дивиденды", group: "Инвестиции", popular: true },
-  { id: "inc-interest", kind: "income", name: "Проценты по вкладам", group: "Инвестиции", popular: false },
-  { id: "inc-capital-gains", kind: "income", name: "Доход от продажи активов", group: "Инвестиции", popular: false },
-  { id: "inc-rental", kind: "income", name: "Аренда имущества", group: "Пассивный доход", popular: true },
-  { id: "inc-royalties", kind: "income", name: "Роялти", group: "Пассивный доход", popular: false },
-  { id: "inc-pension", kind: "income", name: "Пенсия", group: "Социальные", popular: false },
-  { id: "inc-benefits", kind: "income", name: "Пособия", group: "Социальные", popular: false },
-  { id: "inc-alimony", kind: "income", name: "Алименты", group: "Социальные", popular: false },
-  { id: "inc-cashback", kind: "income", name: "Кешбэк", group: "Возвраты", popular: false },
-  { id: "inc-tax-refund", kind: "income", name: "Налоговый вычет", group: "Возвраты", popular: false },
-  { id: "inc-refunds", kind: "income", name: "Возвраты покупок", group: "Возвраты", popular: false },
-  { id: "inc-gifts", kind: "income", name: "Подарки и помощь", group: "Прочее", popular: false },
-  { id: "inc-other", kind: "income", name: "Прочие доходы", group: "Прочее", popular: true },
+  // Доходы
+  e("inc-salary", "income", "💰 Зарплата", "Работа", true),
+  e("inc-bonus", "income", "🏆 Премия", "Работа", true),
+  e("inc-side", "income", "🧑‍💻 Подработка", "Работа", true),
+  e("inc-invest", "income", "📈 Инвестиции", "Капитал", true),
+  e("inc-cashback", "income", "🔄 Кэшбэк", "Капитал"),
+  e("inc-rent", "income", "🏠 Рента", "Капитал"),
+  e("inc-benefits", "income", "👶 Пособия", "Социальные"),
+  e("inc-pension", "income", "🏛️ Пенсия", "Социальные"),
+  e("inc-stipend", "income", "🎓 Стипендия", "Социальные"),
+  e("inc-family", "income", "🤝 Помощь от близких", "Близкие"),
+  e("inc-gift", "income", "🎁 Подарок", "Близкие"),
+  e("inc-hobby", "income", "🎨 Хобби", "Прочее"),
+  e("inc-other", "income", "📦 Прочие доходы", "Прочее", true),
+  e("inc-unknown", "income", "🤔 Я не помню", "Прочее"),
 ];
 
 function norm(s: string) {
@@ -132,14 +100,13 @@ export function filterCatalog(
   kind: BudgetCategoryKind,
 ): CategoryCatalogEntry[] {
   const q = norm(query);
-  return CATEGORY_CATALOG.filter((e) => {
-    if (e.kind !== kind) return false;
+  return CATEGORY_CATALOG.filter((entry) => {
+    if (entry.kind !== kind) return false;
     if (!q) return true;
-    return norm(e.name).includes(q) || norm(e.group).includes(q);
+    return norm(entry.name).includes(q) || norm(entry.group).includes(q);
   });
 }
 
-/** Популярные из каталога, которых ещё нет среди пользовательских (по имени). */
 export function popularNotAdded(
   kind: BudgetCategoryKind,
   userCategories: Array<{ name: string; kind: BudgetCategoryKind }>,
@@ -150,7 +117,7 @@ export function popularNotAdded(
       .map((c) => norm(c.name)),
   );
   return CATEGORY_CATALOG.filter(
-    (e) => e.kind === kind && e.popular && !existing.has(norm(e.name)),
+    (entry) => entry.kind === kind && entry.popular && !existing.has(norm(entry.name)),
   );
 }
 
@@ -163,10 +130,9 @@ export function isCatalogNameAdded(
   return userCategories.some((c) => c.kind === kind && norm(c.name) === n);
 }
 
-/** Seed при первом GET: только популярные expense. */
 export function defaultExpenseSeed(): Array<{ name: string; sortOrder: number }> {
-  return CATEGORY_CATALOG.filter((e) => e.kind === "expense" && e.popular).map(
-    (e, i) => ({ name: e.name, sortOrder: i }),
+  return CATEGORY_CATALOG.filter((entry) => entry.kind === "expense" && entry.popular).map(
+    (entry, i) => ({ name: entry.name, sortOrder: i }),
   );
 }
 
@@ -174,10 +140,31 @@ export function groupCatalogEntries(
   entries: CategoryCatalogEntry[],
 ): Array<{ group: string; items: CategoryCatalogEntry[] }> {
   const map = new Map<string, CategoryCatalogEntry[]>();
-  for (const e of entries) {
-    const list = map.get(e.group) ?? [];
-    list.push(e);
-    map.set(e.group, list);
+  for (const entry of entries) {
+    const list = map.get(entry.group) ?? [];
+    list.push(entry);
+    map.set(entry.group, list);
   }
   return Array.from(map.entries()).map(([group, items]) => ({ group, items }));
+}
+
+/** Топ категорий пользователя по числу привязанных операций. */
+export function topFrequentCategories<T extends { id: string; name: string; kind: BudgetCategoryKind }>(
+  kind: BudgetCategoryKind,
+  userCategories: T[],
+  lines: Array<{ category?: string | null }>,
+  limit = 5,
+): T[] {
+  const ofKind = userCategories.filter((c) => c.kind === kind);
+  const counts = new Map<string, number>();
+  for (const line of lines) {
+    const id = line.category;
+    if (!id || id === "general") continue;
+    if (!ofKind.some((c) => c.id === id)) continue;
+    counts.set(id, (counts.get(id) ?? 0) + 1);
+  }
+  return ofKind
+    .filter((c) => (counts.get(c.id) ?? 0) > 0)
+    .sort((a, b) => (counts.get(b.id)! - counts.get(a.id)!) || a.name.localeCompare(b.name, "ru"))
+    .slice(0, limit);
 }

@@ -43,8 +43,8 @@ export type ScoreStatus = "empty" | "incomplete" | "stale" | "ready";
 export type ScoreMissingStep = "balance" | "cashflow" | "goals";
 
 export type FinancialScore = {
-  /** 0–100; null если данных нет (status empty) */
-  total: number | null;
+  /** 0–100; 0 если профиль пуст или неполон */
+  total: number;
   grade: ScoreGrade | null;
   summary: string;
   debtHeavy: boolean;
@@ -55,7 +55,14 @@ export type FinancialScore = {
   staleDays: number | null;
   /** Короткий призыв к действию */
   cta: string;
+  ctaLabel: string;
+  ctaSub: ScoreMissingStep | null;
 };
+
+/** Нет полного набора данных — балл недействителен (0 / «—»). */
+export function scoreIsPending(score: Pick<FinancialScore, "status">): boolean {
+  return score.status === "empty" || score.status === "incomplete";
+}
 
 export type ScoringExtras = {
   goals?: Pick<Goal, "linkedAssetId" | "goalType">[];
@@ -531,13 +538,28 @@ export function latestEntityUpdate(
   return max > 0 ? new Date(max) : null;
 }
 
+const STEP_CTA: Record<ScoreMissingStep, string> = {
+  balance: "Заполнить баланс",
+  cashflow: "Добавить доходы и расходы",
+  goals: "Добавить цели",
+};
+
+function actionForMissing(missing: ScoreMissingStep[]): {
+  ctaLabel: string;
+  ctaSub: ScoreMissingStep | null;
+} {
+  const first = missing[0];
+  if (!first) return { ctaLabel: "", ctaSub: null };
+  return { ctaLabel: STEP_CTA[first], ctaSub: first };
+}
+
 export function resolveScoreReadiness(
   metrics: DashboardMetrics,
   lastUpdated: Date | string | null | undefined,
   now = new Date(),
 ): Pick<
   FinancialScore,
-  "status" | "missingSteps" | "staleDays" | "cta"
+  "status" | "missingSteps" | "staleDays" | "cta" | "ctaLabel" | "ctaSub"
 > {
   const missingSteps: ScoreMissingStep[] = [];
   if (!metrics.step1) missingSteps.push("balance");
@@ -550,6 +572,7 @@ export function resolveScoreReadiness(
       missingSteps,
       staleDays: null,
       cta: "Заполните Баланс, Поток и Цели — после этого появится финансовый скоринг.",
+      ...actionForMissing(missingSteps),
     };
   }
 
@@ -560,6 +583,7 @@ export function resolveScoreReadiness(
       missingSteps,
       staleDays: null,
       cta: `Данных недостаточно — внесите: ${names}. Иначе скоринг неверен.`,
+      ...actionForMissing(missingSteps),
     };
   }
 
@@ -570,6 +594,8 @@ export function resolveScoreReadiness(
       missingSteps: [],
       staleDays: null,
       cta: "",
+      ctaLabel: "",
+      ctaSub: null,
     };
   }
 
@@ -582,6 +608,8 @@ export function resolveScoreReadiness(
       missingSteps: [],
       staleDays,
       cta: `Данные не обновлялись ${staleDays} дн. — обновите баланс и поток, иначе оценка занижена.`,
+      ctaLabel: "Обновить данные",
+      ctaSub: "balance",
     };
   }
 
@@ -590,6 +618,8 @@ export function resolveScoreReadiness(
     missingSteps: [],
     staleDays,
     cta: "",
+    ctaLabel: "",
+    ctaSub: null,
   };
 }
 
@@ -629,11 +659,11 @@ export function computeFinancialScore(
   const debtHeavy = metrics.debtRatio > 0.5;
   const readiness = resolveScoreReadiness(metrics, extras.lastUpdated ?? null);
 
-  if (readiness.status === "empty") {
+  if (scoreIsPending(readiness)) {
     return {
-      total: null,
+      total: 0,
       grade: null,
-      summary: "Недостаточно данных для расчёта скоринга.",
+      summary: readiness.cta,
       debtHeavy: false,
       blocks,
       ...readiness,
