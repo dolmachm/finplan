@@ -9,6 +9,17 @@ export async function GET(req: Request) {
   const limit = Math.min(100, Math.max(1, Number(url.searchParams.get("limit") ?? 40)));
   const items = await listRevisions(userId, limit);
   return NextResponse.json({
-    items: items.map(({ before: _b, after: _a, ...meta }) => meta),
+    items: items.map((row) => {
+      const {
+        id,
+        userId: uid,
+        entityType,
+        entityId,
+        action,
+        label,
+        createdAt,
+      } = row;
+      return { id, userId: uid, entityType, entityId, action, label, createdAt };
+    }),
   });
 }

@@ -46,3 +46,24 @@ export function monthlyEquivalent(
       return 0;
   }
 }
+
+export function monthlyTotal(
+  rows: Array<{ amount: number; frequency: string }>,
+): number {
+  return rows.reduce(
+    (s, r) => s + monthlyEquivalent(r.amount, r.frequency as PlanFrequency),
+    0,
+  );
+}
+
+export function monthlyNetIncome(
+  incomes: Array<{ amount: number; frequency: string; taxRatePct?: number }>,
+): number {
+  return incomes.reduce(
+    (s, i) =>
+      s +
+      monthlyEquivalent(i.amount, i.frequency as PlanFrequency) *
+        (1 - (i.taxRatePct ?? 0) / 100),
+    0,
+  );
+}

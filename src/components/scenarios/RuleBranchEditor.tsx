@@ -1,7 +1,7 @@
 "use client";
 
 import type { RuleBranch, RuleAction, ScenarioRule } from "@/modules/scenarios/rule.types";
-import { isNestedBranch, newRuleId, createEmptyRule } from "@/modules/scenarios/rule.types";
+import { isNestedBranch, createEmptyRule } from "@/modules/scenarios/rule.types";
 import {
   ACTION_CATALOG,
   CONDITION_CATALOG,

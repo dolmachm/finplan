@@ -4,6 +4,7 @@ import { incomeSchema } from "@/shared/finance-schemas";
 import { prisma } from "@/shared/db";
 import { requireUserId, isErrorResponse } from "@/shared/session";
 import { duplicateEntityResponse, isDuplicateIncome } from "@/shared/duplicate-check";
+import { recordRevision } from "@/shared/revision";
 
 const patchSchema = incomeSchema.partial();
 
@@ -34,6 +35,15 @@ export async function PATCH(
     where: { id },
     data: parsed.data,
   });
+  void recordRevision({
+    userId,
+    entityType: "income",
+    entityId: row.id,
+    action: "UPDATE",
+    label: `Доход изменён: ${row.name}`,
+    before: current,
+    after: row,
+  }).catch(() => {});
   return NextResponse.json(row);
 }
 
@@ -49,5 +59,14 @@ export async function DELETE(
     return notFoundResponse();
   }
   await prisma.income.delete({ where: { id } });
+  void recordRevision({
+    userId,
+    entityType: "income",
+    entityId: id,
+    action: "DELETE",
+    label: `Доход удалён: ${current.name}`,
+    before: current,
+    after: null,
+  }).catch(() => {});
   return NextResponse.json({ ok: true });
 }

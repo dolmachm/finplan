@@ -167,7 +167,8 @@ const userRepo = {
     } else if (typeof bal === "number") {
       balance = bal;
     }
-    const { balance: _b, ...rest } = args.data;
+    const rest = { ...args.data };
+    delete rest.balance;
     const updated: User = { ...existing, ...rest, balance, updatedAt: now() };
     if (rest.email && rest.email !== existing.email) {
       await redis.del(`idx:user:email:${existing.email}`);

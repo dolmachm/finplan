@@ -1,4 +1,4 @@
-import { monthlyEquivalent } from "@/modules/plan/frequency";
+import { monthlyNetIncome, monthlyTotal } from "@/modules/plan/frequency";
 import type {
   Asset,
   BudgetCategory,
@@ -7,7 +7,6 @@ import type {
   Income,
   Liability,
 } from "@/shared/types";
-import type { PlanFrequency } from "@/modules/plan/frequency";
 import { formatRub } from "@/shared/format";
 import {
   envelopeOverviewSummary,
@@ -89,10 +88,6 @@ export type HomeDashboardInput = {
   goalProbabilities?: Array<{ probability: number }>;
 };
 
-function freq(amount: number, frequency: string) {
-  return monthlyEquivalent(amount, frequency as PlanFrequency);
-}
-
 export function computeDashboardMetrics(
   input: HomeDashboardInput,
 ): DashboardMetrics {
@@ -114,21 +109,8 @@ export function computeDashboardMetrics(
     (s, l) => s + l.remainingBalance,
     0,
   );
-  const incomeMonthly = incomes.reduce(
-    (s, i) => s + freq(i.amount, i.frequency),
-    0,
-  );
-  const expenseMonthly = expenses.reduce(
-    (s, e) => s + freq(e.amount, e.frequency),
-    0,
-  );
-  const surplusMonthly = incomeMonthly - expenseMonthly;
-  const liquidTotal = assets
-    .filter((a) => LIQUID_TYPES.has(a.type))
-    .reduce((s, a) => s + a.currentValue, 0);
-  const investTotal = assets
-    .filter((a) => a.assetClass === "INVESTMENT")
-    .reduce((s, a) => s + a.currentValue, 0);
+  const incomeMonthly = monthlyNetIncome(incomes);
+  const expenseMonthly = monthlyTotal(expenses);
   const debtServiceMonthly = activeDebts.reduce(
     (s, l) => s + l.monthlyPayment,
     0,
@@ -137,6 +119,14 @@ export function computeDashboardMetrics(
     (s, a) => s + (a.dividendIncomeMonthly ?? 0),
     0,
   );
+  const surplusMonthly =
+    incomeMonthly + dividendMonthly - expenseMonthly - debtServiceMonthly;
+  const liquidTotal = assets
+    .filter((a) => LIQUID_TYPES.has(a.type))
+    .reduce((s, a) => s + a.currentValue, 0);
+  const investTotal = assets
+    .filter((a) => a.assetClass === "INVESTMENT")
+    .reduce((s, a) => s + a.currentValue, 0);
 
   let wRet = 0;
   let wVol = 0;

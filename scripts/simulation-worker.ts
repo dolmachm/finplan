@@ -45,7 +45,6 @@ async function poll() {
 
 async function main() {
   console.log("FinPlan simulation worker started");
-  // eslint-disable-next-line no-constant-condition
   while (true) {
     try {
       await poll();

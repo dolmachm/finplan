@@ -14,7 +14,7 @@ const MARGIN = 14;
 const PAGE_W = 210;
 const PAGE_H = 297;
 const CONTENT_W = PAGE_W - MARGIN * 2;
-const FOOTER_Y = 287;
+const FOOTER_Y = PAGE_H - 10;
 
 type DocCtx = {
   doc: jsPDF;

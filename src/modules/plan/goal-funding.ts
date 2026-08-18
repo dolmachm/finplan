@@ -78,11 +78,12 @@ export function analyzeGoalFunding(
     let requiredMonthlyDesired = 0;
 
     for (const st of stages) {
-      const m = Math.max(1, st.monthIndex);
+      const m = Math.max(0, st.monthIndex);
+      const months = Math.max(1, m);
       const amountInflated = inflate(st.amount, inflation, m);
       const available = Math.max(0, nwAt(m) - reservedAt(m));
       const gap = Math.max(0, amountInflated - available);
-      const requiredMonthly = gap / m;
+      const requiredMonthly = gap / months;
       requiredMonthlyDesired += requiredMonthly;
       stageResults.push({
         id: st.id,

@@ -4,6 +4,7 @@ import { incomeSchema } from "@/shared/finance-schemas";
 import { prisma } from "@/shared/db";
 import { requireUserId, isErrorResponse } from "@/shared/session";
 import { duplicateEntityResponse, isDuplicateIncome } from "@/shared/duplicate-check";
+import { recordRevision } from "@/shared/revision";
 
 export async function GET() {
   const userId = await requireUserId();
@@ -29,5 +30,14 @@ export async function POST(req: Request) {
       userId,
     },
   });
+  void recordRevision({
+    userId,
+    entityType: "income",
+    entityId: row.id,
+    action: "CREATE",
+    label: `Доход добавлен: ${row.name}`,
+    before: null,
+    after: row,
+  }).catch(() => {});
   return NextResponse.json(row, { status: 201 });
 }

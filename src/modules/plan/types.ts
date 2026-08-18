@@ -97,6 +97,12 @@ export interface ScenarioModifiers {
   expenseCutPct?: number;
   /** Scale asset dividend/rental income (1 = unchanged, 0 = stop) */
   dividendMultiplier?: number;
+  /** Scale asset volatility (1 = unchanged) */
+  volatilityMultiplier?: number;
+  /** Cut only non-essential expenses when expenseCutPct is set */
+  expenseCutEssentialOnly?: boolean;
+  /** Withdraw this much ₽ from liquid assets into cash at month 0 */
+  emergencyWithdraw?: number;
   /** @deprecated use assetSales */
   assetSale?: ScenarioAssetSale;
   assetSales?: ScenarioAssetSale[];

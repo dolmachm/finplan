@@ -4,6 +4,7 @@ import { expenseSchema } from "@/shared/finance-schemas";
 import { prisma } from "@/shared/db";
 import { requireUserId, isErrorResponse } from "@/shared/session";
 import { duplicateEntityResponse, isDuplicateExpense } from "@/shared/duplicate-check";
+import { recordRevision } from "@/shared/revision";
 
 export async function GET() {
   const userId = await requireUserId();
@@ -23,5 +24,14 @@ export async function POST(req: Request) {
     return duplicateEntityResponse("Расход");
   }
   const row = await prisma.expense.create({ data: { ...parsed.data, userId } });
+  void recordRevision({
+    userId,
+    entityType: "expense",
+    entityId: row.id,
+    action: "CREATE",
+    label: `Расход добавлен: ${row.name}`,
+    before: null,
+    after: row,
+  }).catch(() => {});
   return NextResponse.json(row, { status: 201 });
 }

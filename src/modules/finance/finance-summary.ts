@@ -67,6 +67,8 @@ export function buildFinanceSummaryFromSnapshot(
     incomes: snap.incomes,
     expenses: snap.expenses,
     budgetCategories: snap.budgetCategories,
+    liabilities: snap.liabilities,
+    assets: snap.assets,
   });
   return {
     metrics,

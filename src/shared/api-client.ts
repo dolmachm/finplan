@@ -58,7 +58,7 @@ export function issuesByField(
   return map;
 }
 
-export function parsePositiveNumber(
+export function parseNonNegativeNumber(
   value: string,
   label: string,
 ): { ok: true; value: number } | { ok: false; message: string } {
@@ -77,4 +77,16 @@ export function parsePositiveNumber(
     return { ok: false, message: `${label}: не может быть отрицательным` };
   }
   return { ok: true, value: num };
+}
+
+export function parsePositiveNumber(
+  value: string,
+  label: string,
+): { ok: true; value: number } | { ok: false; message: string } {
+  const parsed = parseNonNegativeNumber(value, label);
+  if (!parsed.ok) return parsed;
+  if (parsed.value <= 0) {
+    return { ok: false, message: `${label}: укажите число больше нуля` };
+  }
+  return parsed;
 }

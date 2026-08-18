@@ -3,6 +3,7 @@ import { parseJsonBody } from "@/shared/api-validation";
 import { liabilitySchema } from "@/shared/finance-schemas";
 import { prisma } from "@/shared/db";
 import { requireUserId, isErrorResponse } from "@/shared/session";
+import { duplicateEntityResponse, isDuplicateLiability } from "@/shared/duplicate-check";
 import { recordRevision } from "@/shared/revision";
 import { archiveExpiredLiabilities } from "@/modules/finance/archive-liabilities";
 
@@ -19,6 +20,10 @@ export async function POST(req: Request) {
   const parsed = parseJsonBody(liabilitySchema, await req.json());
   if (!parsed.ok) return parsed.response;
   const data = parsed.data;
+  const existing = await prisma.liability.findMany({ where: { userId } });
+  if (isDuplicateLiability(existing, data)) {
+    return duplicateEntityResponse("Пассив");
+  }
   const row = await prisma.liability.create({
     data: {
       ...data,

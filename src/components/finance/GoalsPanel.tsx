@@ -25,6 +25,7 @@ import {
   analyzeGoalPaths,
   normalizePathSettings,
   summarizeGoalsBudget,
+  surplusAvailableForGoal,
   type GoalPathSettings,
 } from "@/modules/plan/goal-paths";
 import type { Asset, Goal, GoalStrategy, GoalType } from "@/shared/types";
@@ -190,7 +191,9 @@ export function GoalsPanel({
               <GoalCard
                 key={g.id}
                 goal={g}
+                goals={goals}
                 funding={funding[g.id]}
+                fundingMap={funding}
                 avgSurplus={avgSurplus}
                 onEdit={() => setEditView({ id: g.id })}
                 onDelete={() => remove(g.id)}
@@ -251,14 +254,18 @@ function GoalsBudgetBanner({
 
 function GoalCard({
   goal,
+  goals,
   funding,
+  fundingMap,
   avgSurplus,
   onEdit,
   onDelete,
   onSavePaths,
 }: {
   goal: Goal;
+  goals: Goal[];
   funding?: GoalFundingResult;
+  fundingMap: Record<string, GoalFundingResult>;
   avgSurplus: number;
   onEdit: () => void;
   onDelete: () => void;
@@ -275,10 +282,16 @@ function GoalCard({
     setDraft(normalizePathSettings(goal.pathSettings, monthsToGoal));
   }, [goal.pathSettings, goal.id, monthsToGoal]);
 
+  const availableSurplus = surplusAvailableForGoal(
+    goal.id,
+    goals,
+    fundingMap,
+    avgSurplus,
+  );
   const analysis = analyzeGoalPaths({
     targetAmount: goal.targetAmountNominal,
     monthsToGoal,
-    avgMonthlySurplus: avgSurplus,
+    avgMonthlySurplus: availableSurplus,
     funding,
     settings: draft,
   });

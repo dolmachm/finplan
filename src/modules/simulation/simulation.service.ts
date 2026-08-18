@@ -94,6 +94,7 @@ async function runSimulationJobBody(jobId: string) {
         numRuns,
         horizonMonths: planInput.horizonMonths,
         crisisShockPct: modifiers.assetShockPct,
+        modifiers,
       },
       async (pct) => {
         await prisma.simulationJob.update({
@@ -108,7 +109,11 @@ async function runSimulationJobBody(jobId: string) {
       data: { progressPct: 96 },
     });
 
-    const sensitivity = await runSensitivity(planInput, SENSITIVITY_RUNS);
+    const sensitivity = await runSensitivity(
+      planInput,
+      SENSITIVITY_RUNS,
+      modifiers,
+    );
 
     await prisma.planSnapshot.create({
       data: {

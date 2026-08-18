@@ -86,9 +86,14 @@ function applyAction(
       next.returnMultiplier = (next.returnMultiplier ?? 1) * (1 - Number(p.pct ?? 20) / 100);
       break;
     case "increase_volatility":
+      next.volatilityMultiplier =
+        (next.volatilityMultiplier ?? 1) * (1 + Number(p.pct ?? 10) / 100);
       break;
     case "cut_expenses":
       next.expenseCutPct = Math.max(next.expenseCutPct ?? 0, Number(p.pct ?? 15));
+      if (p.essentialOnly != null) {
+        next.expenseCutEssentialOnly = String(p.essentialOnly) === "true";
+      }
       break;
     case "income_zero":
       next.incomeLossMonths = Math.max(next.incomeLossMonths ?? 0, Number(p.months ?? 6));
@@ -105,6 +110,13 @@ function applyAction(
       break;
     }
     case "use_emergency_fund":
+      next.emergencyWithdraw = Math.max(
+        next.emergencyWithdraw ?? 0,
+        Math.min(
+          ctx.liquidAssetsValue,
+          ctx.monthlyExpenses * Number(p.months ?? 6),
+        ),
+      );
       break;
     case "sell_asset": {
       const assetId = p.assetId as string;
@@ -165,11 +177,6 @@ function applyAction(
     case "noop":
     default:
       break;
-  }
-
-  if (action.type === "reduce_returns" && ctx.planInput) {
-    const condMonths = Number(p.months ?? 12);
-    void condMonths;
   }
 
   return next;

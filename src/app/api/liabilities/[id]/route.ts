@@ -3,6 +3,7 @@ import { parseJsonBody, notFoundResponse } from "@/shared/api-validation";
 import { liabilityPatchSchema } from "@/shared/finance-schemas";
 import { prisma } from "@/shared/db";
 import { requireUserId, isErrorResponse } from "@/shared/session";
+import { duplicateEntityResponse, isDuplicateLiability } from "@/shared/duplicate-check";
 import { recordRevision } from "@/shared/revision";
 
 export async function PATCH(
@@ -18,6 +19,15 @@ export async function PATCH(
   }
   const parsed = parseJsonBody(liabilityPatchSchema, await req.json());
   if (!parsed.ok) return parsed.response;
+  const merged = {
+    name: parsed.data.name ?? current.name,
+    type: parsed.data.type ?? current.type,
+    remainingBalance: parsed.data.remainingBalance ?? current.remainingBalance,
+  };
+  const existing = await prisma.liability.findMany({ where: { userId } });
+  if (isDuplicateLiability(existing, merged, id)) {
+    return duplicateEntityResponse("Пассив");
+  }
   const { endDate, archivedAt, ...rest } = parsed.data;
   const row = await prisma.liability.update({
     where: { id },

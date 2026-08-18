@@ -127,7 +127,10 @@ export function FinanceStoreProvider({ children }: { children: ReactNode }) {
   const snapshotInflight = useRef<Promise<void> | null>(null);
   const entitiesReadyRef = useRef(false);
   const enrichmentRef = useRef(enrichment);
-  enrichmentRef.current = enrichment;
+
+  useEffect(() => {
+    enrichmentRef.current = enrichment;
+  }, [enrichment]);
 
   const applySnapshot = useCallback((snap: FinanceSnapshot) => {
     setAssets(snap.assets);

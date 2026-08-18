@@ -196,19 +196,21 @@ export function analyzeGoalPaths(args: {
     const down = amount * (settings.downPaymentPct / 100);
     const principal = Math.max(0, amount - down);
     const saveM = down / months;
-    const loanM = loanPayment(principal, settings.loanRatePct, settings.loanTermMonths);
-    const monthly = saveM + loanM;
-    const totalCost = saveM * months + loanM * settings.loanTermMonths;
+    const loanN = settings.loanTermMonths;
+    const loanM = loanPayment(principal, settings.loanRatePct, loanN);
+    // Сначала взнос, потом кредит — пик платежа = max фаз, не сумма.
+    const monthly = Math.max(saveM, loanM);
+    const totalCost = saveM * months + loanM * loanN;
     const feasible = surplus + 1 >= monthly || monthly <= 0;
     options.push({
       kind: "HYBRID",
       label: "Часть копить, часть в кредит",
       monthlyOutflow: monthly,
       totalCost,
-      months: Math.max(months, settings.loanTermMonths),
+      months: months + loanN,
       feasible,
       score: feasible ? totalCost : totalCost + 1e12,
-      note: `Сначала копите ${settings.downPaymentPct}% за ${months} мес., затем берёте кредит на остаток`,
+      note: `Сначала копите ${settings.downPaymentPct}% за ${months} мес., затем кредит на остаток ${loanN} мес.`,
     });
   }
 
@@ -266,4 +268,34 @@ export function summarizeGoalsBudget(
         : `План в минусе: на цели нужно ≈ ${Math.round(requiredMonthly).toLocaleString("ru-RU")} ₽/мес, свободно ${Math.round(surplusMonthly).toLocaleString("ru-RU")} ₽ — нехватка ≈ ${Math.round(Math.abs(remaining)).toLocaleString("ru-RU")} ₽/мес.`
       : `На все выбранные пути нужно ≈ ${Math.round(requiredMonthly).toLocaleString("ru-RU")} ₽/мес при профиците ${Math.round(surplusMonthly).toLocaleString("ru-RU")} ₽ — бюджета хватает (остаток ≈ ${Math.round(remaining).toLocaleString("ru-RU")} ₽/мес).`,
   };
+}
+
+/** Профицит, доступный цели после взносов более приоритетных. */
+export function surplusAvailableForGoal(
+  goalId: string,
+  goals: Array<{
+    id: string;
+    targetAmountNominal: number;
+    priority?: number | null;
+    pathSettings?: Partial<GoalPathSettings> | null;
+  }>,
+  funding: Record<string, GoalFundingResult | undefined>,
+  surplusMonthly: number,
+): number {
+  const sorted = [...goals].sort(
+    (a, b) => (a.priority ?? 1) - (b.priority ?? 1),
+  );
+  let remaining = surplusMonthly;
+  for (const g of sorted) {
+    if (g.id === goalId) return remaining;
+    const analysis = analyzeGoalPaths({
+      targetAmount: g.targetAmountNominal,
+      monthsToGoal: funding[g.id]?.monthsToGoal ?? 12,
+      avgMonthlySurplus: remaining,
+      funding: funding[g.id],
+      settings: g.pathSettings,
+    });
+    remaining -= analysis.budget.requiredMonthly;
+  }
+  return remaining;
 }

@@ -34,7 +34,7 @@ import type {
   LiabilityType,
   LiabilityUrgency,
 } from "@/shared/types";
-import { readApiError, parsePositiveNumber } from "@/shared/api-client";
+import { readApiError, parsePositiveNumber, parseNonNegativeNumber } from "@/shared/api-client";
 import { apiFetch } from "@/shared/api-fetch";
 import { ensureOnlineForWrite } from "@/shared/offline";
 import { formatMoneyInput } from "@/shared/format-input";
@@ -786,10 +786,10 @@ function AssetEditor({
     const rent = useRollup
       ? { ok: true as const, value: rollup!.dividendIncomeMonthly }
       : dividendIncomeMonthly
-        ? parsePositiveNumber(dividendIncomeMonthly, "Доход")
+        ? parseNonNegativeNumber(dividendIncomeMonthly, "Доход")
         : { ok: true as const, value: 0 };
     const maint = maintenanceCostMonthly
-      ? parsePositiveNumber(maintenanceCostMonthly, "Расход на содержание")
+      ? parseNonNegativeNumber(maintenanceCostMonthly, "Расход на содержание")
       : { ok: true as const, value: 0 };
     if (!rent.ok) {
       toast.error(rent.message);
@@ -984,7 +984,7 @@ function IncomeEditor({
   onBack: () => void;
   onSaved: () => void | Promise<void>;
 }) {
-  const { upsert } = useFinanceStore();
+  const { upsert, macro } = useFinanceStore();
   const incomeCategories = categories.filter((c) => c.kind === "income");
   const defaultCat =
     (existing?.category &&
@@ -1000,7 +1000,9 @@ function IncomeEditor({
   );
   const [frequency, setFrequency] = useState(existing?.frequency ?? "MONTHLY");
   const [isEssential, setIsEssential] = useState(existing?.isEssential ?? true);
-  const [taxRatePct, setTaxRatePct] = useState(String(existing?.taxRatePct ?? 13));
+  const [taxRatePct, setTaxRatePct] = useState(
+    String(existing?.taxRatePct ?? macro?.incomeTaxPct ?? 13),
+  );
   const [saving, setSaving] = useState(false);
 
   async function save() {
@@ -1469,7 +1471,7 @@ function BudgetEnvelopesPanel({
     const raw = limitDrafts[id] ?? "";
     let monthlyLimit: number | null = null;
     if (raw.trim()) {
-      const parsed = parsePositiveNumber(raw, "Лимит");
+      const parsed = parseNonNegativeNumber(raw, "Лимит");
       if (!parsed.ok) {
         toast.error(parsed.message);
         return;

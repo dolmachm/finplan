@@ -23,7 +23,7 @@ function pickScheduleStep(
     .filter((s) => s.fromYear != null && s.fromYear > 0)
     .sort((a, b) => (b.fromYear ?? 0) - (a.fromYear ?? 0));
   for (const step of sorted) {
-    if (year >= (step.fromYear ?? 0) && (step.ratePct !== 0 || step.volatilityPct !== 0)) {
+    if (year >= (step.fromYear ?? 0)) {
       return step;
     }
   }

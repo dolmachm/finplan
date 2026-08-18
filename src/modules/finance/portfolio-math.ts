@@ -59,8 +59,8 @@ export function computePortfolioMetrics(
       returnSum: number;
       yieldSum: number;
       volSum: number;
-      targetSum: number;
-      targetCount: number;
+      targetPct: number | null;
+      targetValue: number | null;
     }
   >();
 
@@ -71,16 +71,18 @@ export function computePortfolioMetrics(
       returnSum: 0,
       yieldSum: 0,
       volSum: 0,
-      targetSum: 0,
-      targetCount: 0,
+      targetPct: null,
+      targetValue: null,
     };
     cur.value += v;
     cur.returnSum += v * h.expectedReturnPct;
     cur.yieldSum += v * h.dividendYieldPct;
     cur.volSum += v * h.volatilityPct;
     if (h.targetWeightPct != null) {
-      cur.targetSum += h.targetWeightPct;
-      cur.targetCount += 1;
+      if (cur.targetValue == null || v >= cur.targetValue) {
+        cur.targetPct = h.targetWeightPct;
+        cur.targetValue = v;
+      }
     }
     sleeveMap.set(h.sleeve, cur);
   }
@@ -91,8 +93,7 @@ export function computePortfolioMetrics(
       const expected = cur.value > 0 ? cur.returnSum / cur.value : 0;
       const yieldPct = cur.value > 0 ? cur.yieldSum / cur.value : 0;
       const vol = cur.value > 0 ? cur.volSum / cur.value : 0;
-      const targetWeightPct =
-        cur.targetCount > 0 ? cur.targetSum : null;
+      const targetWeightPct = cur.targetPct;
       return {
         sleeve,
         value: cur.value,

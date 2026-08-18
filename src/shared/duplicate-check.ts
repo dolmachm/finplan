@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import type { Asset, Expense, Goal, Income } from "@/shared/types";
+import type { Asset, Expense, Goal, Income, Liability } from "@/shared/types";
 
 export function normName(name: string): string {
   return name.trim().toLowerCase();
@@ -96,5 +96,20 @@ export function isDuplicateGoal(
       (r.goalType ?? "OTHER") === candidate.goalType &&
       r.targetAmountNominal === candidate.targetAmountNominal &&
       sameGoalDate(r.targetDate, candidate.targetDate),
+  );
+}
+
+export function isDuplicateLiability(
+  rows: Liability[],
+  candidate: { name: string; type: string; remainingBalance: number },
+  excludeId?: string,
+): boolean {
+  const name = normName(candidate.name);
+  return rows.some(
+    (r) =>
+      r.id !== excludeId &&
+      normName(r.name) === name &&
+      r.type === candidate.type &&
+      r.remainingBalance === candidate.remainingBalance,
   );
 }

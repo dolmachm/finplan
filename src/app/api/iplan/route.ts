@@ -17,15 +17,9 @@ import {
   validateContributionsVsBudget,
 } from "@/modules/iplan/budget";
 import { envelopeReserveBudgetLine } from "@/modules/budget/envelopes";
+import { loadUserFinanceSnapshot } from "@/modules/finance/finance-snapshot";
+import { activeLiabilities } from "@/modules/finance/liability-status";
 import type { IPlanVariant, InvestmentPlan } from "@/modules/iplan/types";
-import type {
-  Asset,
-  BudgetCategory,
-  Expense,
-  Goal,
-  Income,
-  MacroSettings,
-} from "@/shared/types";
 import { recordRevision } from "@/shared/revision";
 import { newId } from "@/shared/db/helpers";
 
@@ -72,42 +66,53 @@ const putSchema = z.object({
 });
 
 async function loadContext(userId: string) {
-  const [plan, assets, incomes, expenses, goals, macro, budgetCategories] =
-    await Promise.all([
-      prisma.investmentPlan.findUnique({ where: { userId } }),
-      prisma.asset.findMany({ where: { userId } }),
-      prisma.income.findMany({ where: { userId } }),
-      prisma.expense.findMany({ where: { userId } }),
-      prisma.goal.findMany({ where: { userId }, orderBy: { priority: "asc" } }),
-      prisma.macroSettings.findUnique({ where: { userId } }),
-      prisma.budgetCategory.findMany({
-        where: { userId },
-        orderBy: { sortOrder: "asc" },
-      }),
-    ]) as [
-      InvestmentPlan | null,
-      Asset[],
-      Income[],
-      Expense[],
-      Goal[],
-      MacroSettings | null,
-      BudgetCategory[],
-    ];
+  const [plan, snap] = await Promise.all([
+    prisma.investmentPlan.findUnique({ where: { userId } }),
+    loadUserFinanceSnapshot(userId),
+  ]);
+  const { assets, incomes, expenses, goals, macro, budgetCategories, liabilities } =
+    snap;
 
   const investmentAssets = assets.filter((a) => a.assetClass === "INVESTMENT");
   const capitalAssets = investmentAssets.length > 0 ? investmentAssets : assets;
   const initialCapital = capitalAssets.reduce((s, a) => s + a.currentValue, 0);
   const wRet = weightedReturnPct(capitalAssets);
   const wVol = weightedVolatilityPct(capitalAssets);
-  const budgetIncomes = toBudgetLines(incomes);
+  const budgetIncomes = [
+    ...toBudgetLines(
+      incomes.map((i) => ({
+        ...i,
+        amount: i.amount * (1 - (i.taxRatePct ?? 0) / 100),
+      })),
+    ),
+    ...assets
+      .filter((a) => (a.dividendIncomeMonthly ?? 0) > 0)
+      .map((a) => ({
+        id: `div_${a.id}`,
+        name: a.name,
+        amount: a.dividendIncomeMonthly,
+        frequency: "MONTHLY" as const,
+        startYear: null,
+        endYear: null,
+      })),
+  ];
   const reserve = envelopeReserveBudgetLine(expenses, budgetCategories);
-  const budgetExpenses = toBudgetLines(
-    reserve ? [...expenses, reserve] : expenses,
+  const debtLines = toBudgetLines(
+    activeLiabilities(liabilities).map((l) => ({
+      id: l.id,
+      name: l.name,
+      amount: l.monthlyPayment,
+      frequency: "MONTHLY" as const,
+    })),
   );
+  const budgetExpenses = [
+    ...toBudgetLines(reserve ? [...expenses, reserve] : expenses),
+    ...debtLines,
+  ];
   const surplusMonthly = baselineMonthlySurplus(budgetIncomes, budgetExpenses);
 
   return {
-    plan,
+    plan: plan as InvestmentPlan | null,
     assets,
     capitalAssets,
     initialCapital,

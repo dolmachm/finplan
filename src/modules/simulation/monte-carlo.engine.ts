@@ -1,4 +1,4 @@
-import type { PlanInput } from "@/modules/plan/types";
+import type { PlanInput, ScenarioModifiers } from "@/modules/plan/types";
 import { runDeterministicPlan } from "@/modules/plan/cashflow.engine";
 import { percentile, randn } from "@/shared/math";
 
@@ -17,6 +17,7 @@ export interface MonteCarloParams {
   horizonMonths: number;
   correlation?: number;
   crisisShockPct?: number;
+  modifiers?: ScenarioModifiers;
 }
 
 export interface GoalMonteCarloResult {
@@ -43,16 +44,32 @@ function yieldEventLoop() {
   });
 }
 
+/** Shock/return/vol/div already baked into assets for this path. */
+function pathModifiers(mods?: ScenarioModifiers): ScenarioModifiers | undefined {
+  if (!mods) return undefined;
+  return {
+    ...mods,
+    returnMultiplier: 1,
+    volatilityMultiplier: 1,
+    dividendMultiplier: 1,
+    assetShockPct: 0,
+  };
+}
+
 function runOnePath(
   baseInput: PlanInput,
   horizonMonths: number,
   chol: number[][],
-  crisisShockPct: number | undefined,
+  modifiers: ScenarioModifiers | undefined,
   applyCrisis: boolean,
 ) {
+  const retMul = modifiers?.returnMultiplier ?? 1;
+  const volMul = modifiers?.volatilityMultiplier ?? 1;
+  const divMul = modifiers?.dividendMultiplier ?? 1;
+  const crisisShockPct = applyCrisis ? (modifiers?.assetShockPct ?? 0) : 0;
   const perturbedAssets = baseInput.assets.map((a, i) => {
-    const monthlyVol = a.volatilityPct / 100 / Math.sqrt(12);
-    const monthlyMu = a.expectedReturnPct / 100 / 12;
+    const monthlyVol = ((a.volatilityPct * volMul) / 100) / Math.sqrt(12);
+    const monthlyMu = ((a.expectedReturnPct * retMul) / 100) / 12;
     let logSum = 0;
     for (let m = 0; m < horizonMonths; m++) {
       const z1 = randn();
@@ -62,21 +79,25 @@ function runOnePath(
     }
     const avgMonthly = logSum / Math.max(1, horizonMonths);
     let currentValue = a.currentValue;
-    if (applyCrisis && crisisShockPct) {
+    if (crisisShockPct) {
       currentValue *= 1 + crisisShockPct / 100;
     }
     return {
       ...a,
       expectedReturnPct: (Math.pow(1 + avgMonthly, 12) - 1) * 100,
+      dividendIncomeMonthly: a.dividendIncomeMonthly * divMul,
       currentValue,
     };
   });
 
-  return runDeterministicPlan({
-    ...baseInput,
-    horizonMonths,
-    assets: perturbedAssets,
-  });
+  return runDeterministicPlan(
+    {
+      ...baseInput,
+      horizonMonths,
+      assets: perturbedAssets,
+    },
+    pathModifiers(modifiers),
+  );
 }
 
 /** Асинхронный MC: чанки + yield, чтобы прогресс писался в Redis и UI не залипал на 0%. */
@@ -85,63 +106,80 @@ export async function runMonteCarlo(
   params: MonteCarloParams,
   onProgress?: (pct: number) => void | Promise<void>,
 ): Promise<MonteCarloResult> {
-  const { numRuns, horizonMonths, correlation = 0.3, crisisShockPct } = params;
+  const {
+    numRuns,
+    horizonMonths,
+    correlation = 0.3,
+    crisisShockPct,
+    modifiers,
+  } = params;
+  const mods: ScenarioModifiers = {
+    ...(modifiers ?? {}),
+    assetShockPct: modifiers?.assetShockPct ?? crisisShockPct,
+  };
   const chol = cholesky2x2(correlation);
+  const inflationPct = (() => {
+    const inf =
+      baseInput.baseInflationPct * (mods.inflationMultiplier ?? 1) +
+      (mods.inflationDeltaPct ?? 0);
+    return inf;
+  })();
 
   const finalWealth: number[] = [];
+  const allPaths: number[][] = [];
   const goalHits: Record<string, number[]> = {};
-  for (const g of baseInput.goals) goalHits[g.id] = [];
+  const goalWealth: Record<string, number[]> = {};
+  for (const g of baseInput.goals) {
+    goalHits[g.id] = [];
+    goalWealth[g.id] = [];
+  }
 
-  const sampleWorst: number[] = [];
-  const sampleMedian: number[] = [];
-  const sampleBest: number[] = [];
+  let sampleWorst: number[] = [];
+  let sampleBest: number[] = [];
+  let worstFinal = Infinity;
+  let bestFinal = -Infinity;
 
   await onProgress?.(1);
 
   for (let run = 0; run < numRuns; run++) {
-    const applyCrisis = !!(crisisShockPct && run < numRuns * 0.15);
+    const applyCrisis = !!(mods.assetShockPct && run < numRuns * 0.15);
     const planResult = runOnePath(
       baseInput,
       horizonMonths,
       chol,
-      crisisShockPct,
+      mods,
       applyCrisis,
     );
 
     const nw = planResult.monthly.map((x) => x.netWorth);
     const final = nw[nw.length - 1] ?? 0;
     finalWealth.push(final);
+    allPaths.push(nw);
 
     for (const g of baseInput.goals) {
-      const idx = Math.min(g.targetMonthIndex, nw.length - 1);
+      const idx = Math.min(Math.max(0, g.targetMonthIndex), nw.length - 1);
       const atGoal = nw[idx] ?? 0;
       const inflatedTarget =
         g.targetAmountNominal *
-        Math.pow(1 + baseInput.baseInflationPct / 100, g.targetMonthIndex / 12);
+        Math.pow(1 + inflationPct / 100, g.targetMonthIndex / 12);
       const minShare =
         g.minAmount != null && g.targetAmountNominal > 0
           ? g.minAmount / g.targetAmountNominal
           : g.allowPartialFunding
             ? 0.8
             : 1;
-      const threshold = Math.min(1, Math.max(0.5, minShare));
+      const threshold = Math.min(1, Math.max(0, minShare));
       goalHits[g.id].push(atGoal >= inflatedTarget * threshold ? 1 : 0);
+      goalWealth[g.id].push(atGoal);
     }
 
-    if (run === 0) {
-      sampleWorst.push(...nw);
-      sampleMedian.push(...nw);
-      sampleBest.push(...nw);
-    } else {
-      if (final < (sampleWorst[sampleWorst.length - 1] ?? Infinity)) {
-        sampleWorst.splice(0, sampleWorst.length, ...nw);
-      }
-      if (final > (sampleBest[sampleBest.length - 1] ?? -Infinity)) {
-        sampleBest.splice(0, sampleBest.length, ...nw);
-      }
-      if (run === Math.floor(numRuns / 2)) {
-        sampleMedian.splice(0, sampleMedian.length, ...nw);
-      }
+    if (final < worstFinal) {
+      worstFinal = final;
+      sampleWorst = nw;
+    }
+    if (final > bestFinal) {
+      bestFinal = final;
+      sampleBest = nw;
     }
 
     if (run % CHUNK === 0 || run === numRuns - 1) {
@@ -150,17 +188,29 @@ export async function runMonteCarlo(
     }
   }
 
-  finalWealth.sort((a, b) => a - b);
+  const sortedFinal = [...finalWealth].sort((a, b) => a - b);
+  const medianWealth = percentile(sortedFinal, 0.5);
+  let medianIdx = 0;
+  let medianDist = Infinity;
+  for (let i = 0; i < finalWealth.length; i++) {
+    const d = Math.abs(finalWealth[i]! - medianWealth);
+    if (d < medianDist) {
+      medianDist = d;
+      medianIdx = i;
+    }
+  }
+  const sampleMedian = allPaths[medianIdx] ?? sampleWorst;
 
   const goalResults: GoalMonteCarloResult[] = baseInput.goals.map((g) => {
     const hits = goalHits[g.id];
+    const wealth = [...(goalWealth[g.id] ?? [])].sort((a, b) => a - b);
     const prob = hits.reduce((s, h) => s + h, 0) / numRuns;
     return {
       goalId: g.id,
       probability: prob,
-      median: percentile(finalWealth, 0.5),
-      p5: percentile(finalWealth, 0.05),
-      p95: percentile(finalWealth, 0.95),
+      median: percentile(wealth, 0.5),
+      p5: percentile(wealth, 0.05),
+      p95: percentile(wealth, 0.95),
     };
   });
 
@@ -169,9 +219,9 @@ export async function runMonteCarlo(
   return {
     goalResults,
     wealthAtHorizon: {
-      p5: percentile(finalWealth, 0.05),
-      median: percentile(finalWealth, 0.5),
-      p95: percentile(finalWealth, 0.95),
+      p5: percentile(sortedFinal, 0.05),
+      median: percentile(sortedFinal, 0.5),
+      p95: percentile(sortedFinal, 0.95),
     },
     samplePaths: [
       { label: "worst", netWorth: sampleWorst },
@@ -185,6 +235,7 @@ export async function runMonteCarlo(
 export async function runSensitivity(
   baseInput: PlanInput,
   runs: number = 80,
+  modifiers?: ScenarioModifiers,
 ): Promise<Record<string, GoalMonteCarloResult[]>> {
   const deltas = [
     { key: "inflation+1", inflation: 1 },
@@ -211,6 +262,7 @@ export async function runSensitivity(
     const mc = await runMonteCarlo(modified, {
       numRuns: runs,
       horizonMonths: baseInput.horizonMonths,
+      modifiers,
     });
     out[d.key] = mc.goalResults;
   }

@@ -1,10 +1,10 @@
-import { monthlyEquivalent } from "@/modules/plan/frequency";
-import type { PlanFrequency } from "@/modules/plan/frequency";
+import { monthlyEquivalent, monthlyNetIncome, monthlyTotal } from "@/modules/plan/frequency";
 import {
   budgetExpenseFloor,
   envelopeStatuses,
 } from "@/modules/budget/envelopes";
-import type { BudgetCategory, Expense, Income } from "@/shared/types";
+import { activeLiabilities } from "@/modules/finance/liability-status";
+import type { Asset, BudgetCategory, Expense, Income, Liability } from "@/shared/types";
 
 export type SavingsAction = "cut" | "raise" | "tighten" | "deploy";
 
@@ -20,7 +20,7 @@ export type SavingsRecommendation = {
 export type SavingsCorridor = {
   incomeMonthly: number;
   expenseMonthly: number;
-  /** income − expense — сколько можно откладывать сейчас */
+  /** Чистый профицит: доходы после налога + дивиденды − расходы − долг */
   deltaMonthly: number;
   savingsRate: number;
   /** После финансирования конвертов (лимитов) */
@@ -47,30 +47,42 @@ export type SavingsCorridor = {
   }>;
 };
 
-function freq(amount: number, frequency: string) {
-  return monthlyEquivalent(amount, frequency as PlanFrequency);
+function freq(amount: number, frequency: Expense["frequency"] | Income["frequency"]) {
+  return monthlyEquivalent(amount, frequency);
 }
 
 export function buildSavingsCorridor(input: {
   incomes: Income[];
   expenses: Expense[];
   budgetCategories?: BudgetCategory[];
+  liabilities?: Liability[];
+  assets?: Asset[];
 }): SavingsCorridor | null {
-  const { incomes, expenses, budgetCategories = [] } = input;
+  const {
+    incomes,
+    expenses,
+    budgetCategories = [],
+    liabilities = [],
+    assets = [],
+  } = input;
   if (incomes.length === 0 && expenses.length === 0) return null;
 
-  const incomeMonthly = incomes.reduce(
-    (s, i) => s + freq(i.amount, i.frequency),
+  const incomeMonthly = monthlyNetIncome(incomes);
+  const expenseMonthly = monthlyTotal(expenses);
+  const debtMonthly = activeLiabilities(liabilities).reduce(
+    (s, l) => s + l.monthlyPayment,
     0,
   );
-  const expenseMonthly = expenses.reduce(
-    (s, e) => s + freq(e.amount, e.frequency),
+  const dividendMonthly = assets.reduce(
+    (s, a) => s + (a.dividendIncomeMonthly ?? 0),
     0,
   );
-  const deltaMonthly = incomeMonthly - expenseMonthly;
+  const deltaMonthly =
+    incomeMonthly + dividendMonthly - expenseMonthly - debtMonthly;
   const savingsRate = incomeMonthly > 0 ? deltaMonthly / incomeMonthly : 0;
   const floor = budgetExpenseFloor(expenses, budgetCategories);
-  const afterEnvelopesMonthly = incomeMonthly - floor;
+  const afterEnvelopesMonthly =
+    incomeMonthly + dividendMonthly - floor - debtMonthly;
 
   const envelopes = envelopeStatuses(expenses, budgetCategories);
   const overspendTotal = envelopes

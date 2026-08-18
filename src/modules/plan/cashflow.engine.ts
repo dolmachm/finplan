@@ -28,18 +28,24 @@ function applyModifiers(
     base.baseInflationPct * (m.inflationMultiplier ?? 1) +
     (m.inflationDeltaPct ?? 0);
   const divMul = m.dividendMultiplier ?? 1;
+  const volMul = m.volatilityMultiplier ?? 1;
+  const cut = m.expenseCutPct ?? 0;
   return {
     ...base,
     assets: base.assets.map((a) => ({
       ...a,
       currentValue: a.currentValue * (1 + (m.assetShockPct ?? 0) / 100),
       expectedReturnPct: a.expectedReturnPct * (m.returnMultiplier ?? 1),
+      volatilityPct: a.volatilityPct * volMul,
       dividendIncomeMonthly: a.dividendIncomeMonthly * divMul,
     })),
     baseInflationPct: inflation,
     expenses: base.expenses.map((e) => ({
       ...e,
-      amount: e.amount * (1 - (m.expenseCutPct ?? 0) / 100),
+      amount:
+        m.expenseCutEssentialOnly && e.isEssential
+          ? e.amount
+          : e.amount * (1 - cut / 100),
     })),
   };
 }
@@ -105,11 +111,28 @@ export function runDeterministicPlan(
     }
 
     let income = 0;
+    if (m === 0 && modifiers?.emergencyWithdraw) {
+      let withdraw = Math.max(0, modifiers.emergencyWithdraw);
+      const liquids = tracked
+        .filter((a) => !a.sold && a.liquidityDays <= 30 && a.currentValue > 0)
+        .sort((a, b) => a.liquidityDays - b.liquidityDays);
+      for (const a of liquids) {
+        if (withdraw <= 0) break;
+        const take = Math.min(a.currentValue, withdraw);
+        a.currentValue -= take;
+        cashFromSales += take;
+        withdraw -= take;
+      }
+    }
+
     for (const inc of plan.incomes) {
       const growth = Math.pow(1 + inc.growthRatePct / 100, m / 12);
       const gross = amountForMonth(inc.amount, inc.frequency, m) * growth;
       if (modifiers?.incomeLossMonths && m < modifiers.incomeLossMonths) continue;
-      income += gross * (1 - inc.taxRatePct / 100);
+      const taxPct = Number.isFinite(inc.taxRatePct)
+        ? inc.taxRatePct
+        : plan.incomeTaxPct;
+      income += gross * (1 - taxPct / 100);
     }
 
     let expenses = 0;
@@ -150,18 +173,19 @@ export function runDeterministicPlan(
     const debtTotal = debts.reduce((s, d) => s + d.balance, 0);
 
     let investmentReturn = 0;
-    const pool = activeValue(tracked);
+    let dividendCash = 0;
     for (const a of tracked) {
       if (a.sold || a.currentValue <= 0) continue;
       const monthlyReturn = Math.pow(1 + a.expectedReturnPct / 100, 1 / 12) - 1;
       const growth = a.currentValue * monthlyReturn;
       a.currentValue += growth;
+      dividendCash += a.dividendIncomeMonthly;
       investmentReturn += growth + a.dividendIncomeMonthly;
     }
+    // Рост капитала уже в currentValue; в кэшфлоу только живые деньги.
     // Idle cash from sales earns 0 in MVP (conservative)
 
-    const cashflow = income + investmentReturn - expenses - debtPayments;
-    // Apply net cashflow to largest active asset (or hold as cash)
+    const cashflow = income + dividendCash - expenses - debtPayments;
     if (cashflow !== 0) {
       const active = tracked.filter((a) => !a.sold);
       if (active.length > 0) {
@@ -174,7 +198,6 @@ export function runDeterministicPlan(
       }
     }
 
-    void pool;
     surplusSum += cashflow;
     const netWorth = activeValue(tracked) + cashFromSales - debtTotal;
     monthly.push({
