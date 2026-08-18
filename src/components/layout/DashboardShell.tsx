@@ -1,14 +1,16 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useSession } from "next-auth/react";
+import { useRouter } from "next/navigation";
 import { BrandLogo } from "@/components/brand/BrandLogo";
 import { PwaInstallButton } from "@/components/pwa/PwaInstall";
 import { SupportPanel } from "@/components/support/SupportPanel";
 import { HelpHint } from "@/components/ui/FormField";
 import { toast } from "@/components/ui/ToastProvider";
 import { TAB_HINTS } from "@/content/help";
+import { apiFetchJson } from "@/shared/api-fetch";
 import { useOnlineStatus } from "@/shared/offline";
 import { signOut } from "next-auth/react";
 
@@ -86,13 +88,87 @@ export function DashboardShell({
   supportSubTab?: string | null;
 }) {
   const { data: session } = useSession();
+  const router = useRouter();
   const online = useOnlineStatus();
   const [supportOpen, setSupportOpen] = useState(false);
+  const [demoStatus, setDemoStatus] = useState<{
+    active: boolean;
+    hasSandbox: boolean;
+    sandboxUserId: string | null;
+  } | null>(null);
+  const [demoBusy, setDemoBusy] = useState(false);
   const current = navItems.find((n) => n.id === tab);
   const firstName =
     session?.user?.name?.trim().split(/\s+/)[0] ||
     session?.user?.email?.split("@")[0] ||
     null;
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const result = await apiFetchJson<{
+        active: boolean;
+        hasSandbox: boolean;
+        sandboxUserId: string | null;
+      }>("/api/demo-account");
+      if (cancelled || !result.ok) return;
+      setDemoStatus(result.data);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  async function toggleDemoMode(nextActive: boolean) {
+    setDemoBusy(true);
+    try {
+      const result = await apiFetchJson<{ ok?: true; active?: boolean }>(
+        "/api/demo-account",
+        { method: nextActive ? "POST" : "DELETE" },
+      );
+      if (!result.ok) {
+        toast.error(result.message);
+        return;
+      }
+      toast.success(
+        nextActive
+          ? "Открыта ваша demo-копия"
+          : "Возврат в основной аккаунт выполнен",
+      );
+      router.refresh();
+      window.location.reload();
+    } catch {
+      toast.error(
+        nextActive
+          ? "Не удалось открыть тестовый аккаунт"
+          : "Не удалось вернуться в основной аккаунт",
+      );
+    } finally {
+      setDemoBusy(false);
+    }
+  }
+
+  async function recreateDemo() {
+    setDemoBusy(true);
+    try {
+      const result = await apiFetchJson<{
+        active: boolean;
+        hasSandbox: boolean;
+        sandboxUserId: string | null;
+      }>("/api/demo-account", { method: "PUT" });
+      if (!result.ok) {
+        toast.error(result.message);
+        return;
+      }
+      toast.success("Demo-копия пересоздана из шаблона");
+      router.refresh();
+      window.location.reload();
+    } catch {
+      toast.error("Не удалось пересоздать demo-копию");
+    } finally {
+      setDemoBusy(false);
+    }
+  }
 
   return (
     <div className="min-h-screen bg-background">
@@ -115,6 +191,18 @@ export function DashboardShell({
               className="rounded-lg px-2 py-1.5 text-sm text-muted transition-colors hover:bg-brand-light hover:text-foreground"
             >
               Поддержка
+            </button>
+            <button
+              type="button"
+              disabled={demoBusy}
+              onClick={() => void toggleDemoMode(!(demoStatus?.active ?? false))}
+              className="rounded-lg px-2 py-1.5 text-sm text-muted transition-colors hover:bg-brand-light hover:text-foreground disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {demoBusy
+                ? "Переключение…"
+                : demoStatus?.active
+                  ? "Вернуться из demo"
+                  : "Тестовый аккаунт"}
             </button>
             <Link
               href="/dashboard/account"
@@ -173,11 +261,38 @@ export function DashboardShell({
             Нет сети — показаны сохранённые данные. Изменения недоступны.
           </div>
         )}
+        {demoStatus?.active && (
+          <div
+            role="status"
+            className="border-b border-sky-200 bg-sky-50 px-4 py-2 text-sky-950 sm:px-6 lg:px-8"
+          >
+            <div className="flex flex-col items-center justify-center gap-2 text-center sm:flex-row sm:justify-between sm:text-left">
+              <p className="text-xs sm:text-sm">
+                Вы в demo-копии: изменения сохраняются только в вашей версии и
+                не затрагивают эталонный тестовый аккаунт.
+              </p>
+              <button
+                type="button"
+                disabled={demoBusy}
+                onClick={() => void recreateDemo()}
+                className="rounded-lg border border-sky-300 bg-white px-3 py-1.5 text-xs font-medium text-sky-900 transition-colors hover:bg-sky-100 disabled:cursor-not-allowed disabled:opacity-60 sm:text-sm"
+              >
+                {demoBusy ? "Пересоздание…" : "Пересоздать demo-копию"}
+              </button>
+            </div>
+          </div>
+        )}
         <div className="border-b border-border bg-card px-4 py-3 sm:px-6 lg:px-8">
           <h1 className="text-base font-semibold tracking-tight text-foreground sm:text-lg">
             {current?.label}
           </h1>
           <HelpHint className="mt-0.5">{TAB_HINTS[tab]}</HelpHint>
+          {!demoStatus?.active && (
+            <p className="mt-2 text-xs text-muted">
+              Можно открыть тестовый аккаунт с уже заполненными данными и
+              безопасно поэкспериментировать в своей копии.
+            </p>
+          )}
         </div>
 
         <nav className="border-b border-border bg-card px-3 py-2 lg:hidden">

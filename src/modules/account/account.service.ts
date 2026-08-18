@@ -182,7 +182,9 @@ export async function startOver(userId: string): Promise<void> {
  */
 export async function softDeleteAccount(userId: string): Promise<void> {
   const user = await requireActiveUser(userId);
+  const { removeDemoSandbox } = await import("@/modules/demo/demo-account.service");
   await wipeUserData(userId);
+  await removeDemoSandbox(userId);
 
   await redis.del(`idx:user:email:${user.email}`);
   await prisma.user.update({

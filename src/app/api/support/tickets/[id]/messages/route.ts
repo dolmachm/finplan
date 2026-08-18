@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { notFoundResponse, parseJsonBody } from "@/shared/api-validation";
-import { requireUserId, isErrorResponse } from "@/shared/session";
+import { requireViewerUserId, isErrorResponse } from "@/shared/session";
 import { addUserMessage } from "@/modules/support/support.service";
 
 const schema = z.object({
@@ -11,7 +11,7 @@ const schema = z.object({
 type Ctx = { params: Promise<{ id: string }> };
 
 export async function POST(req: Request, ctx: Ctx) {
-  const userId = await requireUserId();
+  const userId = await requireViewerUserId();
   if (isErrorResponse(userId)) return userId;
   const { id } = await ctx.params;
   const parsed = parseJsonBody(schema, await req.json().catch(() => ({})));

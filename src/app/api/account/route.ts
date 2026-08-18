@@ -11,10 +11,10 @@ import {
   parseJsonBody,
   validationErrorResponse,
 } from "@/shared/api-validation";
-import { isErrorResponse, requireUserId } from "@/shared/session";
+import { isErrorResponse, requireViewerUserId } from "@/shared/session";
 
 export async function GET() {
-  const userId = await requireUserId();
+  const userId = await requireViewerUserId();
   if (isErrorResponse(userId)) return userId;
 
   const account = await getAccount(userId);
@@ -23,7 +23,7 @@ export async function GET() {
 }
 
 export async function PATCH(req: Request) {
-  const userId = await requireUserId();
+  const userId = await requireViewerUserId();
   if (isErrorResponse(userId)) return userId;
 
   const parsed = parseJsonBody(updateProfileSchema, await req.json());
@@ -63,7 +63,7 @@ export async function PATCH(req: Request) {
 }
 
 export async function DELETE() {
-  const userId = await requireUserId();
+  const userId = await requireViewerUserId();
   if (isErrorResponse(userId)) return userId;
 
   try {

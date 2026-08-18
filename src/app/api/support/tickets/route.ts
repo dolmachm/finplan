@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { parseJsonBody } from "@/shared/api-validation";
-import { requireUserId, isErrorResponse } from "@/shared/session";
+import { requireViewerUserId, isErrorResponse } from "@/shared/session";
 import {
   createTicket,
   listTicketsForUser,
@@ -18,14 +18,14 @@ const createSchema = z.object({
 });
 
 export async function GET() {
-  const userId = await requireUserId();
+  const userId = await requireViewerUserId();
   if (isErrorResponse(userId)) return userId;
   const tickets = await listTicketsForUser(userId);
   return NextResponse.json({ tickets });
 }
 
 export async function POST(req: Request) {
-  const userId = await requireUserId();
+  const userId = await requireViewerUserId();
   if (isErrorResponse(userId)) return userId;
   const parsed = parseJsonBody(createSchema, await req.json().catch(() => ({})));
   if (!parsed.ok) return parsed.response;
