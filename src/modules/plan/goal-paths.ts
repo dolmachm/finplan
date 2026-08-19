@@ -246,6 +246,120 @@ export function analyzeGoalPaths(args: {
   };
 }
 
+export type GoalFix = {
+  kind: "extend_term" | "reduce_amount" | "switch_path" | "reduce_priority";
+  label: string;
+  /** Human-readable suggestion */
+  hint: string;
+  /** Suggested new value (months / amount / kind), to pre-fill inputs */
+  value?: number | GoalPathKind;
+};
+
+/**
+ * Generates concrete "how to make this goal achievable" suggestions
+ * for an unachievable goal.
+ */
+export function suggestFixesForGoal(args: {
+  targetAmount: number;
+  monthsToGoal: number;
+  avgMonthlySurplus: number;
+  funding?: GoalFundingResult;
+  settings: GoalPathSettings;
+  goalPriority?: number;
+}): GoalFix[] {
+  const { targetAmount, monthsToGoal, avgMonthlySurplus, funding, settings, goalPriority } = args;
+  const surplus = avgMonthlySurplus;
+  const fixes: GoalFix[] = [];
+
+  if (surplus <= 0) {
+    fixes.push({
+      kind: "reduce_priority",
+      label: "Исправьте бюджет",
+      hint: "Доходы меньше расходов — сначала устраните дефицит бюджета, затем вернитесь к цели.",
+    });
+    return fixes;
+  }
+
+  // 1. Extend term: find months when the cheapest path becomes feasible
+  const tryMonths = [
+    monthsToGoal + 12,
+    monthsToGoal + 24,
+    monthsToGoal + 36,
+    monthsToGoal + 60,
+  ];
+  for (const m of tryMonths) {
+    const a = analyzeGoalPaths({ targetAmount, monthsToGoal: m, avgMonthlySurplus: surplus, funding, settings });
+    if (a.budget.budgetOk) {
+      const yrs = Math.round(m / 12);
+      fixes.push({
+        kind: "extend_term",
+        label: `Сдвинуть срок на ${m - monthsToGoal} мес. (+${yrs > 0 ? yrs + " г." : ""})`,
+        hint: `При сроке ${m} мес. нужный взнос (${Math.round(a.budget.requiredMonthly).toLocaleString("ru-RU")} ₽/мес) укладывается в бюджет.`,
+        value: m,
+      });
+      break;
+    }
+  }
+
+  // 2. Reduce amount: find target that fits current term
+  const frac = surplus > 0 ? Math.min(1, surplus / ((funding?.requiredMonthlyDesired ?? targetAmount / monthsToGoal) || 1)) : 0;
+  if (frac > 0.1 && frac < 0.99) {
+    const reducedAmount = Math.round(targetAmount * frac * 0.95 / 1000) * 1000;
+    if (reducedAmount > 0 && reducedAmount < targetAmount) {
+      const a = analyzeGoalPaths({ targetAmount: reducedAmount, monthsToGoal, avgMonthlySurplus: surplus, funding: undefined, settings });
+      if (a.budget.budgetOk) {
+        fixes.push({
+          kind: "reduce_amount",
+          label: `Снизить сумму до ≈ ${reducedAmount.toLocaleString("ru-RU")} ₽`,
+          hint: `При уменьшенной сумме взнос (${Math.round(a.budget.requiredMonthly).toLocaleString("ru-RU")} ₽/мес) укладывается в профицит.`,
+          value: reducedAmount,
+        });
+      }
+    }
+  }
+
+  // 3. Switch path: try LOAN / HYBRID if they are cheaper
+  const altKinds: GoalPathKind[] = ["LOAN", "HYBRID", "SAVE"];
+  for (const kind of altKinds) {
+    if (kind === settings.preferredKind) continue;
+    const a = analyzeGoalPaths({
+      targetAmount, monthsToGoal, avgMonthlySurplus: surplus, funding,
+      settings: { ...settings, preferredKind: kind },
+    });
+    if (a.budget.budgetOk) {
+      const opt = a.options.find((o) => o.kind === kind);
+      if (opt) {
+        fixes.push({
+          kind: "switch_path",
+          label: `Сменить способ → «${opt.label}»`,
+          hint: `${opt.label}: взнос ≈ ${Math.round(opt.monthlyOutflow).toLocaleString("ru-RU")} ₽/мес — влезает в бюджет.`,
+          value: kind,
+        });
+        break;
+      }
+    }
+  }
+
+  // 4. If priority > 1, suggest reducing it (free up more surplus)
+  if ((goalPriority ?? 1) > 1) {
+    fixes.push({
+      kind: "reduce_priority",
+      label: "Повысить приоритет цели",
+      hint: "Если поставить эту цель первой — больше профицита будет распределено на неё до других целей.",
+    });
+  }
+
+  if (fixes.length === 0) {
+    fixes.push({
+      kind: "reduce_priority",
+      label: "Увеличьте доход или сократите расходы",
+      hint: `Не хватает ≈ ${Math.round(Math.max(0, (funding?.requiredMonthlyMin ?? 0) - surplus)).toLocaleString("ru-RU")} ₽/мес. Скорректируйте бюджет в разделе «Данные».`,
+    });
+  }
+
+  return fixes;
+}
+
 /** Сводка по всем целям: суммарный взнос vs профицит */
 export function summarizeGoalsBudget(
   analyses: GoalPathAnalysis[],

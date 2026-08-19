@@ -25,8 +25,10 @@ import { findAchievableSubset } from "@/modules/plan/goal-funding";
 import {
   analyzeGoalPaths,
   normalizePathSettings,
+  suggestFixesForGoal,
   summarizeGoalsBudget,
   surplusAvailableForGoal,
+  type GoalPathKind,
   type GoalPathSettings,
 } from "@/modules/plan/goal-paths";
 import type { Asset, Goal, GoalStrategy, GoalType } from "@/shared/types";
@@ -284,6 +286,56 @@ function GoalsBudgetBanner({
         </p>
       )}
     </Card>
+  );
+}
+
+function GoalFixConstructor({
+  goal,
+  funding,
+  availableSurplus,
+  draft,
+  onApplyFix,
+}: {
+  goal: Goal;
+  funding?: GoalFundingResult;
+  availableSurplus: number;
+  draft: GoalPathSettings;
+  onApplyFix: (fix: ReturnType<typeof suggestFixesForGoal>[number]) => void;
+}) {
+  const fixes = suggestFixesForGoal({
+    targetAmount: goal.targetAmountNominal,
+    monthsToGoal: funding?.monthsToGoal ?? 12,
+    avgMonthlySurplus: availableSurplus,
+    funding,
+    settings: draft,
+    goalPriority: goal.priority,
+  });
+
+  if (fixes.length === 0) return null;
+
+  return (
+    <div className="space-y-2 rounded-xl border border-red-200 bg-red-50/60 px-3 py-2.5">
+      <p className="text-[11px] font-medium uppercase tracking-wide text-red-700">
+        Как достичь цели
+      </p>
+      <ul className="space-y-1.5">
+        {fixes.map((fix) => (
+          <li key={fix.kind + fix.label} className="flex items-start justify-between gap-2">
+            <div className="min-w-0 flex-1">
+              <p className="text-xs font-medium text-foreground">{fix.label}</p>
+              <p className="text-[11px] text-muted">{fix.hint}</p>
+            </div>
+            <button
+              type="button"
+              className="shrink-0 rounded-md border border-red-300 bg-white px-2 py-0.5 text-[11px] text-red-700 hover:bg-red-50"
+              onClick={() => onApplyFix(fix)}
+            >
+              {fix.kind === "switch_path" ? "Применить" : "Изменить"}
+            </button>
+          </li>
+        ))}
+      </ul>
+    </div>
   );
 }
 
@@ -567,7 +619,25 @@ function GoalCard({
         </div>
       </div>
 
-      {funding && funding.requiredMonthlyDesired > funding.allocatedMonthlySaving + 1 && (
+      {achieve === "none" && (
+        <GoalFixConstructor
+          goal={goal}
+          funding={funding}
+          availableSurplus={availableSurplus}
+          draft={draft}
+          onApplyFix={(fix) => {
+            if (fix.kind === "switch_path" && typeof fix.value === "string") {
+              void persist({ ...draft, preferredKind: fix.value as GoalPathKind });
+            } else if (fix.kind === "extend_term" || fix.kind === "reduce_amount") {
+              onEdit();
+            } else {
+              onEdit();
+            }
+          }}
+        />
+      )}
+
+      {achieve !== "none" && funding && funding.requiredMonthlyDesired > funding.allocatedMonthlySaving + 1 && (
         <p className="text-xs text-amber-700">
           Не хватает ≈{" "}
           {formatRub(funding.requiredMonthlyDesired - funding.allocatedMonthlySaving)}
