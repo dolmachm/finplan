@@ -21,6 +21,7 @@ import {
   goalTypeLabel,
 } from "@/shared/goals-catalog";
 import type { GoalFundingResult } from "@/modules/plan/types";
+import { findAchievableSubset } from "@/modules/plan/goal-funding";
 import {
   analyzeGoalPaths,
   normalizePathSettings,
@@ -228,6 +229,24 @@ function GoalsBudgetBanner({
   );
   const summary = summarizeGoalsBudget(analyses, avgSurplus);
   const inMinus = !summary.budgetOk;
+
+  // When plan is in deficit, find which goals are still achievable
+  const allNone =
+    inMinus &&
+    Object.values(funding).length > 0 &&
+    Object.values(funding).every((f) => f.achievability === "none");
+
+  const achievableIds = allNone
+    ? findAchievableSubset(Object.values(funding), Math.max(0, avgSurplus))
+    : [];
+
+  const achievableNames =
+    achievableIds.length > 0
+      ? achievableIds
+          .map((id) => goals.find((g) => g.id === id)?.name ?? "")
+          .filter(Boolean)
+      : [];
+
   return (
     <Card
       className={
@@ -249,6 +268,21 @@ function GoalsBudgetBanner({
           {formatRub(summary.remainingMonthly)}/мес
         </span>
       </p>
+      {achievableNames.length > 0 && (
+        <p className="mt-2 text-xs text-amber-800 border-t border-red-200 pt-2">
+          <span className="font-medium">Если сосредоточиться на главных:</span>{" "}
+          {achievableNames.length === goals.length
+            ? "все цели достижимы по отдельности"
+            : `по приоритету и бюджету реально закрыть — ${achievableNames.join(", ")}.`}{" "}
+          Сократите расходы или скорректируйте цели, чтобы уложиться.
+        </p>
+      )}
+      {allNone && achievableNames.length === 0 && (
+        <p className="mt-2 text-xs text-red-700 border-t border-red-200 pt-2">
+          При текущем бюджете ни одна цель недостижима. Необходимо увеличить
+          доходы или снизить расходы.
+        </p>
+      )}
     </Card>
   );
 }

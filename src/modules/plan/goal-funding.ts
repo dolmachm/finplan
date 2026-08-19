@@ -214,3 +214,36 @@ export function analyzeGoalFunding(
 
   return results;
 }
+
+/**
+ * Finds the largest achievable subset of goals when the full set is not
+ * affordable together. Sorted by priority asc, then by monthly contribution
+ * asc (cheapest first within same priority), then by months-to-goal asc.
+ *
+ * Returns the goal IDs that *could* be achieved if only those goals were funded,
+ * i.e. their total required monthly ≤ availableSurplus.
+ */
+export function findAchievableSubset(
+  results: GoalFundingResult[],
+  availableSurplus: number,
+): string[] {
+  if (availableSurplus <= 0) return [];
+
+  // Sort: priority asc, then cheapest monthly, then shortest term
+  const sorted = [...results].sort((a, b) => {
+    if (a.priority !== b.priority) return a.priority - b.priority;
+    if (a.requiredMonthlyMin !== b.requiredMonthlyMin)
+      return a.requiredMonthlyMin - b.requiredMonthlyMin;
+    return a.monthsToGoal - b.monthsToGoal;
+  });
+
+  let budget = availableSurplus;
+  const chosen: string[] = [];
+  for (const r of sorted) {
+    if (r.requiredMonthlyMin <= budget + 1) {
+      chosen.push(r.goalId);
+      budget -= r.requiredMonthlyMin;
+    }
+  }
+  return chosen;
+}
