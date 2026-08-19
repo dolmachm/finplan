@@ -99,7 +99,10 @@ export function analyzeGoalFunding(
     const inflationAdjustedMin = inflate(bands.min, inflation, monthsToGoal);
     const inflationAdjustedMax = inflate(bands.max, inflation, monthsToGoal);
 
-    // Если этапы заданы — gap считается по ним; иначе от баланса на конечную дату
+    // Если этапы не заданы — одиночная цель: gap от баланса на конечную дату.
+    // Важно: availableAtTarget уже включает накопленный cashflow (netWorth растёт
+    // за счёт surplus). Поэтому "funded wealth" = availableAtTarget (без double-count).
+    // Дополнительный surplus нужен только если availableAtTarget < target.
     if (stages.length === 1 && g.stages.length === 0) {
       const gapD = Math.max(0, inflationAdjustedDesired - availableAtTarget);
       const gapMin = Math.max(0, inflationAdjustedMin - availableAtTarget);
@@ -111,12 +114,24 @@ export function analyzeGoalFunding(
       const requiredMonthlyMin = gapMin / monthsToGoal;
       const requiredMonthlyMax = gapMax / monthsToGoal;
 
+      // Сколько из оставшегося профицита выделяем на эту цель
       const allocated = Math.min(requiredMonthlyDesired, remainingSurplus);
       remainingSurplus = Math.max(0, remainingSurplus - allocated);
 
-      const fundedWealth = availableAtTarget + allocated * monthsToGoal;
-      const cashShort = planDeficit || allocated + 1 < requiredMonthlyMin;
-      const achievability = cashShort
+      // Ожидаемое накопление: то, что уже есть в netWorth + дополнительные взносы
+      // (только gap-часть, не весь surplus — избегаем двойного счёта)
+      const extraFromSaving = allocated * monthsToGoal;
+      const fundedWealth = availableAtTarget + extraFromSaving;
+
+      // Цель достижима если:
+      // 1) planDeficit не означает автоматически "none" — если капитал уже покрывает
+      //    цель, она достижима даже при текущем дефиците cashflow
+      // 2) Не хватает денег — если gap > 0 и allocated < requiredMonthlyMin
+      const coveredByCapital = availableAtTarget >= inflationAdjustedMin - 1;
+      const cashShort =
+        !coveredByCapital && (planDeficit || allocated + 1 < requiredMonthlyMin);
+
+      const achievability: GoalFundingResult["achievability"] = cashShort
         ? "none"
         : fundedWealth >= inflationAdjustedMax - 1
           ? "max"
@@ -180,8 +195,15 @@ export function analyzeGoalFunding(
       });
     }
 
-    const cashShort = planDeficit || coverRatio < 0.8;
-    const achievability = cashShort
+    // Для многоэтапной: если весь netWorth на каждый этап покрывает минимум —
+    // цель достижима даже без дополнительных взносов
+    const allStagesCoveredByCapital = stageResults.every((st) => {
+      const avail = Math.max(0, (monthly[Math.min(Math.max(0, st.monthIndex), monthly.length - 1)]?.netWorth ?? 0));
+      return avail >= st.amountInflated * 0.8;
+    });
+    const cashShort =
+      !allStagesCoveredByCapital && (planDeficit || coverRatio < 0.8);
+    const achievability: GoalFundingResult["achievability"] = cashShort
       ? "none"
       : coverRatio < 0.999
         ? "min"

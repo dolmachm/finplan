@@ -402,14 +402,10 @@ export function surplusAvailableForGoal(
   let remaining = surplusMonthly;
   for (const g of sorted) {
     if (g.id === goalId) return remaining;
-    const analysis = analyzeGoalPaths({
-      targetAmount: g.targetAmountNominal,
-      monthsToGoal: funding[g.id]?.monthsToGoal ?? 12,
-      avgMonthlySurplus: remaining,
-      funding: funding[g.id],
-      settings: g.pathSettings,
-    });
-    remaining -= analysis.budget.requiredMonthly;
+    // Используем requiredMonthlyDesired из funding-движка (он уже учёл капитал).
+    // Не уходим в минус: более приоритетная цель не может забрать больше, чем есть.
+    const required = funding[g.id]?.requiredMonthlyDesired ?? 0;
+    remaining = Math.max(0, remaining - required);
   }
   return remaining;
 }

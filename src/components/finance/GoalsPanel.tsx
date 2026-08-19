@@ -382,8 +382,10 @@ function GoalCard({
     funding,
     settings: draft,
   });
+  // inMinus = бюджетное предупреждение (только для UI-подсветки взносов).
+  // achievability берём из funding-движка — он учитывает капитал и двойной счёт корректно.
   const inMinus = !analysis.budget.budgetOk;
-  const achieve = inMinus ? "none" : funding?.achievability;
+  const achieve = funding?.achievability ?? (inMinus ? "none" : undefined);
 
   async function persist(next: GoalPathSettings) {
     setDraft(next);
@@ -396,7 +398,7 @@ function GoalCard({
   }
 
   return (
-    <Card className={`!p-4 space-y-3 ${inMinus ? "border-red-300" : ""}`}>
+    <Card className={`!p-4 space-y-3 ${achieve === "none" ? "border-red-300" : achieve === "min" ? "border-amber-300" : ""}`}>
       <div className="flex items-start justify-between gap-2">
         <div>
           <p className="text-xs text-muted">
