@@ -514,18 +514,20 @@ function GoalCard({
               }
             >
               <p className="font-medium">{analysis.budget.contributionAdvice}</p>
-              {!isCapital && (
-                <p className="mt-0.5 text-muted">
-                  Свободно {formatRub(availableSurplus)}/мес
-                  {occupiedByOthers > 1 && (
-                    <span className="text-muted"> (из {formatRub(avgSurplus)}/мес профицита, {formatRub(occupiedByOthers)} занято другими целями)</span>
-                  )}
-                  {" → "}на путь {formatRub(required)}/мес → остаток{" "}
-                  <span className={remaining >= -1 ? "text-emerald-700" : "text-amber-800"}>
-                    {formatRub(remaining)}/мес
-                  </span>
-                </p>
-              )}
+              <p className="mt-0.5 text-muted">
+                Свободно {formatRub(availableSurplus)}/мес
+                {occupiedByOthers > 1 && (
+                  <span> (из {formatRub(avgSurplus)}/мес, {formatRub(occupiedByOthers)} занято другими целями)</span>
+                )}
+                {!isCapital && (
+                  <>
+                    {" → "}на путь {formatRub(required)}/мес → остаток{" "}
+                    <span className={remaining >= -1 ? "text-emerald-700" : "text-amber-800"}>
+                      {formatRub(remaining)}/мес
+                    </span>
+                  </>
+                )}
+              </p>
               <p className="mt-0.5">{analysis.budget.budgetAdvice}</p>
             </div>
           );
