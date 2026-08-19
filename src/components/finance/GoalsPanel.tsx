@@ -487,12 +487,14 @@ function GoalCard({
         </div>
 
         {(() => {
+          const isCapital = analysis.selectedKind === "CAPITAL" &&
+            analysis.options.find((o) => o.kind === "CAPITAL")?.feasible;
           const occupiedByOthers = isAchievable
             ? Math.max(0, avgSurplus - availableSurplus)
             : 0;
-          const surplusLabel = isAchievable ? availableSurplus : avgSurplus;
-          const remaining = surplusLabel - analysis.budget.requiredMonthly;
-          const budgetOk = analysis.budget.budgetOk && remaining >= -1;
+          const surplusForDisplay = isAchievable ? availableSurplus : avgSurplus;
+          const remaining = surplusForDisplay - analysis.budget.requiredMonthly;
+          const budgetOk = analysis.budget.budgetOk;
           return (
             <div
               className={
@@ -502,16 +504,18 @@ function GoalCard({
               }
             >
               <p className="font-medium">{analysis.budget.contributionAdvice}</p>
-              <p className="mt-0.5 text-muted">
-                Профицит {formatRub(avgSurplus)}/мес
-                {occupiedByOthers > 1 && (
-                  <> · другие цели {formatRub(occupiedByOthers)}/мес · свободно {formatRub(availableSurplus)}/мес</>
-                )}
-                {" → "}на путь {formatRub(analysis.budget.requiredMonthly)}/мес → остаток{" "}
-                <span className={budgetOk ? "text-emerald-700" : "text-amber-800"}>
-                  {formatRub(remaining)}/мес
-                </span>
-              </p>
+              {!isCapital && (
+                <p className="mt-0.5 text-muted">
+                  Профицит {formatRub(avgSurplus)}/мес
+                  {occupiedByOthers > 1 && (
+                    <> · другие цели {formatRub(occupiedByOthers)}/мес · свободно {formatRub(availableSurplus)}/мес</>
+                  )}
+                  {" → "}на путь {formatRub(analysis.budget.requiredMonthly)}/мес → остаток{" "}
+                  <span className={budgetOk ? "text-emerald-700" : "text-amber-800"}>
+                    {formatRub(remaining)}/мес
+                  </span>
+                </p>
+              )}
               <p className="mt-0.5">{analysis.budget.budgetAdvice}</p>
             </div>
           );

@@ -96,32 +96,38 @@ function buildBudgetAdvice(
   recommended: GoalPathKind,
 ): GoalPathBudget {
   const remaining = surplus - required;
-  const inMinus = remaining < -1 || surplus < -1;
-  const budgetOk = !inMinus;
+  // Для CAPITAL взнос = 0 — это нормально, бюджет в порядке если капитал покрывает
+  const capitalOk = selected.kind === "CAPITAL" && selected.feasible;
+  const inMinus = !capitalOk && (remaining < -1 || surplus < -1);
+  const budgetOk = capitalOk || !inMinus;
+
   let contributionAdvice = "";
-  if (inMinus) {
-    contributionAdvice = "На цель нет денег: план уходит в минус.";
-  } else if (selected.kind === "CAPITAL") {
-    contributionAdvice = "Дополнительный взнос не нужен — цель покрывается капиталом.";
-  } else if (required <= 0) {
-    contributionAdvice = "Взнос ≈ 0 ₽/мес при текущих параметрах.";
+  if (capitalOk) {
+    contributionAdvice = "Дополнительный взнос не нужен — цель покрывается имеющимся капиталом.";
+  } else if (inMinus) {
+    contributionAdvice = surplus < -1
+      ? `Бюджет в минусе на ${Math.round(Math.abs(surplus)).toLocaleString("ru-RU")} ₽/мес — сначала устраните дефицит.`
+      : `Не хватает ≈ ${Math.round(Math.abs(remaining)).toLocaleString("ru-RU")} ₽/мес для этого пути.`;
   } else {
-    contributionAdvice = `Рекомендуемый взнос/платёж: ≈ ${Math.round(required).toLocaleString("ru-RU")} ₽/мес (${selected.label}).`;
+    contributionAdvice = `Нужно откладывать ≈ ${Math.round(required).toLocaleString("ru-RU")} ₽/мес (${selected.label}).`;
     if (selected.kind !== recommended) {
-      contributionAdvice += ` Более выгодный путь по стоимости: ${recommended}.`;
+      const recLabel = selected.label; // will be overwritten below if needed
+      void recLabel;
+      contributionAdvice += ` Более выгодный путь: ${recommended}.`;
     }
   }
 
   let budgetAdvice = "";
-  if (inMinus) {
-    budgetAdvice =
-      surplus < -1
-        ? `Доходы меньше расходов на ≈ ${Math.round(Math.abs(surplus)).toLocaleString("ru-RU")} ₽/мес. Пока бюджет в минусе, копить на цель нельзя.`
-        : `Не хватает ≈ ${Math.round(Math.abs(remaining)).toLocaleString("ru-RU")} ₽/мес. Увеличьте доход, сократите расходы или снизьте сумму цели.`;
+  if (capitalOk) {
+    budgetAdvice = `Капитал к сроку покрывает цель — дополнительных вложений не требуется.`;
+  } else if (inMinus) {
+    budgetAdvice = surplus < -1
+      ? `Доходы меньше расходов на ≈ ${Math.round(Math.abs(surplus)).toLocaleString("ru-RU")} ₽/мес. Пока бюджет в минусе, копить на цель нельзя.`
+      : `Не хватает ≈ ${Math.round(Math.abs(remaining)).toLocaleString("ru-RU")} ₽/мес. Увеличьте доход, сократите расходы или снизьте сумму цели.`;
   } else if (remaining > 100) {
-    budgetAdvice = `Бюджета хватает: после цели останется ≈ ${Math.round(remaining).toLocaleString("ru-RU")} ₽/мес.`;
+    budgetAdvice = `После взноса на эту цель останется ≈ ${Math.round(remaining).toLocaleString("ru-RU")} ₽/мес свободных.`;
   } else {
-    budgetAdvice = "Бюджет на грани: почти всё свободное уходит на эту цель.";
+    budgetAdvice = "Взнос на цель практически совпадает со свободным профицитом.";
   }
 
   return {
@@ -136,7 +142,14 @@ function buildBudgetAdvice(
 
 /**
  * Варианты достижения цели: накопление / кредит / гибрид / из капитала.
- * Срок и сумма согласованы с целью; бюджет — с профицитом плана.
+ *
+ * Ключевые принципы:
+ * - SAVE/LOAN/HYBRID всегда показывают реальный взнос от нуля (amount / months),
+ *   чтобы пользователь видел сколько нужно откладывать.
+ * - funding.requiredMonthlyDesired отражает gap с учётом капитала — используем
+ *   его для SAVE только если он больше нуля (иначе цель уже покрыта капиталом).
+ * - CAPITAL feasible зависит только от наличия капитала, не от cashflow surplus.
+ * - feasible проверяет availableSurplus (профицит без недостижимых целей).
  */
 export function analyzeGoalPaths(args: {
   targetAmount: number;
@@ -150,14 +163,21 @@ export function analyzeGoalPaths(args: {
   const amount = Math.max(0, args.targetAmount);
   const surplus = args.avgMonthlySurplus;
   const available = args.funding?.availableAtTarget ?? 0;
-  const saveMonthly =
-    args.funding?.requiredMonthlyDesired ?? amount / months;
+
+  // Взнос для SAVE: всегда от полной суммы цели (информационно),
+  // но если капитал уже частично покрывает — берём gap из движка.
+  // Никогда не используем 0 как "нужный взнос" — если gap=0, CAPITAL будет рекомендован.
+  const gapMonthly = args.funding?.requiredMonthlyDesired ?? 0;
+  const rawMonthly = amount / months;
+  // Если движок посчитал gap=0 (капитал покрывает), используем rawMonthly для
+  // информационных вариантов SAVE/LOAN/HYBRID, иначе — реальный gap.
+  const saveMonthly = gapMonthly > 0 ? gapMonthly : rawMonthly;
 
   const options: GoalPathOption[] = [];
 
   {
     const monthly = saveMonthly;
-    const feasible = surplus + 1 >= monthly || monthly <= 0;
+    const feasible = surplus + 1 >= monthly;
     const totalCost = monthly * months;
     options.push({
       kind: "SAVE",
@@ -168,7 +188,7 @@ export function analyzeGoalPaths(args: {
       feasible,
       score: feasible ? totalCost : totalCost + 1e12,
       note: feasible
-        ? `Откладывайте всю сумму ${months} мес. до срока цели`
+        ? `Откладывайте ≈ ${Math.round(monthly).toLocaleString("ru-RU")} ₽/мес на ${months} мес.`
         : "Профицита не хватает на нужный взнос",
     });
   }
@@ -177,7 +197,7 @@ export function analyzeGoalPaths(args: {
     const n = settings.loanTermMonths;
     const monthly = loanPayment(amount, settings.loanRatePct, n);
     const totalCost = monthly * n;
-    const feasible = surplus + 1 >= monthly || monthly <= 0;
+    const feasible = surplus + 1 >= monthly;
     options.push({
       kind: "LOAN",
       label: "Взять кредит",
@@ -198,10 +218,9 @@ export function analyzeGoalPaths(args: {
     const saveM = down / months;
     const loanN = settings.loanTermMonths;
     const loanM = loanPayment(principal, settings.loanRatePct, loanN);
-    // Сначала взнос, потом кредит — пик платежа = max фаз, не сумма.
     const monthly = Math.max(saveM, loanM);
     const totalCost = saveM * months + loanM * loanN;
-    const feasible = surplus + 1 >= monthly || monthly <= 0;
+    const feasible = surplus + 1 >= monthly;
     options.push({
       kind: "HYBRID",
       label: "Часть копить, часть в кредит",
@@ -215,18 +234,19 @@ export function analyzeGoalPaths(args: {
   }
 
   {
-    const feasible = available + 1 >= amount && surplus >= -1;
+    // CAPITAL: feasible зависит только от капитала, не от cashflow
+    const capitalFeasible = available + 1 >= amount;
     options.push({
       kind: "CAPITAL",
       label: "Из капитала",
       monthlyOutflow: 0,
       totalCost: amount,
       months: 0,
-      feasible,
-      score: feasible ? amount * 0.95 : amount + 1e12,
-      note: feasible
-        ? "К сроку цель покрывается доступным капиталом"
-        : "Капитала к сроку недостаточно",
+      feasible: capitalFeasible,
+      score: capitalFeasible ? amount * 0.95 : amount + 1e12,
+      note: capitalFeasible
+        ? `К сроку цель покрывается капиталом (${Math.round(available).toLocaleString("ru-RU")} ₽ доступно)`
+        : `Капитала недостаточно: есть ${Math.round(available).toLocaleString("ru-RU")} ₽, нужно ${Math.round(amount).toLocaleString("ru-RU")} ₽`,
     });
   }
 
