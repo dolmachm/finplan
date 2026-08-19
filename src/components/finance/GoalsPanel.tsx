@@ -93,7 +93,10 @@ export function GoalsPanel({
         map[f.goalId] = f;
       }
       setFunding(map);
-      setAvgSurplus(data.result?.summary?.avgMonthlySurplus ?? 0);
+      // nearTermSurplus (первые 24 мес) точнее отражает реальный денежный поток
+      // для расчёта достижимости целей, чем среднее за весь 30-летний горизонт.
+      const s = data.result?.summary;
+      setAvgSurplus(s?.nearTermSurplus ?? s?.avgMonthlySurplus ?? 0);
     } finally {
       setProjectionLoading(false);
     }

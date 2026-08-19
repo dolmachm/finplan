@@ -213,7 +213,17 @@ export function runDeterministicPlan(
 
   const n = monthly.length || 1;
   const avgMonthlySurplus = surplusSum / n;
-  const goalFunding = analyzeGoalFunding(plan, monthly, avgMonthlySurplus);
+
+  // Краткосрочный профицит: среднее за первые 24 месяца (или весь горизонт если короче).
+  // Используется для расчёта достижимости целей — отражает реальный денежный поток
+  // сейчас, без искажения долгосрочными пиками/провалами.
+  const nearTermSlice = monthly.slice(0, 24);
+  const nearTermSurplus =
+    nearTermSlice.length > 0
+      ? nearTermSlice.reduce((s, m) => s + m.cashflow, 0) / nearTermSlice.length
+      : avgMonthlySurplus;
+
+  const goalFunding = analyzeGoalFunding(plan, monthly, nearTermSurplus);
 
   return {
     monthly,
@@ -221,6 +231,7 @@ export function runDeterministicPlan(
     summary: {
       finalNetWorth: monthly[monthly.length - 1]?.netWorth ?? 0,
       avgMonthlySurplus,
+      nearTermSurplus,
       recommendedMonthlySaving: goalFunding.reduce(
         (s, g) => s + g.requiredMonthlyDesired,
         0,

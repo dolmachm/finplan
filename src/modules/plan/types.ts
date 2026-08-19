@@ -140,6 +140,7 @@ export interface DeterministicPlanResult {
   summary: {
     finalNetWorth: number;
     avgMonthlySurplus: number;
+    nearTermSurplus: number;
     recommendedMonthlySaving: number;
   };
 }

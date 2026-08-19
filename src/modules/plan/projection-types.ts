@@ -3,6 +3,8 @@ import type { GoalFundingResult } from "@/modules/plan/types";
 export type PlanProjectionSummary = {
   finalNetWorth: number;
   avgMonthlySurplus: number;
+  /** Среднее за первые 24 мес — для расчёта достижимости целей */
+  nearTermSurplus: number;
   recommendedMonthlySaving: number;
 };
 
