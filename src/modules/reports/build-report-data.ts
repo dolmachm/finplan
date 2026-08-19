@@ -50,6 +50,7 @@ export type PdfReportData = {
   summary: {
     finalNetWorth: number;
     avgMonthlySurplus: number;
+    nearTermSurplus: number;
     recommendedSaving: number;
   };
   /** Yearly (or sampled) net-worth points for chart */
@@ -59,10 +60,10 @@ export type PdfReportData = {
 };
 
 const ACHIEVABILITY_LABEL: Record<string, string> = {
-  max: "с запасом",
-  desired: "хватит к сроку",
-  min: "только минимум",
-  none: "пока не хватит",
+  max: "с запасом — даже больше цели",
+  desired: "цели хватит к сроку",
+  min: "хватит только на минимум",
+  none: "нет денег на цель",
 };
 
 type BuildInput = {
@@ -184,6 +185,7 @@ export function buildReportPayload(input: BuildInput): PdfReportData {
     summary: {
       finalNetWorth: det.summary.finalNetWorth,
       avgMonthlySurplus: det.summary.avgMonthlySurplus,
+      nearTermSurplus: det.summary.nearTermSurplus,
       recommendedSaving: det.summary.recommendedMonthlySaving,
     },
     nwSeries: isItemEnabled(config, "projection", "proj_chart")

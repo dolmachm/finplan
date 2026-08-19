@@ -357,7 +357,12 @@ function writeProjection(ctx: DocCtx, data: PdfReportData) {
   if (isItemEnabled(config, "projection", "proj_avgSurplus")) {
     kvLine(
       ctx,
-      "Средний месячный профицит",
+      "Профицит сейчас (24 мес.)",
+      formatRub(summary.nearTermSurplus ?? summary.avgMonthlySurplus),
+    );
+    kvLine(
+      ctx,
+      "Средний профицит (весь план)",
       formatRub(summary.avgMonthlySurplus),
     );
   }

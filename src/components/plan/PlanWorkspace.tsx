@@ -156,8 +156,8 @@ export function PlanWorkspace({
               value={projection.result.summary.recommendedMonthlySaving}
             />
             <SummaryCard
-              title="Профицит / мес"
-              value={projection.result.summary.avgMonthlySurplus}
+              title="Профицит / мес (сейчас)"
+              value={projection.result.summary.nearTermSurplus ?? projection.result.summary.avgMonthlySurplus}
             />
             <SummaryCard
               title="Чистые активы (конец)"
