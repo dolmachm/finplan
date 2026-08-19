@@ -375,16 +375,21 @@ function GoalCard({
     fundingMap,
     avgSurplus,
   );
+
+  // Для отображения бюджетного блока используем полный avgSurplus плана,
+  // чтобы пользователь видел реальные цифры, а не "0 ₽/мес".
+  // Для проверки feasibility отдельных путей — availableSurplus (после приоритетных целей).
   const analysis = analyzeGoalPaths({
     targetAmount: goal.targetAmountNominal,
     monthsToGoal,
-    avgMonthlySurplus: availableSurplus,
+    avgMonthlySurplus: avgSurplus,
     funding,
     settings: draft,
   });
-  // inMinus = бюджетное предупреждение (только для UI-подсветки взносов).
-  // achievability берём из funding-движка — он учитывает капитал и двойной счёт корректно.
-  const inMinus = !analysis.budget.budgetOk;
+
+  // achievability берём из funding-движка — он учитывает капитал корректно.
+  // inMinus используем только для UI-подсветки.
+  const inMinus = availableSurplus < -1 || avgSurplus < -1;
   const achieve = funding?.achievability ?? (inMinus ? "none" : undefined);
 
   async function persist(next: GoalPathSettings) {
@@ -479,23 +484,32 @@ function GoalCard({
           </span>
         </div>
 
-        <div
-          className={
-            analysis.budget.budgetOk
-              ? "rounded-lg border border-emerald-200 bg-emerald-50/80 px-2.5 py-2 text-xs"
-              : "rounded-lg border border-amber-200 bg-amber-50/80 px-2.5 py-2 text-xs"
-          }
-        >
-          <p className="font-medium">{analysis.budget.contributionAdvice}</p>
-          <p className="mt-0.5 text-muted">
-            Профицит {formatRub(analysis.budget.surplusMonthly)}/мес → на путь{" "}
-            {formatRub(analysis.budget.requiredMonthly)}/мес → остаток{" "}
-            <span className={analysis.budget.budgetOk ? "text-emerald-700" : "text-amber-800"}>
-              {formatRub(analysis.budget.remainingMonthly)}/мес
-            </span>
-          </p>
-          <p className="mt-0.5">{analysis.budget.budgetAdvice}</p>
-        </div>
+        {(() => {
+          const occupiedByOthers = Math.max(0, avgSurplus - availableSurplus);
+          const budgetOk = analysis.budget.budgetOk && availableSurplus >= analysis.budget.requiredMonthly - 1;
+          return (
+            <div
+              className={
+                budgetOk
+                  ? "rounded-lg border border-emerald-200 bg-emerald-50/80 px-2.5 py-2 text-xs"
+                  : "rounded-lg border border-amber-200 bg-amber-50/80 px-2.5 py-2 text-xs"
+              }
+            >
+              <p className="font-medium">{analysis.budget.contributionAdvice}</p>
+              <p className="mt-0.5 text-muted">
+                Профицит {formatRub(avgSurplus)}/мес
+                {occupiedByOthers > 1 && (
+                  <> · другие цели {formatRub(occupiedByOthers)}/мес · свободно {formatRub(availableSurplus)}/мес</>
+                )}
+                {" → "}на путь {formatRub(analysis.budget.requiredMonthly)}/мес → остаток{" "}
+                <span className={budgetOk ? "text-emerald-700" : "text-amber-800"}>
+                  {formatRub(availableSurplus - analysis.budget.requiredMonthly)}/мес
+                </span>
+              </p>
+              <p className="mt-0.5">{analysis.budget.budgetAdvice}</p>
+            </div>
+          );
+        })()}
 
         <div className="grid gap-1.5">
           {analysis.options.map((o) => {
