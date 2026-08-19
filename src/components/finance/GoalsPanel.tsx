@@ -220,17 +220,25 @@ function GoalsBudgetBanner({
   funding: Record<string, GoalFundingResult>;
   avgSurplus: number;
 }) {
-  const analyses = goals.map((g) =>
-    analyzeGoalPaths({
+  // Суммируем взносы только по достижимым целям — недостижимые не занимают бюджет.
+  const achievableGoals = goals.filter(
+    (g) => funding[g.id] && funding[g.id]!.achievability !== "none",
+  );
+  let remaining = avgSurplus;
+  const analyses = achievableGoals.map((g) => {
+    const a = analyzeGoalPaths({
       targetAmount: g.targetAmountNominal,
       monthsToGoal: funding[g.id]?.monthsToGoal ?? 12,
-      avgMonthlySurplus: avgSurplus,
+      avgMonthlySurplus: remaining,
       funding: funding[g.id],
       settings: g.pathSettings,
-    }),
-  );
+    });
+    remaining = Math.max(0, remaining - a.budget.requiredMonthly);
+    return a;
+  });
   const summary = summarizeGoalsBudget(analyses, avgSurplus);
   const inMinus = !summary.budgetOk;
+  const unachievableCount = goals.length - achievableGoals.length;
 
   // When plan is in deficit, find which goals are still achievable
   const allNone =
@@ -264,11 +272,14 @@ function GoalsBudgetBanner({
         {summary.advice}
       </p>
       <p className={`mt-1 text-xs ${inMinus ? "text-red-700" : "text-muted"}`}>
-        Взносы: {formatRub(summary.requiredMonthly)}/мес · свободно:{" "}
-        {formatRub(summary.surplusMonthly)}/мес · остаток:{" "}
+        Взносы на достижимые цели: {formatRub(summary.requiredMonthly)}/мес · профицит:{" "}
+        {formatRub(avgSurplus)}/мес · остаток:{" "}
         <span className={inMinus ? "font-semibold" : ""}>
           {formatRub(summary.remainingMonthly)}/мес
         </span>
+        {unachievableCount > 0 && (
+          <span className="ml-1 text-amber-700">· {unachievableCount} {unachievableCount === 1 ? "цель" : unachievableCount < 5 ? "цели" : "целей"} вне бюджета</span>
+        )}
       </p>
       {achievableNames.length > 0 && (
         <p className="mt-2 text-xs text-amber-800 border-t border-red-200 pt-2">
