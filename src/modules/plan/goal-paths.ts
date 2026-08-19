@@ -384,7 +384,11 @@ export function summarizeGoalsBudget(
   };
 }
 
-/** Профицит, доступный цели после взносов более приоритетных. */
+/**
+ * Профицит, доступный цели после взносов более приоритетных **достижимых** целей.
+ * Недостижимые цели (achievability === "none") не занимают бюджет — они "вне игры"
+ * до тех пор, пока пользователь не выберет вариант их достижения.
+ */
 export function surplusAvailableForGoal(
   goalId: string,
   goals: Array<{
@@ -402,9 +406,10 @@ export function surplusAvailableForGoal(
   let remaining = surplusMonthly;
   for (const g of sorted) {
     if (g.id === goalId) return remaining;
-    // Используем requiredMonthlyDesired из funding-движка (он уже учёл капитал).
-    // Не уходим в минус: более приоритетная цель не может забрать больше, чем есть.
-    const required = funding[g.id]?.requiredMonthlyDesired ?? 0;
+    const f = funding[g.id];
+    // Недостижимые цели не расходуют бюджет других целей
+    if (!f || f.achievability === "none") continue;
+    const required = f.requiredMonthlyDesired;
     remaining = Math.max(0, remaining - required);
   }
   return remaining;

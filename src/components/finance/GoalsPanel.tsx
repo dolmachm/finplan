@@ -369,6 +369,8 @@ function GoalCard({
     setDraft(normalizePathSettings(goal.pathSettings, monthsToGoal));
   }, [goal.pathSettings, goal.id, monthsToGoal]);
 
+  // availableSurplus — профицит после взносов на более приоритетные ДОСТИЖИМЫЕ цели.
+  // Недостижимые цели исключены из цепочки до момента выбора варианта пользователем.
   const availableSurplus = surplusAvailableForGoal(
     goal.id,
     goals,
@@ -376,21 +378,21 @@ function GoalCard({
     avgSurplus,
   );
 
-  // Для отображения бюджетного блока используем полный avgSurplus плана,
-  // чтобы пользователь видел реальные цифры, а не "0 ₽/мес".
-  // Для проверки feasibility отдельных путей — availableSurplus (после приоритетных целей).
+  const achieve = funding?.achievability;
+  const isAchievable = achieve && achieve !== "none";
+
+  // Для достижимых целей считаем бюджет от availableSurplus (реальный остаток).
+  // Для недостижимых — от avgSurplus, чтобы показать полную картину и варианты.
+  const surplusForAnalysis = isAchievable ? availableSurplus : avgSurplus;
   const analysis = analyzeGoalPaths({
     targetAmount: goal.targetAmountNominal,
     monthsToGoal,
-    avgMonthlySurplus: avgSurplus,
+    avgMonthlySurplus: surplusForAnalysis,
     funding,
     settings: draft,
   });
 
-  // achievability берём из funding-движка — он учитывает капитал корректно.
-  // inMinus используем только для UI-подсветки.
-  const inMinus = availableSurplus < -1 || avgSurplus < -1;
-  const achieve = funding?.achievability ?? (inMinus ? "none" : undefined);
+  const inMinus = surplusForAnalysis < -1;
 
   async function persist(next: GoalPathSettings) {
     setDraft(next);
@@ -485,8 +487,12 @@ function GoalCard({
         </div>
 
         {(() => {
-          const occupiedByOthers = Math.max(0, avgSurplus - availableSurplus);
-          const budgetOk = analysis.budget.budgetOk && availableSurplus >= analysis.budget.requiredMonthly - 1;
+          const occupiedByOthers = isAchievable
+            ? Math.max(0, avgSurplus - availableSurplus)
+            : 0;
+          const surplusLabel = isAchievable ? availableSurplus : avgSurplus;
+          const remaining = surplusLabel - analysis.budget.requiredMonthly;
+          const budgetOk = analysis.budget.budgetOk && remaining >= -1;
           return (
             <div
               className={
@@ -503,7 +509,7 @@ function GoalCard({
                 )}
                 {" → "}на путь {formatRub(analysis.budget.requiredMonthly)}/мес → остаток{" "}
                 <span className={budgetOk ? "text-emerald-700" : "text-amber-800"}>
-                  {formatRub(availableSurplus - analysis.budget.requiredMonthly)}/мес
+                  {formatRub(remaining)}/мес
                 </span>
               </p>
               <p className="mt-0.5">{analysis.budget.budgetAdvice}</p>
@@ -639,7 +645,7 @@ function GoalCard({
         <GoalFixConstructor
           goal={goal}
           funding={funding}
-          availableSurplus={availableSurplus}
+          availableSurplus={avgSurplus}
           draft={draft}
           onApplyFix={(fix) => {
             if (fix.kind === "switch_path" && typeof fix.value === "string") {
