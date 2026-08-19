@@ -408,6 +408,9 @@ export function summarizeGoalsBudget(
  * Профицит, доступный цели после взносов более приоритетных **достижимых** целей.
  * Недостижимые цели (achievability === "none") не занимают бюджет — они "вне игры"
  * до тех пор, пока пользователь не выберет вариант их достижения.
+ *
+ * Вычитается реальный ежемесячный взнос по выбранному пути (SAVE/LOAN/HYBRID),
+ * а не gap из движка (который может быть 0 если капитал уже покрывает цель).
  */
 export function surplusAvailableForGoal(
   goalId: string,
@@ -429,8 +432,17 @@ export function surplusAvailableForGoal(
     const f = funding[g.id];
     // Недостижимые цели не расходуют бюджет других целей
     if (!f || f.achievability === "none") continue;
-    const required = f.requiredMonthlyDesired;
-    remaining = Math.max(0, remaining - required);
+    // Считаем реальный взнос по выбранному пути для этой цели
+    const a = analyzeGoalPaths({
+      targetAmount: g.targetAmountNominal,
+      monthsToGoal: f.monthsToGoal,
+      avgMonthlySurplus: remaining,
+      funding: f,
+      settings: g.pathSettings,
+    });
+    // CAPITAL не требует ежемесячного взноса из cashflow
+    const outflow = a.selectedKind === "CAPITAL" ? 0 : a.budget.requiredMonthly;
+    remaining = Math.max(0, remaining - outflow);
   }
   return remaining;
 }
