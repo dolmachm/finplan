@@ -1,9 +1,9 @@
-import { monthlyEquivalent, monthlyNetIncome, monthlyTotal } from "@/modules/plan/frequency";
+import { monthlyEquivalent } from "@/modules/plan/frequency";
 import {
   budgetExpenseFloor,
   envelopeStatuses,
 } from "@/modules/budget/envelopes";
-import { activeLiabilities } from "@/modules/finance/liability-status";
+import { liveCashflow } from "@/modules/finance/live-cash";
 import type { Asset, BudgetCategory, Expense, Income, Liability } from "@/shared/types";
 
 export type SavingsAction = "cut" | "raise" | "tighten" | "deploy";
@@ -67,22 +67,23 @@ export function buildSavingsCorridor(input: {
   } = input;
   if (incomes.length === 0 && expenses.length === 0) return null;
 
-  const incomeMonthly = monthlyNetIncome(incomes);
-  const expenseMonthly = monthlyTotal(expenses);
-  const debtMonthly = activeLiabilities(liabilities).reduce(
-    (s, l) => s + l.monthlyPayment,
-    0,
-  );
-  const dividendMonthly = assets.reduce(
-    (s, a) => s + (a.dividendIncomeMonthly ?? 0),
-    0,
-  );
-  const deltaMonthly =
-    incomeMonthly + dividendMonthly - expenseMonthly - debtMonthly;
+  const {
+    incomeMonthly,
+    expenseMonthly,
+    debtServiceMonthly,
+    dividendMonthly,
+    maintenanceMonthly,
+    surplusMonthly,
+  } = liveCashflow({ incomes, expenses, assets, liabilities });
+  const deltaMonthly = surplusMonthly;
   const savingsRate = incomeMonthly > 0 ? deltaMonthly / incomeMonthly : 0;
   const floor = budgetExpenseFloor(expenses, budgetCategories);
   const afterEnvelopesMonthly =
-    incomeMonthly + dividendMonthly - floor - debtMonthly;
+    incomeMonthly +
+    dividendMonthly -
+    floor -
+    debtServiceMonthly -
+    maintenanceMonthly;
 
   const envelopes = envelopeStatuses(expenses, budgetCategories);
   const overspendTotal = envelopes

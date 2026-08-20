@@ -75,6 +75,16 @@ export async function DELETE(
     }
   }
 
+  const txs = await prisma.cashTransaction.findMany({ where: { userId } });
+  for (const t of txs) {
+    if (t.category === id) {
+      await prisma.cashTransaction.update({
+        where: { id: t.id },
+        data: { category: "general" },
+      });
+    }
+  }
+
   await prisma.budgetCategory.delete({ where: { id } });
   return NextResponse.json({ ok: true });
 }

@@ -39,12 +39,10 @@ import { apiFetch } from "@/shared/api-fetch";
 import { ensureOnlineForWrite } from "@/shared/offline";
 import { formatMoneyInput } from "@/shared/format-input";
 import { formatRub } from "@/shared/format";
-import { envelopeStatuses, budgetExpenseFloor } from "@/modules/budget/envelopes";
 import type { FinancialScore } from "@/modules/dashboard/scoring";
 import { useFinanceStore } from "@/modules/finance/finance-store";
 import { activeLiabilities } from "@/modules/finance/liability-status";
-import { EnvelopeBars } from "@/components/finance/EnvelopeOverview";
-import { CategoryCatalogPicker } from "@/components/finance/CategoryCatalogPicker";
+import { BudgetWorkspace } from "@/components/finance/BudgetWorkspace";
 import { topFrequentCategories } from "@/shared/category-catalog";
 import { LoanCalculator } from "@/components/finance/LoanCalculator";
 import { DebtPayoffStrategies } from "@/components/finance/DebtPayoffStrategies";
@@ -57,8 +55,6 @@ import {
   holdingsToDrafts,
 } from "@/components/finance/PortfolioHoldingsEditor";
 import { computePortfolioMetrics } from "@/modules/finance/portfolio-math";
-import { monthlyEquivalent } from "@/modules/plan/frequency";
-import type { PlanFrequency } from "@/modules/plan/frequency";
 
 type EditView =
   | { kind: "asset" | "income" | "expense" | "liability"; id?: string }
@@ -516,7 +512,7 @@ export function FinanceDataPanel({
               onEdit={(id) => setEditView({ kind: "expense", id })}
               onDelete={(id) => remove("expense", id)}
             />
-            <BudgetEnvelopesPanel
+            <BudgetWorkspace
               categories={categories}
               expenses={expenses}
               incomes={incomes}
@@ -1423,284 +1419,5 @@ function LiabilityEditor({
       submitLabel={existing ? "Сохранить" : "Добавить"}
     />
     </>
-  );
-}
-
-function BudgetEnvelopesPanel({
-  categories,
-  expenses,
-  incomes,
-}: {
-  categories: BudgetCategory[];
-  expenses: Expense[];
-  incomes: Income[];
-}) {
-  const { upsert, remove: removeEntity } = useFinanceStore();
-  const statuses = envelopeStatuses(expenses, categories);
-  const [limitDrafts, setLimitDrafts] = useState<Record<string, string>>({});
-  const [busyId, setBusyId] = useState<string | null>(null);
-  const [showCatalog, setShowCatalog] = useState(false);
-
-  const incomeMonthly = incomes.reduce(
-    (s, i) => s + monthlyEquivalent(i.amount, i.frequency as PlanFrequency),
-    0,
-  );
-  const plannedTotal = expenses.reduce(
-    (s, e) => s + monthlyEquivalent(e.amount, e.frequency as PlanFrequency),
-    0,
-  );
-  const limitTotal = statuses
-    .filter((s) => s.monthlyLimit != null)
-    .reduce((s, e) => s + (e.monthlyLimit as number), 0);
-  const floor = budgetExpenseFloor(expenses, categories);
-  const afterBudget = incomeMonthly - floor;
-  const overspentCount = statuses.filter((s) => s.overspent).length;
-
-  useEffect(() => {
-    const next: Record<string, string> = {};
-    for (const c of categories) {
-      if (c.kind !== "expense") continue;
-      next[c.id] =
-        c.monthlyLimit == null ? "" : formatMoneyInput(String(c.monthlyLimit));
-    }
-    setLimitDrafts(next);
-  }, [categories]);
-
-  async function saveLimit(id: string) {
-    if (!ensureOnlineForWrite()) return;
-    const raw = limitDrafts[id] ?? "";
-    let monthlyLimit: number | null = null;
-    if (raw.trim()) {
-      const parsed = parseNonNegativeNumber(raw, "Лимит");
-      if (!parsed.ok) {
-        toast.error(parsed.message);
-        return;
-      }
-      monthlyLimit = parsed.value;
-    }
-    setBusyId(id);
-    try {
-      const res = await apiFetch(`/api/budget-categories/${id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ monthlyLimit }),
-      });
-      if (!res) return;
-      if (!res.ok) {
-        const { message } = await readApiError(res);
-        toast.error(message);
-        return;
-      }
-      upsert("budgetCategories", (await res.json()) as BudgetCategory);
-      toast.success("Лимит сохранён");
-    } catch {
-      toast.error("Не удалось сохранить лимит");
-    } finally {
-      setBusyId(null);
-    }
-  }
-
-  async function removeCategory(id: string) {
-    if (!ensureOnlineForWrite()) return;
-    setBusyId(id);
-    try {
-      const res = await apiFetch(`/api/budget-categories/${id}`, {
-        method: "DELETE",
-      });
-      if (!res) return;
-      if (!res.ok) {
-        toast.error("Не удалось удалить");
-        return;
-      }
-      removeEntity("budgetCategories", id);
-      toast.success("Категория удалена");
-    } catch {
-      toast.error("Не удалось удалить");
-    } finally {
-      setBusyId(null);
-    }
-  }
-
-  const incomeCats = categories.filter((c) => c.kind === "income");
-
-  return (
-    <Card>
-      <div>
-        <p className="text-xs font-medium uppercase tracking-wide text-muted">
-          Опционально · Бюджет
-        </p>
-        <h3 className="mt-1 font-medium">Конверты по категориям</h3>
-        <HelpHint className="mt-1">
-          Месячный лимит — потолок категории расходов. Добавляйте категории из
-          каталога; доходы — для группировки без лимитов.
-        </HelpHint>
-      </div>
-
-      <div className="mt-4 grid gap-3 sm:grid-cols-3">
-        <div className="rounded-xl border border-border bg-background p-3">
-          <p className="text-xs text-muted">Расходы / мес</p>
-          <p className="mt-1 text-base font-semibold tabular-nums">
-            {formatRub(plannedTotal)}
-          </p>
-        </div>
-        <div className="rounded-xl border border-border bg-background p-3">
-          <p className="text-xs text-muted">Лимиты / мес</p>
-          <p className="mt-1 text-base font-semibold tabular-nums">
-            {limitTotal > 0 ? formatRub(limitTotal) : "—"}
-          </p>
-        </div>
-        <div className="rounded-xl border border-border bg-background p-3">
-          <p className="text-xs text-muted">После бюджета</p>
-          <p
-            className={`mt-1 text-base font-semibold tabular-nums ${
-              afterBudget < 0 ? "text-red-600" : ""
-            }`}
-          >
-            {formatRub(afterBudget)}
-          </p>
-        </div>
-      </div>
-
-      {overspentCount > 0 && (
-        <p className="mt-3 text-sm text-amber-700">
-          Перерасход в {overspentCount}{" "}
-          {overspentCount === 1 ? "категории" : "категориях"} — см. ниже
-        </p>
-      )}
-
-      <div className="mt-4">
-        <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-          <p className="text-sm font-medium">Каталог категорий</p>
-          <Button
-            type="button"
-            variant="secondary"
-            onClick={() => setShowCatalog((v) => !v)}
-          >
-            {showCatalog ? "Скрыть" : "Открыть каталог"}
-          </Button>
-        </div>
-        {showCatalog && (
-          <CategoryCatalogPicker
-            userCategories={categories}
-            expenses={expenses}
-            incomes={incomes}
-            onAdded={(row) => upsert("budgetCategories", row)}
-          />
-        )}
-      </div>
-
-      {statuses.length > 0 && (
-        <div className="mt-4 rounded-xl border border-border bg-background p-4">
-          <p className="mb-3 text-xs font-medium uppercase tracking-wide text-muted">
-            Сводка расходов
-          </p>
-          <EnvelopeBars statuses={statuses} />
-        </div>
-      )}
-
-      {statuses.length === 0 ? (
-        <p className="mt-4 text-sm text-muted">
-          Категории расходов пока не созданы — откройте каталог
-        </p>
-      ) : (
-        <ul className="mt-4 space-y-3">
-          {statuses.map((s) => (
-            <li
-              key={s.categoryId}
-              className={`rounded-xl border bg-background p-3 ${
-                s.overspent ? "border-red-300" : "border-border"
-              }`}
-            >
-              <div className="flex flex-wrap items-start justify-between gap-2">
-                <div>
-                  <p className="font-medium">{s.name}</p>
-                  <p className="mt-0.5 text-sm text-muted">
-                    {formatRub(s.plannedMonthly)}/мес
-                    {s.monthlyLimit != null
-                      ? ` из ${formatRub(s.monthlyLimit)}`
-                      : " · без лимита"}
-                    {s.remaining != null && (
-                      <span
-                        className={
-                          s.overspent ? " text-red-600" : " text-foreground"
-                        }
-                      >
-                        {" "}
-                        ·{" "}
-                        {s.overspent
-                          ? `−${formatRub(-s.remaining)}`
-                          : `+${formatRub(s.remaining)}`}
-                      </span>
-                    )}
-                  </p>
-                </div>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  disabled={busyId === s.categoryId}
-                  onClick={() => removeCategory(s.categoryId)}
-                >
-                  Удалить
-                </Button>
-              </div>
-              <div className="mt-3 flex flex-wrap items-end gap-2">
-                <FormField
-                  label="Лимит, ₽/мес"
-                  htmlFor={`limit-${s.categoryId}`}
-                  className="min-w-[10rem] flex-1"
-                >
-                  <Input
-                    id={`limit-${s.categoryId}`}
-                    inputMode="numeric"
-                    value={limitDrafts[s.categoryId] ?? ""}
-                    onChange={(e) =>
-                      setLimitDrafts((prev) => ({
-                        ...prev,
-                        [s.categoryId]: formatMoneyInput(e.target.value),
-                      }))
-                    }
-                    placeholder="без лимита"
-                  />
-                </FormField>
-                <Button
-                  type="button"
-                  variant="secondary"
-                  disabled={busyId === s.categoryId}
-                  onClick={() => saveLimit(s.categoryId)}
-                >
-                  {busyId === s.categoryId ? "…" : "Сохранить"}
-                </Button>
-              </div>
-            </li>
-          ))}
-        </ul>
-      )}
-
-      {incomeCats.length > 0 && (
-        <div className="mt-4 rounded-xl border border-border bg-background p-4">
-          <p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted">
-            Категории доходов
-          </p>
-          <ul className="flex flex-wrap gap-2">
-            {incomeCats.map((c) => (
-              <li
-                key={c.id}
-                className="flex items-center gap-1 rounded-full border border-border px-3 py-1 text-sm"
-              >
-                <span>{c.name}</span>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  disabled={busyId === c.id}
-                  onClick={() => removeCategory(c.id)}
-                >
-                  ×
-                </Button>
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
-    </Card>
   );
 }

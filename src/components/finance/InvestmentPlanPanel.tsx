@@ -30,8 +30,13 @@ import {
   normalizeVariant,
   runIPlanMonteCarlo,
   runIPlanProjection,
+  weightedReturnPct,
+  weightedVolatilityPct,
 } from "@/modules/iplan/iplan.engine";
 import { buildIPlanBudget, validateContributionsVsBudget } from "@/modules/iplan/budget";
+import { hydrateIPlanVariant } from "@/modules/iplan/sync-from-finance";
+import { planSurplusMonthly } from "@/modules/finance/live-cash";
+import { monthlyNetIncome, monthlyTotal } from "@/modules/plan/frequency";
 import type {
   IPlanDistribution,
   IPlanMcResult,
@@ -97,7 +102,17 @@ export function InvestmentPlanPanel({
   insightsInput?: HomeDashboardInput | null;
   score?: FinancialScore | null;
 }) {
-  const { upsert } = useFinanceStore();
+  const {
+    upsert,
+    entitiesReady,
+    incomes: storeIncomes,
+    expenses: storeExpenses,
+    assets: storeAssets,
+    liabilities: storeLiabilities,
+    goals: storeGoals,
+    budgetCategories: storeCategories,
+    macro,
+  } = useFinanceStore();
   const [data, setData] = useState<ApiPayload | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -144,33 +159,79 @@ export function InvestmentPlanPanel({
     load();
   }, [load]);
 
-  const plan = data?.plan;
+  const incomes = entitiesReady ? storeIncomes : data?.incomes ?? [];
+  const expenses = entitiesReady ? storeExpenses : data?.expenses ?? [];
+  const assets = entitiesReady ? storeAssets : data?.assets ?? [];
+  const liabilities = entitiesReady
+    ? storeLiabilities
+    : data?.liabilities ?? [];
+  const goals = entitiesReady ? storeGoals : [];
+  const budgetCategories = entitiesReady
+    ? storeCategories
+    : data?.budgetCategories ?? [];
+  const surplusMonthly = planSurplusMonthly({
+    incomes,
+    expenses,
+    assets,
+    liabilities,
+    budgetCategories,
+  });
+  const surplusAnnual = surplusMonthly * 12;
+  const investmentAssets = assets.filter((a) => a.assetClass === "INVESTMENT");
+  const capitalAssets =
+    investmentAssets.length > 0 ? investmentAssets : assets;
+  const initialCapital = capitalAssets.reduce((s, a) => s + a.currentValue, 0);
+  const suggestedReturnPct = weightedReturnPct(capitalAssets);
+  const suggestedVolatilityPct = weightedVolatilityPct(capitalAssets);
+
+  const plan = useMemo(() => {
+    if (!data) return null;
+    if (!entitiesReady) return data.plan;
+    return {
+      ...data.plan,
+      variants: data.plan.variants.map((v) =>
+        hydrateIPlanVariant(v, {
+          goals,
+          surplusMonthly,
+          horizonYears: macro?.planHorizonYears ?? 30,
+          weightedReturnPct: suggestedReturnPct,
+          weightedVolatilityPct: suggestedVolatilityPct,
+        }),
+      ),
+    };
+  }, [
+    data,
+    entitiesReady,
+    goals,
+    surplusMonthly,
+    macro,
+    suggestedReturnPct,
+    suggestedVolatilityPct,
+  ]);
   const activeRaw = plan?.variants.find((v) => v.id === plan.activeVariantId);
   const active = activeRaw ? normalizeVariant(activeRaw) : null;
 
   const { budgetIncomes, budgetExpenses } = useMemo(
     () =>
-      data
-        ? buildIPlanBudget({
-            incomes: data.incomes,
-            expenses: data.expenses,
-            assets: data.assets,
-            liabilities: data.liabilities ?? [],
-            budgetCategories: data.budgetCategories,
-          })
-        : { budgetIncomes: [], budgetExpenses: [] },
-    [data],
+      buildIPlanBudget({
+        incomes,
+        expenses,
+        assets,
+        liabilities,
+        budgetCategories,
+      }),
+    [incomes, expenses, assets, liabilities, budgetCategories],
   );
 
   const projection = useMemo(() => {
     if (!active || !data) return null;
     return runIPlanProjection(
       active,
-      data.initialCapital,
+      initialCapital,
       budgetIncomes,
       budgetExpenses,
     );
-  }, [active, data, budgetIncomes, budgetExpenses]);
+  }, [active, initialCapital, budgetIncomes, budgetExpenses]);
 
   const budgetError = useMemo(() => {
     if (!active || !data) return null;
@@ -189,13 +250,13 @@ export function InvestmentPlanPanel({
     if (active.distribution === "RISK_FREE") {
       return runIPlanMonteCarlo(
         { ...active, mcRuns: 50 },
-        data.initialCapital,
+        initialCapital,
         budgetIncomes,
         budgetExpenses,
       );
     }
     return mc;
-  }, [active, data, mc, budgetIncomes, budgetExpenses]);
+  }, [active, initialCapital, mc, budgetIncomes, budgetExpenses]);
 
   function updateActive(mutator: (v: IPlanVariant) => IPlanVariant) {
     if (!plan || !active) return;
@@ -267,7 +328,7 @@ export function InvestmentPlanPanel({
     try {
       const result = runIPlanMonteCarlo(
         active,
-        data.initialCapital,
+        initialCapital,
         budgetIncomes,
         budgetExpenses,
       );
@@ -407,7 +468,7 @@ export function InvestmentPlanPanel({
   const comparisons = plan.variants.map((v) =>
     runIPlanProjection(
       normalizeVariant(v),
-      data.initialCapital,
+      initialCapital,
       budgetIncomes,
       budgetExpenses,
     ),
@@ -442,13 +503,12 @@ export function InvestmentPlanPanel({
     scoreProp ??
     scoreFromHomeInput(
       insightsInput ?? {
-        assets: data.assets,
-        liabilities: [],
-        incomes: data.incomes,
-        expenses: data.expenses,
-        goals: [],
+        assets,
+        liabilities,
+        incomes,
+        expenses,
+        goals,
         scenarioCount: 0,
-        budgetCategories: data.budgetCategories,
       },
     );
 
@@ -468,10 +528,10 @@ export function InvestmentPlanPanel({
           <p className="text-xs text-muted">
             Профицит (лимит взносов):{" "}
             <span className="font-semibold text-brand">
-              {formatRub(data.surplusMonthly)}/мес
+              {formatRub(surplusMonthly)}/мес
             </span>
             {" · "}
-            {formatRub(data.surplusAnnual)}/год
+            {formatRub(surplusAnnual)}/год
           </p>
         </Card>
       ) : (
@@ -483,63 +543,39 @@ export function InvestmentPlanPanel({
         </HelpHint>
         <div className="grid gap-4 sm:grid-cols-3">
           <div>
-            <p className="text-xs text-muted">Доходы / мес. экв.</p>
+            <p className="text-xs text-muted">Доходы / мес. (после налога)</p>
             <p className="text-lg font-semibold">
-              {formatRub(
-                data.incomes.reduce((s, i) => {
-                  const m =
-                    i.frequency === "YEARLY"
-                      ? i.amount / 12
-                      : i.frequency === "QUARTERLY"
-                        ? i.amount / 3
-                        : i.frequency === "SEMI_ANNUAL"
-                          ? i.amount / 6
-                          : i.amount;
-                  return s + m;
-                }, 0),
-              )}
+              {formatRub(monthlyNetIncome(incomes))}
             </p>
             <ul className="mt-1 max-h-24 overflow-y-auto text-xs text-muted">
-              {data.incomes.map((i) => (
+              {incomes.map((i) => (
                 <li key={i.id}>
                   {i.name}: {formatRub(i.amount)} ({i.frequency})
                 </li>
               ))}
-              {data.incomes.length === 0 && <li>Нет доходов</li>}
+              {incomes.length === 0 && <li>Нет доходов</li>}
             </ul>
           </div>
           <div>
             <p className="text-xs text-muted">Расходы / мес. экв.</p>
             <p className="text-lg font-semibold">
-              {formatRub(
-                data.expenses.reduce((s, e) => {
-                  const m =
-                    e.frequency === "YEARLY"
-                      ? e.amount / 12
-                      : e.frequency === "QUARTERLY"
-                        ? e.amount / 3
-                        : e.frequency === "SEMI_ANNUAL"
-                          ? e.amount / 6
-                          : e.amount;
-                  return s + m;
-                }, 0),
-              )}
+              {formatRub(monthlyTotal(expenses))}
             </p>
             <ul className="mt-1 max-h-24 overflow-y-auto text-xs text-muted">
-              {data.expenses.map((e) => (
+              {expenses.map((e) => (
                 <li key={e.id}>
                   {e.name}: {formatRub(e.amount)} ({e.frequency})
                 </li>
               ))}
-              {data.expenses.length === 0 && <li>Нет расходов</li>}
+              {expenses.length === 0 && <li>Нет расходов</li>}
             </ul>
           </div>
           <div>
             <p className="text-xs text-muted">Профицит (лимит взносов)</p>
             <p className="text-lg font-semibold text-brand">
-              {formatRub(data.surplusMonthly)} / мес
+              {formatRub(surplusMonthly)} / мес
             </p>
-            <p className="text-xs text-muted">{formatRub(data.surplusAnnual)} / год</p>
+            <p className="text-xs text-muted">{formatRub(surplusAnnual)} / год</p>
           </div>
         </div>
       </Card>
@@ -590,7 +626,7 @@ export function InvestmentPlanPanel({
       <section className={`grid gap-2 ${compact ? "sm:grid-cols-2 lg:grid-cols-4" : "gap-4 sm:grid-cols-2 lg:grid-cols-4"}`}>
         <Card className={compact ? "!p-3" : undefined}>
           <p className={compact ? "text-xs text-muted" : "text-sm text-muted"}>Начальный капитал</p>
-          <p className={`mt-1 font-semibold ${compact ? "text-lg" : "text-2xl"}`}>{formatRub(data.initialCapital)}</p>
+          <p className={`mt-1 font-semibold ${compact ? "text-lg" : "text-2xl"}`}>{formatRub(initialCapital)}</p>
         </Card>
         <Card className={compact ? "!p-3" : undefined}>
           <p className={compact ? "text-xs text-muted" : "text-sm text-muted"}>Прогнозный капитал в конце</p>
@@ -754,9 +790,9 @@ export function InvestmentPlanPanel({
                   returnSchedule: [
                     {
                       fromYear: null,
-                      ratePct: Math.round(data.suggestedReturnPct * 10) / 10 || 6,
+                      ratePct: Math.round(suggestedReturnPct * 10) / 10 || 6,
                       volatilityPct:
-                        Math.round(data.suggestedVolatilityPct * 10) / 10 || 15,
+                        Math.round(suggestedVolatilityPct * 10) / 10 || 15,
                     },
                   ],
                 }))
@@ -847,7 +883,7 @@ export function InvestmentPlanPanel({
         <h2 className="font-medium">Инвестиционные активы</h2>
         <HelpHint>Те же сущности, что на вкладке «Данные»</HelpHint>
         <ul className="divide-y divide-border text-sm">
-          {data.capitalAssets.map((a) => (
+          {capitalAssets.map((a) => (
             <li key={a.id} className="flex flex-wrap items-center gap-3 py-3">
               <span className="min-w-[8rem] font-medium">{a.name}</span>
               <Input
@@ -884,7 +920,7 @@ export function InvestmentPlanPanel({
               <span className="text-muted">Риск, %</span>
             </li>
           ))}
-          {data.capitalAssets.length === 0 && (
+          {capitalAssets.length === 0 && (
             <li className="py-2 text-muted">Нет активов — добавьте ниже</li>
           )}
         </ul>
@@ -924,7 +960,7 @@ export function InvestmentPlanPanel({
       <StreamsEditor
         title="Взносы из профицита (данные не дублируются)"
         streams={active.contributions}
-        surplusMonthly={data.surplusMonthly}
+        surplusMonthly={surplusMonthly}
         onChange={(contributions) => updateActive((v) => ({ ...v, contributions }))}
         onAdd={() => addStream("contributions")}
       />

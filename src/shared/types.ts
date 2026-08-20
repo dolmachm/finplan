@@ -178,6 +178,23 @@ export type BudgetCategory = {
   updatedAt: Date;
 };
 
+/** Dated cash event for PFM month view — never feeds plan surplus directly */
+export type CashTransaction = {
+  id: string;
+  userId: string;
+  kind: "income" | "expense";
+  name: string;
+  amount: number;
+  currency: string;
+  /** BudgetCategory id or "general" */
+  category: string;
+  /** Calendar date of the operation */
+  date: Date;
+  notes: string | null;
+  createdAt: Date;
+  updatedAt: Date;
+};
+
 export type Goal = {
   id: string;
   userId: string;

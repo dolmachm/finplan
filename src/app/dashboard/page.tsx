@@ -568,7 +568,10 @@ function DashboardPageInner() {
                     <HelpHint className="mt-1">{FEATURE_HINTS.goalsStep}</HelpHint>
                   </div>
                   <MacroSettingsCard />
-                  <GoalsPanel score={score} />
+                  <GoalsPanel
+                    score={score}
+                    scenarioId={viewScenarioId ?? "base"}
+                  />
                   <ChangeHistoryPanel />
                 </div>
               )}

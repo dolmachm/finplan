@@ -66,8 +66,10 @@ function newStageId() {
 
 export function GoalsPanel({
   score = null,
+  scenarioId = "base",
 }: {
   score?: FinancialScore | null;
+  scenarioId?: string;
 }) {
   const {
     goals,
@@ -85,7 +87,10 @@ export function GoalsPanel({
   const loadProjection = useCallback(async () => {
     setProjectionLoading(true);
     try {
-      const res = await apiFetch("/api/plan/projection?scenarioId=base");
+      const id = scenarioId || "base";
+      const res = await apiFetch(
+        `/api/plan/projection?scenarioId=${encodeURIComponent(id)}`,
+      );
       if (!res?.ok) return;
       const data = (await res.json()) as PlanProjection;
       const map: Record<string, GoalFundingResult> = {};
@@ -100,7 +105,7 @@ export function GoalsPanel({
     } finally {
       setProjectionLoading(false);
     }
-  }, []);
+  }, [scenarioId]);
 
   useEffect(() => {
     void loadProjection();

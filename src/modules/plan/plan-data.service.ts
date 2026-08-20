@@ -38,6 +38,7 @@ export function buildPlanInputFromEntities(
       liquidityDays: a.liquidityDays,
     })),
     liabilities: activeLiabilities(liabilities, now).map((l) => ({
+      id: l.id,
       remainingBalance: l.remainingBalance,
       monthlyPayment: l.monthlyPayment,
       interestRatePct: l.interestRatePct,
@@ -47,12 +48,14 @@ export function buildPlanInputFromEntities(
         : null,
     })),
     incomes: incomes.map((i) => ({
+      id: i.id,
       amount: i.amount,
       frequency: i.frequency,
       taxRatePct: i.taxRatePct,
       growthRatePct: i.growthRatePct,
     })),
     expenses: expenses.map((e) => ({
+      id: e.id,
       amount: e.amount,
       frequency: e.frequency,
       growthRatePct: e.growthRatePct,

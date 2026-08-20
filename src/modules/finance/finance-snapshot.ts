@@ -1,5 +1,6 @@
 import { prisma } from "@/shared/db";
 import { archiveExpiredLiabilities } from "@/modules/finance/archive-liabilities";
+import { syncAssetFromHoldings } from "@/modules/finance/portfolio-math";
 import type {
   Asset,
   BudgetCategory,
@@ -57,7 +58,7 @@ export async function loadUserFinanceSnapshot(
   ]);
 
   return {
-    assets: assets as Asset[],
+    assets: (assets as Asset[]).map(syncAssetFromHoldings),
     liabilities: (await archiveExpiredLiabilities(
       liabilities as Liability[],
     )) as Liability[],

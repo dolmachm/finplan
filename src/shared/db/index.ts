@@ -1,6 +1,6 @@
 import type {
   User, MacroSettings, Asset, Liability, Income, Expense, Goal,
-  BudgetCategory, Scenario, PlanSnapshot, SimulationJob, SimulationResult, JsonValue,
+  BudgetCategory, CashTransaction, Scenario, PlanSnapshot, SimulationJob, SimulationResult, JsonValue,
 } from "@/shared/types";
 import type { InvestmentPlan } from "@/modules/iplan/types";
 import {
@@ -395,6 +395,7 @@ type Database = {
   expense: EntityRepo<Expense>;
   goal: EntityRepo<Goal>;
   budgetCategory: EntityRepo<BudgetCategory>;
+  cashTransaction: EntityRepo<CashTransaction>;
   investmentPlan: typeof investmentPlanRepo;
   scenario: typeof scenarioRepo;
   planSnapshot: typeof planSnapshotRepo;
@@ -412,6 +413,7 @@ export const prisma: Database = {
   expense: makeCrud<Expense>("expense"),
   goal: makeCrud<Goal>("goal"),
   budgetCategory: makeCrud<BudgetCategory>("budgetCategory"),
+  cashTransaction: makeCrud<CashTransaction>("cashTransaction"),
   investmentPlan: investmentPlanRepo,
   scenario: scenarioRepo,
   planSnapshot: planSnapshotRepo,

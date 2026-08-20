@@ -9,8 +9,8 @@ import type {
 } from "@/shared/types";
 import type { IPlanStreamFrequency } from "./types";
 import { annualAmount, periodYears } from "./stream-math";
-import { envelopeReserveBudgetLine } from "@/modules/budget/envelopes";
 import { activeLiabilities } from "@/modules/finance/liability-status";
+import { envelopeReserveBudgetLine } from "@/modules/budget/envelopes";
 
 export type BudgetLine = {
   id: string;
@@ -118,6 +118,7 @@ export function validateContributionsVsBudget(params: {
     const year = params.startYear + i;
     const { surplusAnnual } = budgetForYear(year, params.incomes, params.expenses);
     const contrib = contributionAnnualTotal(params.contributions, year);
+    if (contrib <= 0.01) continue;
     if (contrib > surplusAnnual + 0.01) {
       return {
         ok: false,
@@ -151,7 +152,7 @@ export function toBudgetLines(
   }));
 }
 
-/** Тот же бюджет, что на сервере iPlan: налог, дивиденды, долг, конверты. */
+/** Тот же бюджет, что на Home/Плане: налог, дивиденды, долг, содержание активов. */
 export function buildIPlanBudget(input: {
   incomes: Income[];
   expenses: Expense[];
@@ -177,10 +178,6 @@ export function buildIPlanBudget(input: {
         endYear: null,
       })),
   ];
-  const reserve = envelopeReserveBudgetLine(
-    input.expenses,
-    input.budgetCategories ?? [],
-  );
   const debtLines = toBudgetLines(
     activeLiabilities(input.liabilities).map((l) => ({
       id: l.id,
@@ -189,11 +186,27 @@ export function buildIPlanBudget(input: {
       frequency: "MONTHLY" as const,
     })),
   );
+  const maintenanceLines = input.assets
+    .filter((a) => (a.maintenanceCostMonthly ?? 0) > 0)
+    .map((a) => ({
+      id: `mnt_${a.id}`,
+      name: a.name,
+      amount: a.maintenanceCostMonthly,
+      frequency: "MONTHLY" as const,
+      startYear: null,
+      endYear: null,
+    }));
+  const reserve = envelopeReserveBudgetLine(
+    input.expenses,
+    input.budgetCategories ?? [],
+  );
   return {
     budgetIncomes,
     budgetExpenses: [
-      ...toBudgetLines(reserve ? [...input.expenses, reserve] : input.expenses),
+      ...toBudgetLines(input.expenses),
+      ...(reserve ? toBudgetLines([reserve]) : []),
       ...debtLines,
+      ...maintenanceLines,
     ],
   };
 }

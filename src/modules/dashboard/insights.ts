@@ -1,4 +1,3 @@
-import { monthlyNetIncome, monthlyTotal } from "@/modules/plan/frequency";
 import type {
   Asset,
   BudgetCategory,
@@ -13,6 +12,7 @@ import {
   type EnvelopeStatus,
 } from "@/modules/budget/envelopes";
 import { activeLiabilities } from "@/modules/finance/liability-status";
+import { liveCashflow } from "@/modules/finance/live-cash";
 import type { FinancialScore } from "@/modules/dashboard/scoring";
 
 const LIQUID_TYPES = new Set(["CASH", "BANK_ACCOUNT", "DEPOSIT"]);
@@ -109,18 +109,13 @@ export function computeDashboardMetrics(
     (s, l) => s + l.remainingBalance,
     0,
   );
-  const incomeMonthly = monthlyNetIncome(incomes);
-  const expenseMonthly = monthlyTotal(expenses);
-  const debtServiceMonthly = activeDebts.reduce(
-    (s, l) => s + l.monthlyPayment,
-    0,
-  );
-  const dividendMonthly = assets.reduce(
-    (s, a) => s + (a.dividendIncomeMonthly ?? 0),
-    0,
-  );
-  const surplusMonthly =
-    incomeMonthly + dividendMonthly - expenseMonthly - debtServiceMonthly;
+  const {
+    incomeMonthly,
+    expenseMonthly,
+    debtServiceMonthly,
+    dividendMonthly,
+    surplusMonthly,
+  } = liveCashflow({ incomes, expenses, assets, liabilities });
   const liquidTotal = assets
     .filter((a) => LIQUID_TYPES.has(a.type))
     .reduce((s, a) => s + a.currentValue, 0);

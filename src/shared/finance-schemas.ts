@@ -85,6 +85,21 @@ export const budgetCategorySchema = z.object({
   sortOrder: z.number().int().nonnegative().optional(),
 });
 
+export const cashTransactionSchema = z.object({
+  kind: z.enum(["income", "expense"]),
+  name: z.string().min(1).max(120),
+  amount: z.number().positive(),
+  currency: z.string().default("RUB"),
+  category: z.string().min(1).default("general"),
+  /** ISO date YYYY-MM-DD or datetime */
+  date: z.string().min(8),
+  notes: z.string().max(500).nullable().optional(),
+});
+
+export const budgetSyncFromActualsSchema = z.object({
+  months: z.number().int().min(1).max(12).default(3),
+});
+
 export const goalStageSchema = z.object({
   id: z.string().min(1),
   label: z.string().min(1).max(80),

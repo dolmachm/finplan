@@ -5,22 +5,23 @@ import { requireUserId, isErrorResponse } from "@/shared/session";
 import { parseJsonBody } from "@/shared/api-validation";
 import { defaultInvestmentPlan, seedFromFinanceData } from "@/modules/iplan/defaults";
 import {
-  normalizeVariant,
   runIPlanMonteCarlo,
   runIPlanProjection,
   weightedReturnPct,
   weightedVolatilityPct,
 } from "@/modules/iplan/iplan.engine";
 import {
-  baselineMonthlySurplus,
   buildIPlanBudget,
   validateContributionsVsBudget,
 } from "@/modules/iplan/budget";
 import { loadUserFinanceSnapshot } from "@/modules/finance/finance-snapshot";
-import { applyFinanceToVariant } from "@/modules/iplan/sync-from-finance";
+import { planSurplusMonthly } from "@/modules/finance/live-cash";
+import {
+  hydrateIPlanVariant,
+  toIPlanOverlay,
+} from "@/modules/iplan/sync-from-finance";
 import type { IPlanVariant, InvestmentPlan } from "@/modules/iplan/types";
 import { recordRevision } from "@/shared/revision";
-import { newId } from "@/shared/db/helpers";
 
 const streamSchema = z.object({
   id: z.string(),
@@ -86,7 +87,13 @@ async function loadContext(userId: string) {
     liabilities,
     budgetCategories,
   });
-  const surplusMonthly = baselineMonthlySurplus(budgetIncomes, budgetExpenses);
+  const surplusMonthly = planSurplusMonthly({
+    incomes,
+    expenses,
+    assets,
+    liabilities,
+    budgetCategories,
+  });
 
   return {
     plan: plan as InvestmentPlan | null,
@@ -107,41 +114,24 @@ async function loadContext(userId: string) {
   };
 }
 
-/** Keep a single contribution stream synced to monthly surplus from Data */
-function syncSurplusContribution(
-  variant: IPlanVariant,
-  surplusMonthly: number,
-): IPlanVariant {
-  const v = normalizeVariant(variant);
-  const y = v.startYear;
-  const end = y + Math.max(0, v.horizonYears - 1);
-  const existing = v.contributions.find((c) => c.linkedEntityId === "__surplus__");
-  const others = v.contributions.filter((c) => c.linkedEntityId !== "__surplus__");
-  const surplusStream = {
-    id: existing?.id ?? newId(),
-    name: "Взнос = доходы − расходы",
-    amount: Math.max(0, Math.round(surplusMonthly)),
-    frequency: "MONTHLY" as const,
-    startYear: existing?.startYear ?? y,
-    endYear: existing?.endYear ?? end,
-    enabled: existing?.enabled ?? surplusMonthly > 0,
-    linkedEntityId: "__surplus__",
-  };
-  return { ...v, contributions: [surplusStream, ...others] };
-}
-
 function syncVariant(
   variant: IPlanVariant,
   ctx: Awaited<ReturnType<typeof loadContext>>,
 ): IPlanVariant {
-  return applyFinanceToVariant(variant, {
+  return hydrateIPlanVariant(variant, {
     surplusMonthly: ctx.surplusMonthly,
     goals: ctx.goals,
     horizonYears: ctx.macro?.planHorizonYears ?? 30,
     weightedReturnPct: ctx.wRet,
     weightedVolatilityPct: ctx.wVol,
-    syncSurplus: syncSurplusContribution,
   });
+}
+
+function persistPlan(plan: InvestmentPlan): InvestmentPlan {
+  return {
+    ...plan,
+    variants: plan.variants.map(toIPlanOverlay),
+  };
 }
 
 function ensurePlan(
@@ -231,18 +221,19 @@ export async function GET(req: Request) {
     new URL(req.url).searchParams.get("mc") === "1";
 
   const ctx = await loadContext(userId);
-  let plan = ctx.plan;
-  if (!plan) {
-    plan = ensurePlan(userId, ctx);
-    await prisma.investmentPlan.upsert({
-      where: { userId },
-      create: plan,
-      update: plan,
-    });
-  }
+  const synced = ensurePlan(userId, ctx);
+  const stored = persistPlan(synced);
+  await prisma.investmentPlan.upsert({
+    where: { userId },
+    create: stored,
+    update: {
+      activeVariantId: stored.activeVariantId,
+      variants: stored.variants,
+    },
+  });
 
   return NextResponse.json(
-    payload(ensurePlan(userId, { ...ctx, plan }), ctx, {
+    payload(synced, ctx, {
       includeMonteCarlo: includeMc,
     }),
   );
@@ -287,12 +278,13 @@ export async function PUT(req: Request) {
     next.activeVariantId = next.variants[0]!.id;
   }
 
+  const stored = persistPlan(next);
   const saved = await prisma.investmentPlan.upsert({
     where: { userId },
-    create: next,
+    create: stored,
     update: {
-      activeVariantId: next.activeVariantId,
-      variants: next.variants,
+      activeVariantId: stored.activeVariantId,
+      variants: stored.variants,
     },
   });
 
@@ -307,5 +299,5 @@ export async function PUT(req: Request) {
   });
 
   // PUT не гоняет MC — клиент пересчитывает локально / запрашивает ?mc=1 явно.
-  return NextResponse.json(payload(saved, ctx, { includeMonteCarlo: false }));
+  return NextResponse.json(payload(next, ctx, { includeMonteCarlo: false }));
 }

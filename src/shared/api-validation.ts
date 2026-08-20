@@ -20,6 +20,8 @@ const FIELD_LABELS: Record<string, string> = {
   category: "Категория",
   monthlyLimit: "Месячный лимит",
   kind: "Тип категории",
+  date: "Дата",
+  notes: "Заметка",
   source: "Источник",
   type: "Тип",
   numRuns: "Количество прогонов",

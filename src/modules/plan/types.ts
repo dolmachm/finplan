@@ -17,6 +17,7 @@ export interface PlanInput {
     liquidityDays: number;
   }>;
   liabilities: Array<{
+    id: string;
     remainingBalance: number;
     monthlyPayment: number;
     interestRatePct: number;
@@ -26,12 +27,14 @@ export interface PlanInput {
     endMonthIndex: number | null;
   }>;
   incomes: Array<{
+    id: string;
     amount: number;
     frequency: PlanFrequency;
     taxRatePct: number;
     growthRatePct: number;
   }>;
   expenses: Array<{
+    id: string;
     amount: number;
     frequency: PlanFrequency;
     growthRatePct: number;
