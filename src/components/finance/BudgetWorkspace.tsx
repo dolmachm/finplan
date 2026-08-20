@@ -44,6 +44,26 @@ function toInputDate(d: Date | string) {
   return `${y}-${m}-${day}`;
 }
 
+function applyPlanLists(
+  upsert: (key: "incomes" | "expenses", row: Income | Expense) => void,
+  removeEntity: (key: "incomes" | "expenses", id: string) => void,
+  prevIncomes: Income[],
+  prevExpenses: Expense[],
+  nextIncomes: Income[],
+  nextExpenses: Expense[],
+) {
+  for (const i of nextIncomes) upsert("incomes", i);
+  const keepInc = new Set(nextIncomes.map((i) => i.id));
+  for (const i of prevIncomes) {
+    if (!keepInc.has(i.id)) removeEntity("incomes", i.id);
+  }
+  for (const e of nextExpenses) upsert("expenses", e);
+  const keepExp = new Set(nextExpenses.map((e) => e.id));
+  for (const e of prevExpenses) {
+    if (!keepExp.has(e.id)) removeEntity("expenses", e.id);
+  }
+}
+
 export function BudgetWorkspace({
   categories,
   expenses,
@@ -66,11 +86,13 @@ export function BudgetWorkspace({
   const [incomeDraft, setIncomeDraft] = useState("");
   const [expenseDraft, setExpenseDraft] = useState("");
   const [txOpen, setTxOpen] = useState(false);
+  const [txEditId, setTxEditId] = useState<string | null>(null);
   const [txKind, setTxKind] = useState<"income" | "expense">("expense");
   const [txName, setTxName] = useState("");
   const [txAmount, setTxAmount] = useState("");
   const [txCategory, setTxCategory] = useState("general");
   const [txDate, setTxDate] = useState(toInputDate(now));
+  const [barsMode, setBarsMode] = useState<"plan" | "actual">("actual");
 
   const loadTxs = useCallback(async () => {
     setTxLoading(true);
@@ -128,17 +150,41 @@ export function BudgetWorkspace({
     setLimitDrafts(next);
   }, [categories]);
 
+  const expenseCats = categories.filter((c) => c.kind === "expense");
+  const incomeCats = categories.filter((c) => c.kind === "income");
+
   function shiftMonth(delta: number) {
     const d = new Date(year, month - 1 + delta, 1);
     setYear(d.getFullYear());
     setMonth(d.getMonth() + 1);
   }
 
+  function openNewTx() {
+    setTxEditId(null);
+    setTxKind("expense");
+    setTxName("");
+    setTxAmount("");
+    setTxCategory(expenseCats[0]?.id ?? "general");
+    setTxDate(
+      toInputDate(new Date(year, month - 1, Math.min(now.getDate(), 28))),
+    );
+    setTxOpen(true);
+  }
+
+  function openEditTx(t: CashTransaction) {
+    setTxEditId(t.id);
+    setTxKind(t.kind);
+    setTxName(t.name);
+    setTxAmount(formatMoneyInput(String(t.amount)));
+    setTxCategory(t.category || "general");
+    setTxDate(toInputDate(t.date));
+    setTxOpen(true);
+  }
+
   async function saveSummary() {
     if (!ensureOnlineForWrite()) return;
     const inc = parsePositiveNumber(incomeDraft, "Доход");
     const exp = parsePositiveNumber(expenseDraft, "Расход");
-    // allow zero via non-negative: parsePositiveNumber may reject 0 — check
     const incomeMonthly = incomeDraft.trim()
       ? Number(incomeDraft.replace(/\s/g, ""))
       : NaN;
@@ -169,17 +215,14 @@ export function BudgetWorkspace({
         incomes: Income[];
         expenses: Expense[];
       };
-      for (const i of json.incomes) upsert("incomes", i);
-      // remove incomes not in response if collapsed? scale keeps all ids
-      const keepInc = new Set(json.incomes.map((i) => i.id));
-      for (const i of incomes) {
-        if (!keepInc.has(i.id)) removeEntity("incomes", i.id);
-      }
-      for (const e of json.expenses) upsert("expenses", e);
-      const keepExp = new Set(json.expenses.map((e) => e.id));
-      for (const e of expenses) {
-        if (!keepExp.has(e.id)) removeEntity("expenses", e.id);
-      }
+      applyPlanLists(
+        upsert,
+        removeEntity,
+        incomes,
+        expenses,
+        json.incomes,
+        json.expenses,
+      );
       toast.success("Сводка записана в план");
     } catch {
       toast.error("Не удалось сохранить сводку");
@@ -206,11 +249,63 @@ export function BudgetWorkspace({
         incomes: Income[];
         expenses: Expense[];
       };
-      for (const i of json.incomes) upsert("incomes", i);
-      for (const e of json.expenses) upsert("expenses", e);
+      applyPlanLists(
+        upsert,
+        removeEntity,
+        incomes,
+        expenses,
+        json.incomes,
+        json.expenses,
+      );
       toast.success("План обновлён по среднему факту за 3 мес.");
     } catch {
       toast.error("Не удалось обновить план");
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  async function structurePlan(
+    action: "collapse" | "expand",
+    kind: "income" | "expense",
+  ) {
+    if (!ensureOnlineForWrite()) return;
+    const key = `${action}-${kind}`;
+    setBusyId(key);
+    try {
+      const res = await apiFetch("/api/budget/structure", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action, kind }),
+      });
+      if (!res) return;
+      if (!res.ok) {
+        toast.error((await readApiError(res)).message);
+        return;
+      }
+      const json = (await res.json()) as {
+        incomes: Income[];
+        expenses: Expense[];
+      };
+      applyPlanLists(
+        upsert,
+        removeEntity,
+        incomes,
+        expenses,
+        json.incomes,
+        json.expenses,
+      );
+      toast.success(
+        action === "collapse"
+          ? kind === "expense"
+            ? "Расходы свёрнуты в одну строку"
+            : "Доходы свёрнуты в одну строку"
+          : kind === "expense"
+            ? "Расходы разбиты по категориям"
+            : "Доходы разбиты по категориям",
+      );
+    } catch {
+      toast.error("Не удалось изменить структуру");
     } finally {
       setBusyId(null);
     }
@@ -283,26 +378,31 @@ export function BudgetWorkspace({
     }
     setBusyId("tx");
     try {
-      const res = await apiFetch("/api/transactions", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          kind: txKind,
-          name: txName.trim(),
-          amount: amountNum.value,
-          category: txCategory,
-          date: txDate,
-        }),
-      });
+      const body = {
+        kind: txKind,
+        name: txName.trim(),
+        amount: amountNum.value,
+        category: txCategory,
+        date: txDate,
+      };
+      const res = await apiFetch(
+        txEditId ? `/api/transactions/${txEditId}` : "/api/transactions",
+        {
+          method: txEditId ? "PATCH" : "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        },
+      );
       if (!res) return;
       if (!res.ok) {
         toast.error((await readApiError(res)).message);
         return;
       }
       setTxOpen(false);
+      setTxEditId(null);
       setTxName("");
       setTxAmount("");
-      toast.success("Операция добавлена");
+      toast.success(txEditId ? "Операция обновлена" : "Операция добавлена");
       await loadTxs();
     } catch {
       toast.error("Не удалось сохранить");
@@ -330,9 +430,12 @@ export function BudgetWorkspace({
     }
   }
 
-  const expenseCats = categories.filter((c) => c.kind === "expense");
-  const incomeCats = categories.filter((c) => c.kind === "income");
-  const overspentCount = statuses.filter((s) => s.overspentActual || s.overspent).length;
+  const overspentCount = statuses.filter(
+    (s) => s.overspentActual || s.overspent,
+  ).length;
+  const hasUnallocated =
+    summary.unallocatedExpenseMonthly > 0.01 ||
+    summary.unallocatedIncomeMonthly > 0.01;
 
   return (
     <Card>
@@ -409,6 +512,35 @@ export function BudgetWorkspace({
         />
       </div>
 
+      {hasUnallocated && (
+        <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50/80 p-3 text-sm">
+          <p className="font-medium text-amber-900">Неразнесённое</p>
+          <p className="mt-1 text-amber-800/90">
+            Сводка минус суммы по категориям (без «general»).
+          </p>
+          <ul className="mt-2 space-y-1 tabular-nums text-amber-950">
+            {summary.unallocatedExpenseMonthly > 0.01 && (
+              <li>
+                Расходы: {formatRub(summary.unallocatedExpenseMonthly)}
+                <span className="text-amber-800/80">
+                  {" "}
+                  (в категориях {formatRub(summary.categorizedExpenseMonthly)})
+                </span>
+              </li>
+            )}
+            {summary.unallocatedIncomeMonthly > 0.01 && (
+              <li>
+                Доходы: {formatRub(summary.unallocatedIncomeMonthly)}
+                <span className="text-amber-800/80">
+                  {" "}
+                  (в категориях {formatRub(summary.categorizedIncomeMonthly)})
+                </span>
+              </li>
+            )}
+          </ul>
+        </div>
+      )}
+
       {tab === "summary" && (
         <div className="mt-6 space-y-4 border-t border-border pt-4">
           <p className="text-sm font-medium">Верхнеуровневый ввод</p>
@@ -453,6 +585,58 @@ export function BudgetWorkspace({
               {busyId === "sync" ? "…" : "Обновить план из факта (3 мес.)"}
             </Button>
           </div>
+
+          <div className="rounded-xl border border-border bg-background p-4">
+            <p className="text-sm font-medium">Структура плана</p>
+            <HelpHint className="mt-1">
+              Свернуть — одна сводная строка. Разбить — по вашим категориям
+              (пропорционально лимитам, иначе поровну).
+            </HelpHint>
+            <div className="mt-3 flex flex-wrap gap-2">
+              <Button
+                type="button"
+                variant="secondary"
+                disabled={busyId === "collapse-expense" || expenses.length === 0}
+                onClick={() => void structurePlan("collapse", "expense")}
+              >
+                {busyId === "collapse-expense"
+                  ? "…"
+                  : "Свернуть расходы в одну строку"}
+              </Button>
+              <Button
+                type="button"
+                variant="secondary"
+                disabled={
+                  busyId === "expand-expense" || expenseCats.length === 0
+                }
+                onClick={() => void structurePlan("expand", "expense")}
+              >
+                {busyId === "expand-expense"
+                  ? "…"
+                  : "Разбить расходы по категориям"}
+              </Button>
+              <Button
+                type="button"
+                variant="secondary"
+                disabled={busyId === "collapse-income" || incomes.length === 0}
+                onClick={() => void structurePlan("collapse", "income")}
+              >
+                {busyId === "collapse-income"
+                  ? "…"
+                  : "Свернуть доходы в одну строку"}
+              </Button>
+              <Button
+                type="button"
+                variant="secondary"
+                disabled={busyId === "expand-income" || incomeCats.length === 0}
+                onClick={() => void structurePlan("expand", "income")}
+              >
+                {busyId === "expand-income"
+                  ? "…"
+                  : "Разбить доходы по категориям"}
+              </Button>
+            </div>
+          </div>
         </div>
       )}
 
@@ -460,13 +644,29 @@ export function BudgetWorkspace({
         <div className="mt-6 space-y-4 border-t border-border pt-4">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <p className="text-sm font-medium">Конверты и лимиты</p>
-            <Button
-              type="button"
-              variant="secondary"
-              onClick={() => setShowCatalog((v) => !v)}
-            >
-              {showCatalog ? "Скрыть каталог" : "Каталог категорий"}
-            </Button>
+            <div className="flex flex-wrap gap-2">
+              <Button
+                type="button"
+                variant={barsMode === "actual" ? "primary" : "secondary"}
+                onClick={() => setBarsMode("actual")}
+              >
+                Факт / лимит
+              </Button>
+              <Button
+                type="button"
+                variant={barsMode === "plan" ? "primary" : "secondary"}
+                onClick={() => setBarsMode("plan")}
+              >
+                План / лимит
+              </Button>
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={() => setShowCatalog((v) => !v)}
+              >
+                {showCatalog ? "Скрыть каталог" : "Каталог категорий"}
+              </Button>
+            </div>
           </div>
           {showCatalog && (
             <CategoryCatalogPicker
@@ -483,14 +683,7 @@ export function BudgetWorkspace({
           )}
           {statuses.length > 0 && (
             <div className="rounded-xl border border-border bg-background p-4">
-              <EnvelopeBars
-                statuses={statuses.map((s) => ({
-                  ...s,
-                  plannedMonthly: s.plannedMonthly,
-                  remaining: s.remainingVsLimit ?? s.remaining,
-                  overspent: s.overspentActual || s.overspent,
-                }))}
-              />
+              <EnvelopeBars mode={barsMode} statuses={statuses} />
             </div>
           )}
           <ul className="space-y-3">
@@ -597,15 +790,7 @@ export function BudgetWorkspace({
                 →
               </Button>
             </div>
-            <Button
-              type="button"
-              onClick={() => {
-                setTxKind("expense");
-                setTxCategory(expenseCats[0]?.id ?? "general");
-                setTxDate(toInputDate(new Date(year, month - 1, Math.min(now.getDate(), 28))));
-                setTxOpen(true);
-              }}
-            >
+            <Button type="button" onClick={openNewTx}>
               + Операция
             </Button>
           </div>
@@ -642,6 +827,13 @@ export function BudgetWorkspace({
                       <Button
                         type="button"
                         variant="ghost"
+                        onClick={() => openEditTx(t)}
+                      >
+                        Изменить
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="ghost"
                         disabled={busyId === t.id}
                         onClick={() => void deleteTx(t.id)}
                       >
@@ -664,7 +856,14 @@ export function BudgetWorkspace({
         </div>
       )}
 
-      <Modal open={txOpen} title="Новая операция" onClose={() => setTxOpen(false)}>
+      <Modal
+        open={txOpen}
+        title={txEditId ? "Изменить операцию" : "Новая операция"}
+        onClose={() => {
+          setTxOpen(false);
+          setTxEditId(null);
+        }}
+      >
         <ModalFormBox>
           <div className="grid gap-3 sm:grid-cols-2">
             <FormField label="Тип" htmlFor="tx-kind">
@@ -727,10 +926,13 @@ export function BudgetWorkspace({
           </div>
         </ModalFormBox>
         <ModalFormActions
-          onCancel={() => setTxOpen(false)}
+          onCancel={() => {
+            setTxOpen(false);
+            setTxEditId(null);
+          }}
           onSubmit={() => void saveTx()}
           submitting={busyId === "tx"}
-          submitLabel="Добавить"
+          submitLabel={txEditId ? "Сохранить" : "Добавить"}
         />
       </Modal>
     </Card>

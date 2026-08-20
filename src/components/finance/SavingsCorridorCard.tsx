@@ -17,6 +17,7 @@ import type {
   SavingsRecommendation,
 } from "@/modules/budget/savings-corridor";
 import { formatRub } from "@/shared/format";
+import type { MonthActualsSnippet } from "@/modules/finance/finance-summary";
 
 const actionLabel: Record<SavingsRecommendation["action"], string> = {
   cut: "Сократить",
@@ -152,9 +153,11 @@ function TrajectoryChart({
 
 export function SavingsCorridorCard({
   data,
+  monthActuals = null,
   onNavigate,
 }: {
   data: SavingsCorridor;
+  monthActuals?: MonthActualsSnippet | null;
   onNavigate: (tab: DashboardTab) => void;
 }) {
   const ratePct = (data.savingsRate * 100).toFixed(0);
@@ -177,6 +180,39 @@ export function SavingsCorridorCard({
           К доходам и расходам
         </Button>
       </div>
+
+      {monthActuals && monthActuals.txCount > 0 && (
+        <div className="mt-4 rounded-xl border border-border bg-background p-3">
+          <p className="text-xs font-medium uppercase tracking-wide text-muted">
+            Факт текущего месяца
+          </p>
+          <div className="mt-2 flex flex-wrap gap-x-5 gap-y-1 text-sm">
+            <span>
+              Доход{" "}
+              <strong className="tabular-nums">{formatRub(monthActuals.income)}</strong>
+            </span>
+            <span>
+              Расход{" "}
+              <strong className="tabular-nums">
+                {formatRub(monthActuals.expense)}
+              </strong>
+            </span>
+            <span>
+              Δ{" "}
+              <strong
+                className={`tabular-nums ${
+                  monthActuals.delta < 0 ? "text-red-600" : ""
+                }`}
+              >
+                {formatRub(monthActuals.delta)}
+              </strong>
+            </span>
+            <span className="text-muted">
+              план Δ {formatRub(data.deltaMonthly)}
+            </span>
+          </div>
+        </div>
+      )}
 
       <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <div className="rounded-xl border border-border bg-background p-3">

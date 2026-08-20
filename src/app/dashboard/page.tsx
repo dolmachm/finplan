@@ -472,6 +472,7 @@ function DashboardPageInner() {
           metrics={summary?.metrics ?? null}
           score={score}
           corridor={summary?.corridor ?? null}
+          monthActuals={summary?.monthActuals ?? null}
           loading={summaryLoading && !summary}
           onNavigate={navigateHome}
         />

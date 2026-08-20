@@ -87,6 +87,12 @@ export type BudgetSummary = {
   actualIncomeMonth: number;
   actualExpenseMonth: number;
   actualDeltaMonth: number;
+  /** План по категориям (не general) */
+  categorizedExpenseMonthly: number;
+  /** Сводка − категории; >0 = ещё не разнесено */
+  unallocatedExpenseMonthly: number;
+  categorizedIncomeMonthly: number;
+  unallocatedIncomeMonthly: number;
 };
 
 export function buildBudgetSummary(input: {
@@ -116,6 +122,19 @@ export function buildBudgetSummary(input: {
     else actualExpenseMonth += t.amount;
   }
 
+  const categorizedExpenseMonthly = input.expenses
+    .filter((e) => e.category && e.category !== "general")
+    .reduce(
+      (s, e) => s + monthlyEquivalent(e.amount, e.frequency as PlanFrequency),
+      0,
+    );
+  const categorizedIncomeMonthly = input.incomes
+    .filter((i) => i.category && i.category !== "general")
+    .reduce(
+      (s, i) => s + monthlyEquivalent(i.amount, i.frequency as PlanFrequency),
+      0,
+    );
+
   return {
     incomeMonthly: cash.incomeMonthly,
     expenseMonthly: cash.expenseMonthly,
@@ -127,6 +146,16 @@ export function buildBudgetSummary(input: {
     actualIncomeMonth,
     actualExpenseMonth,
     actualDeltaMonth: actualIncomeMonth - actualExpenseMonth,
+    categorizedExpenseMonthly,
+    unallocatedExpenseMonthly: Math.max(
+      0,
+      cash.expenseMonthly - categorizedExpenseMonthly,
+    ),
+    categorizedIncomeMonthly,
+    unallocatedIncomeMonthly: Math.max(
+      0,
+      cash.incomeMonthly - categorizedIncomeMonthly,
+    ),
   };
 }
 

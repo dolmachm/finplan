@@ -6,6 +6,8 @@ export type EnvelopeStatus = {
   categoryId: string;
   name: string;
   plannedMonthly: number;
+  /** Факт текущего месяца, если известен */
+  actualMonthly?: number;
   monthlyLimit: number | null;
   /** limit - planned; null if no limit */
   remaining: number | null;

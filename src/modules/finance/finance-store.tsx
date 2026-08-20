@@ -20,6 +20,7 @@ import type { FinanceSnapshot } from "@/modules/finance/finance-snapshot";
 import {
   buildFinanceSummaryFromSnapshot,
   type FinanceSummary,
+  type MonthActualsSnippet,
 } from "@/modules/finance/finance-summary";
 import type { HomeDashboardInput } from "@/modules/dashboard/insights";
 import {
@@ -132,6 +133,25 @@ export function FinanceStoreProvider({ children }: { children: ReactNode }) {
   const snapshotInflight = useRef<Promise<void> | null>(null);
   const entitiesReadyRef = useRef(false);
   const enrichmentRef = useRef(enrichment);
+  const monthActualsRef = useRef<MonthActualsSnippet | null>(null);
+  const actualByCatRef = useRef<Map<string, number>>(new Map());
+
+  function rememberMonthFromSummary(s: FinanceSummary) {
+    monthActualsRef.current = s.monthActuals;
+    const map = new Map<string, number>();
+    for (const e of s.metrics.envelopes) {
+      if (e.actualMonthly != null) map.set(e.categoryId, e.actualMonthly);
+    }
+    if (map.size > 0) actualByCatRef.current = map;
+  }
+
+  function summaryExtras(base?: FinanceEnrichment) {
+    return {
+      ...(base ?? enrichmentRef.current),
+      previousMonthActuals: monthActualsRef.current,
+      previousActualByCategory: actualByCatRef.current,
+    };
+  }
 
   useEffect(() => {
     enrichmentRef.current = enrichment;
@@ -161,6 +181,7 @@ export function FinanceStoreProvider({ children }: { children: ReactNode }) {
       return;
     }
     setSummary(result.data);
+    rememberMonthFromSummary(result.data);
     setSummaryReady(true);
     setSummaryLoading(false);
   }, []);
@@ -185,9 +206,12 @@ export function FinanceStoreProvider({ children }: { children: ReactNode }) {
         return;
       }
       applySnapshot(result.data);
-      setSummary(
-        buildFinanceSummaryFromSnapshot(result.data, enrichmentRef.current),
+      const next = buildFinanceSummaryFromSnapshot(
+        result.data,
+        summaryExtras(),
       );
+      setSummary(next);
+      rememberMonthFromSummary(next);
       setSummaryReady(true);
       entitiesReadyRef.current = true;
       setEntitiesReady(true);
@@ -212,21 +236,21 @@ export function FinanceStoreProvider({ children }: { children: ReactNode }) {
   // Локальный upsert/remove → пересчитать цифры без повторного HTTP summary.
   useEffect(() => {
     if (!entitiesReady) return;
-    setSummary(
-      buildFinanceSummaryFromSnapshot(
-        {
-          assets,
-          liabilities,
-          incomes,
-          expenses,
-          goals,
-          budgetCategories,
-          scenarios,
-          macro,
-        },
-        enrichment,
-      ),
+    const next = buildFinanceSummaryFromSnapshot(
+      {
+        assets,
+        liabilities,
+        incomes,
+        expenses,
+        goals,
+        budgetCategories,
+        scenarios,
+        macro,
+      },
+      summaryExtras(enrichment),
     );
+    setSummary(next);
+    rememberMonthFromSummary(next);
   }, [
     entitiesReady,
     assets,

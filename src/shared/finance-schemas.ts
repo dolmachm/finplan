@@ -100,6 +100,11 @@ export const budgetSyncFromActualsSchema = z.object({
   months: z.number().int().min(1).max(12).default(3),
 });
 
+export const budgetStructureSchema = z.object({
+  action: z.enum(["collapse", "expand"]),
+  kind: z.enum(["income", "expense"]),
+});
+
 export const goalStageSchema = z.object({
   id: z.string().min(1),
   label: z.string().min(1).max(80),

@@ -31,6 +31,7 @@ import { formatRub } from "@/shared/format";
 import { EnvelopeOverviewCard } from "@/components/finance/EnvelopeOverview";
 import { SavingsCorridorCard } from "@/components/finance/SavingsCorridorCard";
 import { ScoreCard } from "@/components/finance/ScoreCard";
+import type { MonthActualsSnippet } from "@/modules/finance/finance-summary";
 
 const severityClass: Record<InsightSeverity, string> = {
   critical: "border-l-4 border-l-red-500",
@@ -55,12 +56,14 @@ export function HomeDashboard({
   metrics,
   score,
   corridor = null,
+  monthActuals = null,
   loading,
   onNavigate,
 }: {
   metrics: DashboardMetrics | null;
   score: FinancialScore | null;
   corridor?: SavingsCorridor | null;
+  monthActuals?: MonthActualsSnippet | null;
   loading: boolean;
   onNavigate: HomeNavigate;
 }) {
@@ -125,6 +128,9 @@ export function HomeDashboard({
 
       <ScoreCard score={score} mode="overall" onNavigate={onNavigate} />
       <SummaryGrid metrics={metrics} />
+      {monthActuals && monthActuals.txCount > 0 && (
+        <MonthActualsCard data={monthActuals} onNavigate={onNavigate} />
+      )}
 
       <div ref={sentinelRef} aria-hidden className="h-px" />
 
@@ -133,6 +139,7 @@ export function HomeDashboard({
           metrics={metrics}
           score={score}
           corridor={corridor}
+          monthActuals={monthActuals}
           phase={phase}
           onNavigate={onNavigate}
         />
@@ -204,12 +211,14 @@ function BelowFold({
   metrics,
   score,
   corridor,
+  monthActuals,
   phase,
   onNavigate,
 }: {
   metrics: DashboardMetrics;
   score: FinancialScore;
   corridor: SavingsCorridor | null;
+  monthActuals: MonthActualsSnippet | null;
   phase: "gather" | "ready";
   onNavigate: HomeNavigate;
 }) {
@@ -222,7 +231,11 @@ function BelowFold({
   return (
     <>
       {corridor && (
-        <SavingsCorridorCard data={corridor} onNavigate={onNavigate} />
+        <SavingsCorridorCard
+          data={corridor}
+          monthActuals={monthActuals}
+          onNavigate={onNavigate}
+        />
       )}
       <EnvelopeOverviewCard
         statuses={metrics.envelopes}
@@ -230,6 +243,7 @@ function BelowFold({
         limitTotal={metrics.envelopeLimitTotal}
         incomeMonthly={metrics.incomeMonthly}
         overspentCount={metrics.envelopeOverspentCount}
+        actualExpenseMonth={monthActuals?.expense ?? null}
         onNavigate={onNavigate}
       />
       {phase === "gather" && (
@@ -267,6 +281,63 @@ function BelowFold({
         </div>
       )}
     </>
+  );
+}
+
+function MonthActualsCard({
+  data,
+  onNavigate,
+}: {
+  data: MonthActualsSnippet;
+  onNavigate: HomeNavigate;
+}) {
+  const label = new Date(data.year, data.month - 1, 1).toLocaleDateString(
+    "ru-RU",
+    { month: "long", year: "numeric" },
+  );
+  return (
+    <Card className="flex flex-wrap items-center justify-between gap-4">
+      <div>
+        <p className="text-xs font-medium uppercase tracking-wide text-muted">
+          Факт · {label}
+        </p>
+        <p className="mt-1 text-sm text-muted">
+          {data.txCount}{" "}
+          {data.txCount === 1 ? "операция" : "операций"} в этом месяце
+        </p>
+        <div className="mt-3 flex flex-wrap gap-x-6 gap-y-1 text-sm">
+          <span>
+            Доход{" "}
+            <strong className="tabular-nums font-semibold text-foreground">
+              {formatRub(data.income)}
+            </strong>
+          </span>
+          <span>
+            Расход{" "}
+            <strong className="tabular-nums font-semibold text-foreground">
+              {formatRub(data.expense)}
+            </strong>
+          </span>
+          <span>
+            Δ{" "}
+            <strong
+              className={`tabular-nums font-semibold ${
+                data.delta < 0 ? "text-red-600" : "text-foreground"
+              }`}
+            >
+              {formatRub(data.delta)}
+            </strong>
+          </span>
+        </div>
+      </div>
+      <Button
+        type="button"
+        variant="secondary"
+        onClick={() => onNavigate("assets", { dataSub: "cashflow" })}
+      >
+        К операциям
+      </Button>
+    </Card>
   );
 }
 
